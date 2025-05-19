@@ -1,0 +1,23 @@
+# @package _global_
+
+defaults:
+  - override /game: full_board
+  - override /gameplay/architecture: single_thread
+
+log_to_console: true
+log_made_move: true
+
+networks:
+  main:
+    initialize_model_if_empty: true
+    batch_size: 1
+
+gameplay:
+  game_flush_threshold: 1
+
+training:
+  batch_size: 1
+  sample_window: 4
+  samples_per_generation: 2
+  sampling_ratio: 2.0
+  minimum_window_size: 2

@@ -1,0 +1,6 @@
+name: "pentobi_7"
+type: "pentobi"
+pentobi_bin_path: "/Users/shivamsarodia/Dev/pentobi/pentobi_gtp/pentobi-gtp"
+pentobi_opening_book: "/Users/shivamsarodia/Dev/pentobi/opening_books/book_classic.blksgf"
+pentobi_level: 7
+print_stderr: true

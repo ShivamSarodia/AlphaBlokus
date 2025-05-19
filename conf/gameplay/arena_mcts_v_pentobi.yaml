@@ -1,0 +1,20 @@
+defaults:
+  - base
+  - agent_types@agents.mcts_low_temp: mcts
+  - agent_types@agents.mcts_high_temp: mcts
+  - agent_types@agents.pentobi_A: pentobi
+  - agent_types@agents.pentobi_B: pentobi
+
+agents:
+  'mcts_low_temp':
+    name: "mcts_low_temp"
+    move_selection_temperature: 0.3
+    full_move_probability: 1.0
+  'mcts_high_temp':
+    name: "mcts_high_temp"
+    move_selection_temperature: 1.0
+    full_move_probability: 1.0
+  'pentobi_A':
+    name: "pentobi"
+  'pentobi_B':
+    name: "pentobi"

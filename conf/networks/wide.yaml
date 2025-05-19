@@ -1,0 +1,9 @@
+defaults:
+  - main
+
+main_body_channels: 128
+residual_blocks: 10
+value_head_channels: 24
+value_head_flat_layer_width: 128
+policy_head_channels: 128
+policy_convolution_kernel: 3

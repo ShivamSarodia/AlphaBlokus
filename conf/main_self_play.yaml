@@ -1,0 +1,11 @@
+defaults:
+  - base
+  - game: full_board
+  - networks@networks.main: main
+  - gameplay: generate_mcts_game_data
+  - training: main
+
+  # Disable logging because we use Ray's auto-generated logs.
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+  - _self_

@@ -1,0 +1,23 @@
+main_body_channels: 64
+residual_blocks: 10
+value_head_channels: 16
+value_head_flat_layer_width: 64
+policy_head_channels: 64
+policy_convolution_kernel: 3
+
+# Frequency to check if there's a new model to load from disk.
+new_model_check_interval: 120
+batch_size: 128
+
+# The path to the model to load, or a directory containing models.
+# This is used by the training actor to load the very initial model to
+# start training on, and the inference actor to load models as they're
+# generated.
+model_read_path: "models/"
+
+# If true, and if the model read path is an empty directory, we'll create
+# an initial model before starting training or inference.
+initialize_model_if_empty: false
+
+# If true, we'll log GPU evaluation times to the event log.
+log_gpu_evaluation: false

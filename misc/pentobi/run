@@ -1,0 +1,3 @@
+(echo "Opening browser..."; sleep 5; open "http://localhost:6901/vnc.html?password=vncpassword") &
+docker build -t pentobi .
+docker run --privileged -p 5901:5901 -p 6901:6901 pentobi

@@ -1,0 +1,17 @@
+type: "mcts"
+name: "mcts"
+network: "main"
+full_move_probability: 0.2
+full_move_rollouts: 500
+fast_move_rollouts: 100
+ucb_exploration: 1.05
+# This mimics the value in AlphaZero using the logic from KataGo.
+total_dirichlet_alpha: 10.83
+root_exploration_fraction: 0.25
+move_selection_temperature: 1.0
+temperature_turn_cutoff: 24
+forced_playouts_multiplier: 2.0
+reuse_tree: true
+
+log_mcts_report_fraction: 0.00
+log_ucb_report: false

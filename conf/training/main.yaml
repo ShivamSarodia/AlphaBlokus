@@ -1,0 +1,32 @@
+#### Network configuration.
+
+network_name: "main"
+
+
+#### Training configuration.
+
+device: "mps"
+batch_size: 128
+policy_loss_weight: 0.158
+learning_rate: 1.0e-3
+exclude_invalid_moves_from_loss: false
+
+
+#### Sampling information.
+
+# Maximum number of samples into the past to consider for training.
+sample_window: 1_000_000
+# Number of samples that each generation will be trained on.
+samples_per_generation: 10_000
+# Approximately how often each sample will be used for training. 
+# (This controls how much data must be available before a new generation is trained.)
+sampling_ratio: 2.0
+# We feed the window until it reaches this size before starting any training.
+minimum_window_size: 100_000
+
+
+#### Data loading and model writing.
+
+new_data_check_interval: 60
+data_read_directory: "games/"
+model_write_directory: "models/"

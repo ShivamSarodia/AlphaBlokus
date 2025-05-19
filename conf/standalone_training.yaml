@@ -1,0 +1,13 @@
+defaults:
+  - base
+  - game: full_board
+  - networks@networks.main: main
+  - training: main
+  - _self_
+
+entrypoint: standalone_training
+
+training:
+  device: mps
+  samples_per_generation: 1_000_000
+  data_read_directory: '/Users/shivamsarodia/Dev/BlokusBot/data/2024-12-30_23-23-24-rubefaction/games'

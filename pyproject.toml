@@ -1,0 +1,42 @@
+[project]
+name = "alpha_blokus"
+version = "0.1.0"
+description = "An AlphaZero-style bot for the board game Blokus."
+authors = [
+    {name = "Shivam Sarodia",email = "ssarodia@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "numpy (>=2.2.3,<3.0.0)",
+    "pyyaml (>=6.0.2,<7.0.0)",
+    "matplotlib (>=3.10.0,<4.0.0)",
+    "ray (>=2.42.1,<3.0.0)",
+    "uvloop (>=0.21.0,<0.22.0)",
+    "pyinstrument (>=5.0.1,<6.0.0)",
+    "tqdm (>=4.67.1,<5.0.0)",
+    "torch (>=2.6.0,<3.0.0)",
+    "flask (>=3.1.0,<4.0.0)",
+    "flask-cors (>=5.0.0,<6.0.0)",
+    "aim (>=3.27.0,<4.0.0)",
+    "ipykernel (>=6.29.5,<7.0.0)",
+    "scipy (>=1.15.2,<2.0.0)",
+    "ipdb (>=0.13.13,<0.14.0)",
+    "hydra-core (>=1.3.2,<2.0.0)",
+    "omegaconf (>=2.3.0,<3.0.0)"
+]
+
+[tool.poetry]
+packages = [
+    { include = "alpha_blokus" }
+]
+
+[tool.poetry.scripts]
+alpha_blokus = "alpha_blokus.__main__:main"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

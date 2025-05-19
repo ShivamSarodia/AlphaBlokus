@@ -1,0 +1,2 @@
+gameplay_processes: 6
+coroutines_per_process: 256

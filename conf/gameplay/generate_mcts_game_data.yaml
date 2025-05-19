@@ -1,0 +1,7 @@
+defaults:
+  - base
+  - agent_types@agents.0: mcts
+  - agent_types@agents.1: mcts
+  - agent_types@agents.2: mcts
+  - agent_types@agents.3: mcts
+

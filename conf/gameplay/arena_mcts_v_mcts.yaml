@@ -1,0 +1,24 @@
+defaults:
+  - base
+  - agent_types@agents.low_temp_A: mcts
+  - agent_types@agents.high_temp_A: mcts
+  - agent_types@agents.low_temp_B: mcts
+  - agent_types@agents.high_temp_B: mcts
+
+agents:
+  'low_temp_A':
+    name: "low_temp_A"
+    move_selection_temperature: 0.3
+    full_move_probability: 1.0
+  'high_temp_A':
+    name: "high_temp_A"
+    move_selection_temperature: 1.0
+    full_move_probability: 1.0
+  'low_temp_B':
+    name: "low_temp_B"
+    move_selection_temperature: 0.3
+    full_move_probability: 1.0
+  'high_temp_B':
+    name: "high_temp_B"
+    move_selection_temperature: 1.0
+    full_move_probability: 1.0

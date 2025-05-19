@@ -1,0 +1,30 @@
+defaults:
+  - base
+  - game: full_board
+  - networks@networks.main: main
+  - gameplay: arena_mcts_v_pentobi
+
+  # Disable logging because we use Ray's auto-generated logs.
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+  - _self_
+
+########################################################
+# Arena-specific configurations.
+########################################################
+
+networks:
+  main:
+    batch_size: 64
+    model_read_path: "/Users/shivamsarodia/Dev/BlokusBot/outputs/2025-05-15/12-26-32/models/008001435.pt"
+
+gameplay:
+  agents:
+    'mcts_low_temp':
+      network: "main"
+    'mcts_high_temp':
+      network: "main"
+    'pentobi_A':
+      pentobi_level: 5
+    'pentobi_B':
+      pentobi_level: 5

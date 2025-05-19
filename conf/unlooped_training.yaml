@@ -1,0 +1,20 @@
+defaults:
+  - base
+  - game: full_board
+  - networks@networks.main: main
+  - training: main
+  - _self_
+
+entrypoint: unlooped_training
+
+training:
+  device: mps
+
+  validation_set_size: 0.10
+  num_epochs: 5
+  num_samples_between_test_evaluations: 200e3
+  learning_rate: 0.5e-3
+
+  minimum_file: 1740432207245_1499.npz
+  maximum_file: 1740920995337_1476.npz
+  data_read_directory: '/Users/shivamsarodia/Dev/BlokusBot/data/2024-12-30_23-23-24-rubefaction/games'

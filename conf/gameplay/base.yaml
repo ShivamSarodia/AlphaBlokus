@@ -1,0 +1,7 @@
+defaults:
+  - architecture: max
+
+game_save_directory: "games/"
+game_flush_threshold: 100
+
+check_move_validity: true

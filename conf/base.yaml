@@ -1,0 +1,21 @@
+########################################################
+# Configuration that'll change frequently.
+########################################################
+
+entrypoint: simulation
+runtime: 0
+log_flush_interval: 600
+log_to_console: false
+log_made_move: false
+
+########################################################
+# Bits I probably won't change for some time.
+########################################################
+
+use_profiler: false
+
+# This changes the working directory to the Hydra-generated directory, so that
+# paths in the config files are relative to that directory.
+hydra:
+  job:
+    chdir: true
