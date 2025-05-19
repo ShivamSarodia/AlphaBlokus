@@ -4,4 +4,4 @@ RUN git clone https://github.com/ShivamSarodia/AlphaBlokus.git /workspace/AlphaB
 WORKDIR /workspace/AlphaBlokus
 
 # Install dependencies
-RUN pip install .
+RUN pip install -e .
