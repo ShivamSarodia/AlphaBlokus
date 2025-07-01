@@ -31,7 +31,7 @@ class InferenceActor:
 
         # Include an extra .copy() here so we don't get a scary PyTorch warning about 
         # non-writeable tensors.
-        boards_tensor = torch.from_numpy(boards.copy()).to(dtype=torch.float16, device="mps")
+        boards_tensor = torch.from_numpy(boards.copy()).to(dtype=torch.float16, device=self.network_config["device"])
         with torch.inference_mode():
             values_logits_tensor, policy_logits_tensor = self.model(boards_tensor)
         
@@ -100,7 +100,7 @@ class InferenceActor:
         return max(model_paths)
     
     def _load_model(self, path):
-        self.model = NeuralNet(self.network_config, self.cfg).to("mps")
+        self.model = NeuralNet(self.network_config, self.cfg).to(self.network_config["device"])
         self.model.load_state_dict(torch.load(path, weights_only=True))
         self.model.to(dtype=torch.float16)
         self.model.eval()

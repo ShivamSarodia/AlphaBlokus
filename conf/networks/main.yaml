@@ -5,6 +5,9 @@ value_head_flat_layer_width: 64
 policy_head_channels: 64
 policy_convolution_kernel: 3
 
+# Device to use for model inference (e.g., "mps", "cuda", "cpu")
+device: "mps"
+
 # Frequency to check if there's a new model to load from disk.
 new_model_check_interval: 120
 batch_size: 128
