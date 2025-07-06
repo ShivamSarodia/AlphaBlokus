@@ -15,7 +15,6 @@ dependencies = [
     "uvloop (>=0.21.0,<0.22.0)",
     "pyinstrument (>=5.0.1,<6.0.0)",
     "tqdm (>=4.67.1,<5.0.0)",
-    "torch (>=2.6.0,<3.0.0)",
     "aim (>=3.27.0,<4.0.0)",
     "ipykernel (>=6.29.5,<7.0.0)",
     "scipy (>=1.15.2,<2.0.0)",
@@ -41,6 +40,9 @@ alpha_blokus = "alpha_blokus.__main__:main"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 vastai-sdk = "^0.1.0"
+
+[tool.poetry.group.torch.dependencies]
+torch = ">=2.6.0,<3.0.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
