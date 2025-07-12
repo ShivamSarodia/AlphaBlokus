@@ -1,0 +1,18 @@
+# @package _global_
+
+networks:
+  main:
+    device: cuda
+
+game:
+  moves_data_path: /workspace/AlphaBlokus/static/moves_20.npz
+
+gameplay:
+  game_flush_threshold: 1
+
+training:
+  batch_size: 1
+  sample_window: 4
+  samples_per_generation: 2
+  sampling_ratio: 2.0
+  minimum_window_size: 2

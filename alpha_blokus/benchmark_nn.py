@@ -3,8 +3,16 @@ import torch
 import numpy as np
 from alpha_blokus.neural_net import NeuralNet
 
-def run(cfg):
-    """Benchmark neural network evaluation performance."""
+def run(cfg, verbose=True):
+    """Benchmark neural network evaluation performance.
+    
+    Args:
+        cfg: Configuration object
+        verbose: Whether to print results (default: True)
+        
+    Returns:
+        dict: Dictionary containing all benchmark results
+    """
     # Set up device and dtype
     device = torch.device(cfg.networks.main.device)
     dtype = getattr(torch, cfg.networks.main.inference_dtype)
@@ -19,29 +27,33 @@ def run(cfg):
     BENCHMARK_DURATION = cfg.benchmark_duration
     NUM_WARMUP_BATCHES = cfg.num_warmup_batches
     
-    print(f"Benchmarking neural network evaluation...")
-    print(f"Device: {device}")
-    print(f"Dtype: {dtype}")
-    print(f"Batch size: {BATCH_SIZE}")
-    print(f"Board size: {cfg.game.board_size}")
-    print(f"Benchmark duration: {BENCHMARK_DURATION} seconds")
-    print()
+    if verbose:
+        print(f"Benchmarking neural network evaluation...")
+        print(f"Device: {device}")
+        print(f"Dtype: {dtype}")
+        print(f"Batch size: {BATCH_SIZE}")
+        print(f"Board size: {cfg.game.board_size}")
+        print(f"Benchmark duration: {BENCHMARK_DURATION} seconds")
+        print()
 
     # Pre-generate data for warmup and benchmark
     # Estimate how many batches we'll need (add some buffer)
     estimated_batches = int(BENCHMARK_DURATION * 500) + NUM_WARMUP_BATCHES + 1000  # Conservative estimate
-    print(f"Pre-generating {estimated_batches} batches of random data...")
-
+    if verbose:
+        print(f"Pre-generating {estimated_batches} batches of random data...")
+    
     pre_generated_data = []
     for i in range(estimated_batches):
         random_boards = np.random.random((BATCH_SIZE, 4, cfg.game.board_size, cfg.game.board_size))
         pre_generated_data.append(random_boards)
     
-    print(f"Data generation complete. Starting benchmark...")
-    print()
+    if verbose:
+        print(f"Data generation complete. Starting benchmark...")
+        print()
 
     # Warm up
-    print("Warming up...")
+    if verbose:
+        print("Warming up...")
     for i in range(NUM_WARMUP_BATCHES):
         boards = torch.from_numpy(pre_generated_data[i]).to(device=device, dtype=dtype)
         with torch.no_grad():
@@ -50,7 +62,8 @@ def run(cfg):
             policy = policy.cpu().numpy()
 
     # Benchmark with separate time tracking
-    print("Running benchmark...")
+    if verbose:
+        print("Running benchmark...")
     start_time = time.perf_counter()
     num_batches = 0
     total_evaluations = 0
@@ -93,7 +106,7 @@ def run(cfg):
         num_batches += 1
         total_evaluations += BATCH_SIZE
         
-        if num_batches % 10 == 0:
+        if verbose and num_batches % 10 == 0:
             elapsed = time.perf_counter() - start_time
             evals_per_second = total_evaluations / elapsed
             print(f"Batch {num_batches}: {evals_per_second:.1f} evaluations/second (total time)")
@@ -109,21 +122,38 @@ def run(cfg):
     d2h_percent = (total_device_to_host_time / total_time) * 100
     other_percent = 100 - (h2d_percent + eval_percent + d2h_percent)
     
-    print()
-    print("=== Benchmark Results ===")
-    print(f"Total time: {total_time:.2f} seconds")
-    print(f"Total batches: {num_batches}")
-    print(f"Total evaluations: {total_evaluations}")
-    print(f"Evaluations per second: {evaluations_per_second:.1f}")
-    print(f"Average time per evaluation: {avg_time_per_eval:.6f} seconds")
-    print(f"Average time per batch: {total_time / num_batches:.6f} seconds")
-    print()
-    print("=== Time Breakdown ===")
-    print(f"Host-to-device transfer: {total_host_to_device_time:.3f}s ({h2d_percent:.1f}%)")
-    print(f"Model evaluation:        {total_model_eval_time:.3f}s ({eval_percent:.1f}%)")
-    print(f"Device-to-host transfer: {total_device_to_host_time:.3f}s ({d2h_percent:.1f}%)")
-    print(f"Other overhead:          {total_time - total_host_to_device_time - total_model_eval_time - total_device_to_host_time:.3f}s ({other_percent:.1f}%)")
-    print()
-    print("=== Pure Model Performance ===")
-    print(f"Pure model evaluations per second: {total_evaluations / total_model_eval_time:.1f}")
-    print(f"Average pure model time per evaluation: {total_model_eval_time / total_evaluations:.6f} seconds") 
+    # Create simplified results dictionary - average per evaluation in seconds
+    results = {
+        'host_to_device_time': total_host_to_device_time / total_evaluations,
+        'model_eval_time': total_model_eval_time / total_evaluations,
+        'device_to_host_time': total_device_to_host_time / total_evaluations,
+        'other_overhead_time': (total_time - total_host_to_device_time - total_model_eval_time - total_device_to_host_time) / total_evaluations,
+    }
+    
+    if verbose:
+        print()
+        print("=== Benchmark Results ===")
+        print(f"Total time: {total_time:.2f} seconds")
+        print(f"Total batches: {num_batches}")
+        print(f"Total evaluations: {total_evaluations}")
+        print(f"Evaluations per second: {evaluations_per_second:.1f}")
+        print(f"Average time per evaluation: {avg_time_per_eval:.6f} seconds")
+        print(f"Average time per batch: {total_time / num_batches:.6f} seconds")
+        print()
+        print("=== Time Breakdown ===")
+        print(f"Host-to-device transfer: {total_host_to_device_time:.3f}s ({h2d_percent:.1f}%)")
+        print(f"Model evaluation:        {total_model_eval_time:.3f}s ({eval_percent:.1f}%)")
+        print(f"Device-to-host transfer: {total_device_to_host_time:.3f}s ({d2h_percent:.1f}%)")
+        print(f"Other overhead:          {total_time - total_host_to_device_time - total_model_eval_time - total_device_to_host_time:.3f}s ({other_percent:.1f}%)")
+        print()
+        print("=== Pure Model Performance ===")
+        print(f"Pure model evaluations per second: {total_evaluations / total_model_eval_time:.1f}")
+        print(f"Average pure model time per evaluation: {total_model_eval_time / total_evaluations:.6f} seconds")
+        print()
+        print("=== Per-Evaluation Breakdown ===")
+        print(f"Host-to-device time per evaluation: {results['host_to_device_time']:.6f} seconds")
+        print(f"Model eval time per evaluation:     {results['model_eval_time']:.6f} seconds")
+        print(f"Device-to-host time per evaluation: {results['device_to_host_time']:.6f} seconds")
+        print(f"Other overhead time per evaluation:  {results['other_overhead_time']:.6f} seconds")
+    
+    return results 
