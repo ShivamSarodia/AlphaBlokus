@@ -7,6 +7,7 @@ policy_convolution_kernel: 3
 
 # Device to use for model inference (e.g., "mps", "cuda", "cpu")
 device: "mps"
+inference_dtype: "float16"
 
 # Frequency to check if there's a new model to load from disk.
 new_model_check_interval: 120

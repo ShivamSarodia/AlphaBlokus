@@ -73,6 +73,7 @@ class NeuralNet(nn.Module):
         super().__init__()
 
         self.cfg = cfg
+        self.inference_dtype = getattr(torch, net_config["inference_dtype"])
         self.flatten_policy = flatten_policy
 
         self.convolutional_block = nn.Sequential(
@@ -136,7 +137,7 @@ class NeuralNet(nn.Module):
 
     def forward(self, occupancies):
         # Add an all-ones channel to the input for edge detection.
-        ones = torch.ones(occupancies.shape[0], 1, self.cfg.game.board_size, self.cfg.game.board_size, device=occupancies.device, dtype=torch.float16)
+        ones = torch.ones(occupancies.shape[0], 1, self.cfg.game.board_size, self.cfg.game.board_size, device=occupancies.device, dtype=self.inference_dtype)
         x = torch.cat([occupancies, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)
         
         x = self.convolutional_block(x)

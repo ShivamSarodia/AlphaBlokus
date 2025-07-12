@@ -3,8 +3,6 @@ defaults:
   - game: full_board
   - networks@networks.main: main
 
-device: mps
-batch_size: 256
-dtype: float16
-num_batches_warm_up: 10
-num_batches_to_evaluate: 100
+entrypoint: benchmark_nn
+benchmark_duration: 15
+num_warmup_batches: 10
