@@ -14,7 +14,7 @@ def run(cfg):
     OmegaConf.set_struct(default_benchmark_cfg, True)
 
     results = {}
-    for batch_size in [64, 128, 256, 512]:
+    for batch_size in [64, 128, 256, 512, 1024]:
         print("Starting benchmark for batch size: ", batch_size)
         default_benchmark_cfg.networks.main.batch_size = batch_size
         results[batch_size] = benchmark_nn.run(default_benchmark_cfg, verbose=False)

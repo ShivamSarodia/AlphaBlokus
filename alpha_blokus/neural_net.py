@@ -69,12 +69,19 @@ class PolicyFlatten(nn.Module):
         ]
 
 class NeuralNet(nn.Module):
-    def __init__(self, net_config: OmegaConf, cfg: OmegaConf, flatten_policy: bool = True):
+    def __init__(
+        self,
+        net_config: OmegaConf,
+        cfg: OmegaConf,
+        flatten_policy: bool = True,
+        add_ones_channel: bool = True,
+    ):
         super().__init__()
 
         self.cfg = cfg
         self.inference_dtype = getattr(torch, net_config["inference_dtype"])
         self.flatten_policy = flatten_policy
+        self.add_ones_channel = add_ones_channel
 
         self.convolutional_block = nn.Sequential(
             nn.Conv2d(
@@ -137,8 +144,18 @@ class NeuralNet(nn.Module):
 
     def forward(self, occupancies):
         # Add an all-ones channel to the input for edge detection.
-        ones = torch.ones(occupancies.shape[0], 1, self.cfg.game.board_size, self.cfg.game.board_size, device=occupancies.device, dtype=self.inference_dtype)
-        x = torch.cat([occupancies, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)
+        if self.add_ones_channel:
+            ones = torch.ones(
+                occupancies.shape[0],
+                1,
+                self.cfg.game.board_size,
+                self.cfg.game.board_size,
+                device=occupancies.device,
+                dtype=self.inference_dtype,
+            )
+            x = torch.cat([occupancies, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)
+        else:
+            x = occupancies
         
         x = self.convolutional_block(x)
         for residual_block in self.residual_blocks:
@@ -147,3 +164,14 @@ class NeuralNet(nn.Module):
             self.value_head(x),
             self.policy_head(x),
         )
+
+def add_ones_channel(occupancies):
+    ones = torch.ones(
+        occupancies.shape[0],
+        1,
+        occupancies.shape[2],
+        occupancies.shape[3],
+        device=occupancies.device,
+        dtype=occupancies.dtype,
+    )
+    return torch.cat([occupancies, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)

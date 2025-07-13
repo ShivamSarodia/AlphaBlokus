@@ -1,5 +1,6 @@
 import time
 import torch
+# import torch_tensorrt
 import numpy as np
 from alpha_blokus.neural_net import NeuralNet
 
@@ -13,19 +14,34 @@ def run(cfg, verbose=True):
     Returns:
         dict: Dictionary containing all benchmark results
     """
+    # Benchmark parameters
+    BATCH_SIZE = cfg.networks.main.batch_size
+    BENCHMARK_DURATION = cfg.benchmark_duration
+    NUM_WARMUP_BATCHES = cfg.num_warmup_batches
+
     # Set up device and dtype
     device = torch.device(cfg.networks.main.device)
     dtype = getattr(torch, cfg.networks.main.inference_dtype)
 
     # Initialize model
-    model = NeuralNet(cfg.networks.main, cfg, flatten_policy=True)
-    model = model.to(device=device, dtype=dtype)
-    model.eval()
+    raw_model = NeuralNet(
+        cfg.networks.main,
+        cfg,
+    )
+    raw_model = raw_model.to(device=device, dtype=dtype)
+    raw_model.eval()
 
-    # Benchmark parameters
-    BATCH_SIZE = cfg.networks.main.batch_size
-    BENCHMARK_DURATION = cfg.benchmark_duration
-    NUM_WARMUP_BATCHES = cfg.num_warmup_batches
+    # print("Compiling model...")
+    # inputs = [
+    #     add_ones_channel(torch.randn(BATCH_SIZE, 4, cfg.game.board_size, cfg.game.board_size).to(device=device, dtype=dtype)),
+    # ]
+    # trt_gm = torch_tensorrt.compile(raw_model, ir="dynamo", inputs=inputs)
+    # torch_tensorrt.save(trt_gm, "/tmp/trt.ep", inputs=inputs)
+    # torch_tensorrt.save(trt_gm, "/tmp/trt.ts", output_format="torchscript", inputs=inputs)
+
+    # model = torch.export.load("/tmp/trt.ep").module()
+
+    model = raw_model
     
     if verbose:
         print(f"Benchmarking neural network evaluation...")
@@ -38,7 +54,8 @@ def run(cfg, verbose=True):
 
     # Pre-generate data for warmup and benchmark
     # Estimate how many batches we'll need (add some buffer)
-    estimated_batches = int(BENCHMARK_DURATION * 500) + NUM_WARMUP_BATCHES + 1000  # Conservative estimate
+    estimated_evaluations = int(BENCHMARK_DURATION / 0.000028)
+    estimated_batches = int(estimated_evaluations / BATCH_SIZE) + 100
     if verbose:
         print(f"Pre-generating {estimated_batches} batches of random data...")
     
@@ -82,6 +99,7 @@ def run(cfg, verbose=True):
         boards = torch.from_numpy(pre_generated_data[data_index]).to(device=device, dtype=dtype)
         if device.type == 'cuda':
             torch.cuda.synchronize()
+            # pass
         h2d_end = time.perf_counter()
         total_host_to_device_time += (h2d_end - h2d_start)
         
@@ -91,6 +109,7 @@ def run(cfg, verbose=True):
             value, policy = model(boards)
             if device.type == 'cuda':
                 torch.cuda.synchronize()
+                # pass
         eval_end = time.perf_counter()
         total_model_eval_time += (eval_end - eval_start)
         
@@ -100,6 +119,7 @@ def run(cfg, verbose=True):
         policy = policy.cpu().numpy()
         if device.type == 'cuda':
             torch.cuda.synchronize()
+            # pass
         d2h_end = time.perf_counter()
         total_device_to_host_time += (d2h_end - d2h_start)
         
@@ -124,10 +144,10 @@ def run(cfg, verbose=True):
     
     # Create simplified results dictionary - average per evaluation in seconds
     results = {
-        'host_to_device_time': total_host_to_device_time / total_evaluations,
-        'model_eval_time': total_model_eval_time / total_evaluations,
-        'device_to_host_time': total_device_to_host_time / total_evaluations,
-        'other_overhead_time': (total_time - total_host_to_device_time - total_model_eval_time - total_device_to_host_time) / total_evaluations,
+        'host_to_device_time': total_host_to_device_time / total_evaluations * 1e6,
+        'model_eval_time': total_model_eval_time / total_evaluations * 1e6,
+        'device_to_host_time': total_device_to_host_time / total_evaluations * 1e6,
+        'other_overhead_time': (total_time - total_host_to_device_time - total_model_eval_time - total_device_to_host_time) / total_evaluations * 1e6,
     }
     
     if verbose:
@@ -151,9 +171,9 @@ def run(cfg, verbose=True):
         print(f"Average pure model time per evaluation: {total_model_eval_time / total_evaluations:.6f} seconds")
         print()
         print("=== Per-Evaluation Breakdown ===")
-        print(f"Host-to-device time per evaluation: {results['host_to_device_time']:.6f} seconds")
-        print(f"Model eval time per evaluation:     {results['model_eval_time']:.6f} seconds")
-        print(f"Device-to-host time per evaluation: {results['device_to_host_time']:.6f} seconds")
-        print(f"Other overhead time per evaluation:  {results['other_overhead_time']:.6f} seconds")
+        print(f"Host-to-device time per evaluation: {results['host_to_device_time']:.6f} microseconds")
+        print(f"Model eval time per evaluation:     {results['model_eval_time']:.6f} microseconds")
+        print(f"Device-to-host time per evaluation: {results['device_to_host_time']:.6f} microseconds")
+        print(f"Other overhead time per evaluation:  {results['other_overhead_time']:.6f} microseconds")
     
     return results 
