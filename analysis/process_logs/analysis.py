@@ -42,3 +42,12 @@ def load_events(log_path, num_lines=-1):
 
 def filter_events(events, event_name):
     return [event for event in events if event.name == event_name]
+
+def main(argv):
+    events = load_events(argv[0])
+    first_move = filter_events(events, "made_move")[0]
+    print(first_move.timestamp)
+
+if __name__ == "__main__":
+    import sys
+    main(sys.argv)
