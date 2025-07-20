@@ -9,7 +9,13 @@ from typing import Dict
 from alpha_blokus.neural_net import NeuralNet
 from alpha_blokus.event_logger import log_event
 
-@ray.remote(num_gpus=1)
+@ray.remote(
+    num_gpus=1,
+    runtime_env={ "nsight": "default" },
+    # {
+    #     "gpu-metrics-devices": "all",
+    # }},
+)
 class InferenceActor:
     def __init__(self, network_config: Dict, cfg: dict) -> None:
         self.network_config = network_config
