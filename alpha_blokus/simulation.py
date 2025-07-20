@@ -46,11 +46,11 @@ def run(cfg):
             inference_clients[network_name] = InferenceClient(inference_actor, network_config["batch_size"], cfg)
 
     # If we're supposed to be training, start the Ray actor that runs training.
-    if cfg.get("training"):
-        gamedata_path = cfg["training"]["data_read_directory"]
-        print(f"Starting training actor reading from {gamedata_path}...")
-        training_actor = TrainingActor.remote(gamedata_path, cfg)
-        training_actor.run.remote()
+    # if cfg.get("training"):
+    #     gamedata_path = cfg["training"]["data_read_directory"]
+    #     print(f"Starting training actor reading from {gamedata_path}...")
+    #     training_actor = TrainingActor.remote(gamedata_path, cfg)
+    #     training_actor.run.remote()
 
     # If we're supposed to be generating game data, start the Ray actor(s) for gameplay.
     if cfg.get("gameplay"):
