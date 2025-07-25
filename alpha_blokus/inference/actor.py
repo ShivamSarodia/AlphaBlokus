@@ -31,7 +31,7 @@ class InferenceActor:
         self.model = None
         self.model_path = None
         self.last_checked_for_new_model = 0
-        
+
         # Queue to eliminate GPU idle gaps
         self.work_queue = queue.Queue()
         self.shutdown_event = threading.Event()
@@ -40,10 +40,13 @@ class InferenceActor:
 
         if self.model is None:
             raise ValueError("Missing model")
-            
+
         # Start worker thread that keeps GPU busy
-        self.worker_thread = threading.Thread(target=self._worker_loop, daemon=True)
-        self.worker_thread.start()
+        self.worker_threads = [
+            threading.Thread(target=self._worker_loop, daemon=True) for _ in range(2)
+        ]
+        for worker_thread in self.worker_threads:
+            worker_thread.start()
 
     async def evaluate_batch(self, boards) -> Tuple[np.ndarray, np.ndarray]:
         self._maybe_load_model()
@@ -51,38 +54,40 @@ class InferenceActor:
         # Create future and enqueue work
         result_future = Future()
         self.work_queue.put((boards, result_future))
-        
+
         # Await result without blocking other async operations
         return await asyncio.wrap_future(result_future)
 
     def _worker_loop(self):
         """Keep GPU busy by continuously processing work queue."""
+        stream = torch.cuda.Stream()
+
         while not self.shutdown_event.is_set():
             try:
                 # Get next work item (blocks until available)
                 boards, result_future = self.work_queue.get(timeout=0.1)
             except queue.Empty:
                 continue  # Check shutdown and try again
-                
+
             try:
                 # Process immediately - no gaps
                 start_time = time.perf_counter()
-                
-                boards_tensor = torch.from_numpy(boards.copy()).to(
-                    dtype=self.inference_dtype, device=self.device)
-                    
-                with torch.inference_mode():
-                    values_logits, policy_logits = self.model(boards_tensor)
-                
-                values = torch.softmax(values_logits, dim=1).cpu().numpy()
-                policy = policy_logits.cpu().numpy()
-                
+                with torch.cuda.stream(stream):
+                    boards_tensor = torch.from_numpy(boards.copy()).to(
+                        dtype=self.inference_dtype, device=self.device)
+
+                    with torch.inference_mode():
+                        values_logits, policy_logits = self.model(boards_tensor)
+
+                    values = torch.softmax(values_logits, dim=1).cpu().numpy()
+                    policy = policy_logits.cpu().numpy()
+
                 if self.network_config["log_gpu_evaluation"]:
                     log_event("gpu_evaluation", {
                         "duration": time.perf_counter() - start_time,
                         "batch_size": boards.shape[0],
                     })
-                
+
                 # Return result
                 result_future.set_result((values, policy))
             except Exception as e:
