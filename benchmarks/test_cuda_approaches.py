@@ -153,6 +153,14 @@ class InferenceActor:
         # TODO: The duration that we hold the kernel lock should be very short -- everything
         #       is happening async in here?
         with self.kernel_lock:
+            # We don't need to use record_stream here because none of these tensors are
+            # getting deallocated in Python until the end of the method, by which time
+            # we've already synchronized all these operations, converted what we need to
+            # CPU, and no GPU streams will be using them.
+            #
+            # Be careful -- if we overwrite the value of a tensor, that can be a deallocation
+            # that requires record_stream.
+
             start_time = time.perf_counter()
             with torch.cuda.stream(self.load_data_stream):
                 boards_tensor = torch.from_numpy(boards.copy()).to(
@@ -169,19 +177,17 @@ class InferenceActor:
 
             self.unload_data_stream.wait_stream(self.kernel_stream)
             with torch.cuda.stream(self.unload_data_stream):
-                values = values.to(device="cpu", non_blocking=True)
-                policy = policy.to(device="cpu", non_blocking=True)
+                values_cpu = values.to(device="cpu", non_blocking=True)
+                policy_cpu = policy.to(device="cpu", non_blocking=True)
 
             end_time = time.perf_counter()
 
         self.time_in_lock += end_time - start_time
 
-        # TODO: Add a RecordStream!?
-
         # Force the unload stream to finish before returning.
         self.unload_data_stream.synchronize()
 
-        return values.numpy(), policy.numpy()
+        return values_cpu.numpy(), policy_cpu.numpy()
 
 # # # # # # # # # # # # # # #
 # Gameplay Actor
