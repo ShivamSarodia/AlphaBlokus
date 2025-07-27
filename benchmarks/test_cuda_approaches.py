@@ -148,25 +148,30 @@ class InferenceActor:
         self.unload_data_stream = torch.cuda.Stream()
 
     def evaluate_batch(self, boards):
-        with torch.cuda.stream(self.load_data_stream):
-            boards_tensor = torch.from_numpy(boards.copy()).to(
-                dtype=torch.float16,
-                device=torch.device(DEVICE),
-            )
-
+        # TODO: The duration that we hold the kernel lock should be very short -- everything
+        #       is happening async in here?
         with self.kernel_lock:
+            with torch.cuda.stream(self.load_data_stream):
+                boards_tensor = torch.from_numpy(boards.copy()).to(
+                    dtype=torch.float16,
+                    device=torch.device(DEVICE),
+                    non_blocking=True,
+                )
+
             self.kernel_stream.wait_stream(self.load_data_stream)
             with torch.cuda.stream(self.kernel_stream):
                 with torch.inference_mode():
                     values_logits_tensor, policy = self.model(boards_tensor)
                     values = torch.softmax(values_logits_tensor, dim=1)
 
-        self.unload_data_stream.wait_stream(self.kernel_stream)
-        with torch.cuda.stream(self.unload_data_stream):
-            values = values.cpu()
-            policy = policy.cpu()
+            self.unload_data_stream.wait_stream(self.kernel_stream)
+            with torch.cuda.stream(self.unload_data_stream):
+                values = values.to(device="cpu", non_blocking=True)
+                policy = policy.to(device="cpu", non_blocking=True)
 
         # TODO: Add a RecordStream!?
+        # TODO: We need to do something to wait until the data is actually on the CPU
+        #       before calling numpy i think??
 
         return values.numpy(), policy.numpy()
 
