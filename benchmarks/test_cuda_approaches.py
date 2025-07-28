@@ -5,6 +5,7 @@ import ray
 import numpy as np
 import time
 import threading
+from torch.profiler import profile, record_function, ProfilerActivity
 
 # # # # # # # # # # # # # # # # # #
 # Neural network components
@@ -40,7 +41,8 @@ class ResidualBlock(nn.Module):
         )
 
     def forward(self, x):
-        return F.relu(x + self.convolutional_block(x))
+        # return F.relu(x + self.convolutional_block(x))
+        return self.convolutional_block(x)
 
 class NeuralNet(nn.Module):
     def __init__(self):
@@ -106,35 +108,26 @@ class NeuralNet(nn.Module):
 
     def forward(self, occupancies):
         # Add an all-ones channel to the input for edge detection.
-        ones = torch.ones(
-            occupancies.shape[0],
-            1,
-            occupancies.shape[2],
-            occupancies.shape[3],
-            device=occupancies.device,
-            dtype=torch.float16,
-        )
-        x = torch.cat([occupancies, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)
+        x = occupancies
         x = self.convolutional_block(x)
         for residual_block in self.residual_blocks:
             x = residual_block(x)
-        return (
-            self.value_head(x),
-            self.policy_head(x),
-        )
+        return x
 
 # # # # # # # # # # # # # # #
 # Inference Actor
 # # # # # # # # # # # # # # #
 
+# @ray.remote(
+#     num_gpus=1,
+#     runtime_env={
+#         "nsight": {
+#         "gpu-metrics-devices": "all",
+#     }},
+# )
 @ray.remote(
     num_gpus=1,
-    runtime_env={
-        "nsight": {
-        "gpu-metrics-devices": "all",
-    }},
 )
-# @ray.remote
 class InferenceActor:
     def __init__(self) -> None:
         self.model = NeuralNet()
@@ -150,52 +143,52 @@ class InferenceActor:
         self.times = [0.0 for _ in range(10)]
 
     def evaluate_batch(self, boards):
-        # TODO: The duration that we hold the kernel lock should be very short -- everything
-        #       is happening async in here?
-        with self.kernel_lock:
-            # We don't need to use record_stream here because none of these tensors are
-            # getting deallocated in Python until the end of the method, by which time
-            # we've already synchronized all these operations, converted what we need to
-            # CPU, and no GPU streams will be using them.
-            #
-            # Be careful -- if we overwrite the value of a tensor, that can be a deallocation
-            # that requires record_stream.
+        with torch.inference_mode():
+            # TODO: The duration that we hold the kernel lock should be very short -- everything
+            #       is happening async in here?
+            with self.kernel_lock:
+                # We don't need to use record_stream here because none of these tensors are
+                # getting deallocated in Python until the end of the method, by which time
+                # we've already synchronized all these operations, converted what we need to
+                # CPU, and no GPU streams will be using them.
+                #
+                # Be careful -- if we overwrite the value of a tensor, that can be a deallocation
+                # that requires record_stream.
 
-            start_time = time.perf_counter()
-            with torch.cuda.stream(self.load_data_stream):
+                start_time = time.perf_counter()
+                # with torch.cuda.stream(self.load_data_stream):
                 boards_tensor = torch.from_numpy(boards.copy()).to(
                     dtype=torch.float16,
                     device=torch.device(DEVICE),
                     non_blocking=True,
                 )
 
-            self.times[0] += (time.perf_counter() - start_time)
+                self.times[0] += (time.perf_counter() - start_time)
 
-            self.kernel_stream.wait_stream(self.load_data_stream)
+                # self.kernel_stream.wait_stream(self.load_data_stream)
 
-            self.times[1] += (time.perf_counter() - start_time)
+                self.times[1] += (time.perf_counter() - start_time)
 
-            with torch.cuda.stream(self.kernel_stream):
-                with torch.inference_mode():
-                    values_logits_tensor, policy = self.model(boards_tensor)
-                    values = torch.softmax(values_logits_tensor, dim=1)
+                # with torch.cuda.stream(self.kernel_stream):
+                self.times[2] += (time.perf_counter() - start_time)
+                policy = self.model(boards_tensor)
+                self.times[3] += (time.perf_counter() - start_time)
 
-            self.times[2] += (time.perf_counter() - start_time)
+                self.times[4] += (time.perf_counter() - start_time)
 
-            self.unload_data_stream.wait_stream(self.kernel_stream)
+                # self.unload_data_stream.wait_stream(self.kernel_stream)
 
-            self.times[3] += (time.perf_counter() - start_time)
+                self.times[5] += (time.perf_counter() - start_time)
 
-            with torch.cuda.stream(self.unload_data_stream):
-                values_cpu = values.to(device="cpu", non_blocking=True)
+                # with torch.cuda.stream(self.unload_data_stream):
                 policy_cpu = policy.to(device="cpu", non_blocking=True)
 
-            self.times[4] += (time.perf_counter() - start_time)
+                self.times[6] += (time.perf_counter() - start_time)
 
         # Force the unload stream to finish before returning.
         self.unload_data_stream.synchronize()
 
-        return values_cpu.numpy(), policy_cpu.numpy()
+        return policy_cpu.numpy()
 
     def get_times(self):
         return self.times
@@ -211,8 +204,9 @@ class GameplayActor:
     def run(self):
         start_time = time.time()
         while time.time() - start_time < 60:
-            boards = np.random.randint(0, 1, size=(128, 4, 20, 20))
-            values, policy = ray.get(self.inference_actor.evaluate_batch.remote(boards))
+            stack = 5
+            boards = np.random.randint(0, 1, size=(128, stack, 20, 20))
+            policy = ray.get(self.inference_actor.evaluate_batch.remote(boards))
             time.sleep(1e-3)
 
 ray.init(log_to_driver=True)
