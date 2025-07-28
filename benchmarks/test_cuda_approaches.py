@@ -147,7 +147,7 @@ class InferenceActor:
         self.kernel_stream = torch.cuda.Stream()
         self.unload_data_stream = torch.cuda.Stream()
 
-        self.time_in_lock = 0.0
+        self.times = [0.0 for _ in range(10)]
 
     def evaluate_batch(self, boards):
         # TODO: The duration that we hold the kernel lock should be very short -- everything
@@ -169,25 +169,36 @@ class InferenceActor:
                     non_blocking=True,
                 )
 
+            self.times[0] += (time.perf_counter() - start_time)
+
             self.kernel_stream.wait_stream(self.load_data_stream)
+
+            self.times[1] += (time.perf_counter() - start_time)
+
             with torch.cuda.stream(self.kernel_stream):
                 with torch.inference_mode():
                     values_logits_tensor, policy = self.model(boards_tensor)
                     values = torch.softmax(values_logits_tensor, dim=1)
 
+            self.times[2] += (time.perf_counter() - start_time)
+
             self.unload_data_stream.wait_stream(self.kernel_stream)
+
+            self.times[3] += (time.perf_counter() - start_time)
+
             with torch.cuda.stream(self.unload_data_stream):
                 values_cpu = values.to(device="cpu", non_blocking=True)
                 policy_cpu = policy.to(device="cpu", non_blocking=True)
 
-            end_time = time.perf_counter()
-
-        self.time_in_lock += end_time - start_time
+            self.times[4] += (time.perf_counter() - start_time)
 
         # Force the unload stream to finish before returning.
         self.unload_data_stream.synchronize()
 
         return values_cpu.numpy(), policy_cpu.numpy()
+
+    def get_times(self):
+        return self.times
 
 # # # # # # # # # # # # # # #
 # Gameplay Actor
@@ -215,3 +226,5 @@ for gameplay_actor in gameplay_actors:
 
 # Give the actors time to wrap up.
 time.sleep(70)
+
+print("Time in lock:", ray.get(inference_actor.get_times.remote()))
