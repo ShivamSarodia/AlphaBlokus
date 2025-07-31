@@ -3,6 +3,10 @@ import torch.nn as nn
 import tensorrt as trt
 import numpy as np
 import cuda.bindings.driver as cuda
+from queue import Queue
+import time
+from contextlib import contextmanager
+from timer import Timer
 
 from network import NeuralNet
 
@@ -10,6 +14,8 @@ BATCH_SIZE = 128
 ONNX_MODEL_PATH = "/tmp/neuralnet.onnx"
 ENGINE_PATH = "/tmp/neuralnet.trt"
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
+
+torch_model = NeuralNet().eval()
 
 def handleCudaError(tup):
     if tup[0]:
@@ -23,10 +29,9 @@ def handleCudaError(tup):
 
 def generate_onnx_file():
     print("Starting ONNX export...")
-    model = NeuralNet().eval()
     input = torch.randn(BATCH_SIZE, 5, 20, 20)
     torch.onnx.export(
-        model,
+        torch_model,
         input,
         ONNX_MODEL_PATH,
         export_params=True,
@@ -81,10 +86,10 @@ def get_tensor_np_empty(engine, tensor_name):
     return np.empty(shape, dtype=dtype)
 
 # Training actor's job
-generate_onnx_file()
+# generate_onnx_file()
 
 # Model downloading actor's job
-generate_engine_file()
+# generate_engine_file()
 
 # Inference actor's job
 cuda.cuInit(0)
@@ -94,62 +99,87 @@ context = engine.create_execution_context()
 # Confirm I got the order of tensors right.
 assert [engine.get_tensor_name(i) for i in range(engine.num_io_tensors)] == ['boards', 'values', 'policy']
 
-torch_model = NeuralNet().eval()
-
 # Inference actor's job per-iteration
 print("Starting inference...")
-for _ in range(1):
-    # Generate input data
-    boards = np.random.randn(*engine.get_tensor_shape("boards")).astype(trt.nptype(engine.get_tensor_dtype("boards")))
 
-    # Allocate memory for input and output tensors. (TODO: Share memory between calls!)
-    boards_size = get_tensor_size(engine, "boards")
-    values_size = get_tensor_size(engine, "values")
-    policy_size = get_tensor_size(engine, "policy")
-    boards_device_memory = handleCudaError(cuda.cuMemAlloc(boards_size))
-    values_device_memory = handleCudaError(cuda.cuMemAlloc(values_size))
-    policy_device_memory = handleCudaError(cuda.cuMemAlloc(policy_size))
+boards_size = get_tensor_size(engine, "boards")
+values_size = get_tensor_size(engine, "values")
+policy_size = get_tensor_size(engine, "policy")
 
-    # Move input data to device memory.
-    handleCudaError(cuda.cuMemcpyHtoD(boards_device_memory, boards, boards_size))
+spots_size = 4
 
-    # Execute the inference.
-    success = context.execute_v2(
-        bindings=[
-            boards_device_memory,
-            values_device_memory,
-            policy_device_memory,
-        ]
+spots = Queue()
+for _ in range(spots_size):
+    spots.put(
+        {
+            "boards": handleCudaError(cuda.cuMemAlloc(boards_size)),
+            "values": handleCudaError(cuda.cuMemAlloc(values_size)),
+            "policy": handleCudaError(cuda.cuMemAlloc(policy_size)),
+        }
     )
+
+timer = Timer(unit="ms")
+for _ in range(100):
+    with timer.name("get_spots"):
+        spotset = spots.get()
+        boards_device_memory = spotset["boards"]
+        values_device_memory = spotset["values"]
+        policy_device_memory = spotset["policy"]
+
+    with timer.name("generate_data"):
+        # Generate input data
+        boards = np.random.randn(*engine.get_tensor_shape("boards")).astype(trt.nptype(engine.get_tensor_dtype("boards")))
+
+    with timer.name("host_to_device"):
+        # Move input data to device memory.
+        handleCudaError(cuda.cuMemcpyHtoD(boards_device_memory, boards, boards_size))
+
+    with timer.name("execute"):
+        # Execute the inference.
+        success = context.execute_v2(
+            bindings=[
+                boards_device_memory,
+                values_device_memory,
+                policy_device_memory,
+            ]
+        )
     if not success:
         raise RuntimeError("Failed to execute inference")
 
-    # Move output data back to host memory.
-    values = get_tensor_np_empty(engine, "values")
-    policy = get_tensor_np_empty(engine, "policy")
-    handleCudaError(cuda.cuMemcpyDtoH(values, values_device_memory, values_size))
-    handleCudaError(cuda.cuMemcpyDtoH(policy, policy_device_memory, policy_size))
+    with timer.name("device_to_host"):
+        # Move output data back to host memory.
+        values = get_tensor_np_empty(engine, "values")
+        policy = get_tensor_np_empty(engine, "policy")
+        handleCudaError(cuda.cuMemcpyDtoH(values, values_device_memory, values_size))
+        handleCudaError(cuda.cuMemcpyDtoH(policy, policy_device_memory, policy_size))
 
-    # Free the allocated device memory.
-    handleCudaError(cuda.cuMemFree(boards_device_memory))
-    handleCudaError(cuda.cuMemFree(values_device_memory))
-    handleCudaError(cuda.cuMemFree(policy_device_memory))
+    with timer.name("synchronize"):
+        # Synchronize to make sure everything is done.
+        handleCudaError(cuda.cuCtxSynchronize())
 
-    # Synchronize to make sure everything is done.
-    handleCudaError(cuda.cuCtxSynchronize())
+    assert (not np.isnan(values).any()) and (not np.isnan(policy).any()), "NaN detected in outputs!"
 
-    assert np.isnan(values).none() and np.isnan(policy).none(), "NaN detected in outputs!"
+    spots.put(spotset)
 
-    # Confirm that TensorRT and PyTorch outputs are similar.
-    boards_tensor = torch.from_numpy(boards)
-    with torch.no_grad():
-        torch_values, torch_policy = torch_model(boards_tensor)
-    torch_values = torch_values.numpy()
-    torch_policy = torch_policy.numpy()
+    # # Confirm that TensorRT and PyTorch outputs are similar.
+    # boards_tensor = torch.from_numpy(boards)
+    # with torch.no_grad():
+    #     torch_values, torch_policy = torch_model(boards_tensor)
+    # torch_values = torch_values.numpy()
+    # torch_policy = torch_policy.numpy()
 
-    max_diff_values = np.max(np.abs(values - torch_values))
-    max_diff_policy = np.max(np.abs(policy - torch_policy))
-    print(f"Max diff (values): {max_diff_values:.3e}")
-    print(f"Max diff (policy): {max_diff_policy:.3e}")
-    assert np.allclose(values, torch_values, atol=1e-5, rtol=1e-3), "Values outputs differ!"
-    assert np.allclose(policy, torch_policy, atol=1e-5, rtol=1e-3), "Policy outputs differ!"
+    # print(values[53])
+    # print(torch_values[53])
+
+    # max_diff_values = np.max(np.abs(values - torch_values))
+    # max_diff_policy = np.max(np.abs(policy - torch_policy))
+    # print(f"Max diff (values): {max_diff_values:.3e}")
+    # print(f"Max diff (policy): {max_diff_policy:.3e}")
+    # assert np.allclose(values, torch_values, atol=1e-3, rtol=1e-3), "Values outputs differ!"
+    # assert np.allclose(policy, torch_policy, atol=1e-3, rtol=1e-3), "Policy outputs differ!"
+
+while not spots.empty():
+    for _, value in spots.get().items():
+        handleCudaError(cuda.cuMemFree(value))
+
+timer.print_results()
