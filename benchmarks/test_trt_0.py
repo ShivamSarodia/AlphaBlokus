@@ -1,6 +1,6 @@
 import torch
 import tensorrt as trt
-from cuda.bindings import driver
+from cuda.bindings import driver as
 import numpy as np
 
 from network import NeuralNet
@@ -14,7 +14,7 @@ torch.onnx.export(
     export_params=True,        # include learned parameters
     do_constant_folding=True,  # enable constant folding
     input_names=['input'],
-    output_names=['output']
+    output_names=['values', 'policy']
 )
 print("ONNX export complete: neuralnet.onnx")
 
@@ -25,6 +25,16 @@ driver.cuInit(0)
 #
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
+
+def handleCudaError(tup):
+    if tup[0]:
+        raise RuntimeError(
+            f"CUDA error: {driver.cuGetErrorString(tup[0])} ({tup[0]})"
+        )
+    if len(tup) == 2:
+        return tup[1]
+    else:
+        return tup[1:]
 
 def build_engine_from_onnx(onnx_path: str,
                            engine_path: str) -> None:
@@ -78,14 +88,16 @@ def allocate_buffers(engine: trt.ICudaEngine):
 
         # allocate host and device buffers
         host_mem = np.empty(size, dtype=dtype)
-        device_mem = driver.mem_alloc(host_mem.nbytes)
+        device_mem = handleCudaError(driver.cuMemAlloc(host_mem.nbytes))
         bindings.append(int(device_mem))
 
         # sort into inputs vs. outputs
-        if engine.binding_is_input(idx):
-            inputs.append({"name": name, "host": host_mem, "device": device_mem})
+        if engine.get_tensor_mode(name) == trt.TensorIOMode.INPUT:
+            inputs.append({"name": name, "host": host_mem, "device": device_mem, "size": host_mem.nbytes})
+        elif engine.get_tensor_mode(name) == trt.TensorIOMode.OUTPUT:
+            outputs.append({"name": name, "host": host_mem, "device": device_mem, "size": host_mem.nbytes})
         else:
-            outputs.append({"name": name, "host": host_mem, "device": device_mem})
+            raise RuntimeError(f"Unknown tensor mode for {name}")
 
     return inputs, outputs, bindings
 
@@ -93,12 +105,12 @@ def allocate_buffers(engine: trt.ICudaEngine):
 def do_inference(context, inputs, outputs, bindings):
     # copy host → device
     for inp in inputs:
-        driver.memcpy_htod(inp["device"], inp["host"])
+        driver.cuMemcpyHtoD(inp["device"], inp["host"], inp["size"])
     # execute (blocking)
     context.execute_v2(bindings)
     # copy device → host
     for out in outputs:
-        driver.memcpy_dtoh(out["host"], out["device"])
+        driver.cuMemcpyDtoH(out["host"], out["device"], inp["size"])
     # return list of numpy arrays
     return [out["host"] for out in outputs]
 
@@ -124,10 +136,13 @@ def main():
     output_buffers = do_inference(context, inputs, outputs, bindings)
 
     # Reshape and display
-    out_shape = engine.get_tensor_shape(outputs[0]["name"])
-    result = output_buffers[0].reshape(out_shape)
-    print("Result shape:", result.shape)
-    print("First 10 values:", result.flatten()[:10])
+    for output_buffer, output in zip(output_buffers, outputs):
+        print(output_buffer)
+        out_shape = engine.get_tensor_shape(output["name"])
+        result = output_buffer.reshape(out_shape)
+        print("Name", output["name"])
+        print("Result shape:", result.shape)
+        print("First 10 values:", result.flatten()[:10])
 
 if __name__ == "__main__":
     main()
