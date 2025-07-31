@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import tensorrt as trt
 import numpy as np
 import cuda.bindings.driver as cuda
@@ -8,7 +9,6 @@ from network import NeuralNet
 BATCH_SIZE = 128
 ONNX_MODEL_PATH = "/tmp/neuralnet.onnx"
 ENGINE_PATH = "/tmp/neuralnet.trt"
-
 TRT_LOGGER = trt.Logger(trt.Logger.WARNING)
 
 def handleCudaError(tup):
@@ -94,6 +94,8 @@ context = engine.create_execution_context()
 # Confirm I got the order of tensors right.
 assert [engine.get_tensor_name(i) for i in range(engine.num_io_tensors)] == ['boards', 'values', 'policy']
 
+torch_model = NeuralNet().eval()
+
 # Inference actor's job per-iteration
 print("Starting inference...")
 for _ in range(1):
@@ -136,6 +138,18 @@ for _ in range(1):
     # Synchronize to make sure everything is done.
     handleCudaError(cuda.cuCtxSynchronize())
 
-    # Print the results.
-    print("Values:", values[0])
-    print("Policy:", policy[0][10:])
+    assert np.isnan(values).none() and np.isnan(policy).none(), "NaN detected in outputs!"
+
+    # Confirm that TensorRT and PyTorch outputs are similar.
+    boards_tensor = torch.from_numpy(boards)
+    with torch.no_grad():
+        torch_values, torch_policy = torch_model(boards_tensor)
+    torch_values = torch_values.numpy()
+    torch_policy = torch_policy.numpy()
+
+    max_diff_values = np.max(np.abs(values - torch_values))
+    max_diff_policy = np.max(np.abs(policy - torch_policy))
+    print(f"Max diff (values): {max_diff_values:.3e}")
+    print(f"Max diff (policy): {max_diff_policy:.3e}")
+    assert np.allclose(values, torch_values, atol=1e-5, rtol=1e-3), "Values outputs differ!"
+    assert np.allclose(policy, torch_policy, atol=1e-5, rtol=1e-3), "Policy outputs differ!"
