@@ -75,6 +75,11 @@ def get_tensor_size(engine, tensor_name):
     shape = engine.get_tensor_shape(tensor_name)
     return np.prod(shape) * np.dtype(dtype).itemsize
 
+def get_tensor_np_empty(engine, tensor_name):
+    dtype = trt.nptype(engine.get_tensor_dtype(tensor_name))
+    shape = engine.get_tensor_shape(tensor_name)
+    return np.empty(shape, dtype=dtype)
+
 # Training actor's job
 generate_onnx_file()
 
@@ -93,7 +98,7 @@ assert [engine.get_tensor_name(i) for i in range(engine.num_io_tensors)] == ['bo
 print("Starting inference...")
 for _ in range(1):
     # Generate input data
-    boards = np.random.randn(BATCH_SIZE, 5, 20, 20)
+    boards = np.random.randn(*engine.get_tensor_shape("boards")).astype(trt.nptype(engine.get_tensor_dtype("boards")))
 
     # Allocate memory for input and output tensors. (TODO: Share memory between calls!)
     boards_size = get_tensor_size(engine, "boards")
@@ -118,8 +123,8 @@ for _ in range(1):
         raise RuntimeError("Failed to execute inference")
 
     # Move output data back to host memory.
-    values = np.empty((BATCH_SIZE, 4), dtype=np.float32)
-    policy = np.empty((BATCH_SIZE, 36400), dtype=np.float32)
+    values = get_tensor_np_empty(engine, "values")
+    policy = get_tensor_np_empty(engine, "policy")
     handleCudaError(cuda.cuMemcpyDtoH(values, values_device_memory, values_size))
     handleCudaError(cuda.cuMemcpyDtoH(policy, policy_device_memory, policy_size))
 
