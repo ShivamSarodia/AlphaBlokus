@@ -104,6 +104,7 @@ class InferenceActor:
         print("Starting InferenceActor...")
 
         self.time_in_lock = 0
+        self.time_synchronizing = 0
 
         cuda_runtime.cudaDeviceSynchronize()
 
@@ -212,7 +213,9 @@ class InferenceActor:
             self.time_in_lock += time.perf_counter() - start_time
 
         # Wait for all the processing to finish.
+        start_sync = time.perf_counter()
         handleCudaError(cuda_runtime.cudaEventSynchronize(finished_d2h_event))
+        self.time_synchronizing += time.perf_counter() - start_sync
 
         # Copy the Numpy arrays so that we can free the pinned host memory that currently
         # holds them to be used by another inference request.
@@ -234,7 +237,7 @@ class InferenceActor:
         return values, policy
 
     def get_times(self):
-        return self.time_in_lock
+        return (self.time_in_lock, self.time_synchronizing)
 
 @ray.remote
 class GameplayActor:
@@ -255,7 +258,9 @@ class GameplayActor:
             })
             time.sleep(1e-3)
 
-@ray.remote
+@ray.remote(
+    num_gpus=1,
+)
 class CollectionActor:
     def __init__(self):
         self.evals = []
