@@ -18,13 +18,24 @@ class Timer:
         if unit not in self._UNIT_FACTORS:
             raise ValueError(f"Unsupported unit '{unit}'. Choose from {list(self._UNIT_FACTORS)}.")
         self.unit = unit
+        self.disabled = False
         self._factor = self._UNIT_FACTORS[unit]
         self.precision = precision
         self._records: dict[str, dict[str, float | int]] = {}
 
+    def disable(self):
+        self.disabled = True
+
+    def enable(self):
+        self.disabled = False
+
     @contextmanager
-    def name(self, section: str):
+    def name(self, section: str, skip: bool = False):
         """Time a block and accumulate total & count for `section`."""
+        if self.disabled:
+            yield
+            return
+
         start = time.perf_counter()
         try:
             yield
