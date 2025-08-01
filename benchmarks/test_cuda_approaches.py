@@ -5,14 +5,12 @@ import ray
 import numpy as np
 import time
 import threading
-from torch.profiler import profile, record_function, ProfilerActivity
 
 # # # # # # # # # # # # # # # # # #
 # Neural network components
 # # # # # # # # # # # # # # # # # #
 
 DEVICE = "cuda"
-# DEVICE = "mps"
 
 class ResidualBlock(nn.Module):
     def __init__(self):
