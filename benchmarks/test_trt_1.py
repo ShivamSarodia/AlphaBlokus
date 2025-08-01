@@ -223,11 +223,13 @@ for i in range(100):
 
     with timer.name("torch_equivalent"):
         # Confirm that TensorRT and PyTorch outputs are similar.
-        boards_tensor = torch.from_numpy(boards)
+        torch_model.cuda()
+        torch_model.eval()
+        boards_tensor = torch.from_numpy(boards).cuda()
         with torch.no_grad():
             torch_values, torch_policy = torch_model(boards_tensor)
-        torch_values = torch_values.numpy()
-        torch_policy = torch_policy.numpy()
+        torch_values = torch_values.cpu().numpy()
+        torch_policy = torch_policy.cpu().numpy()
 
     # print(values[53])
     # print(torch_values[53])

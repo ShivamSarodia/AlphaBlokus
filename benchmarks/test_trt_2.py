@@ -214,6 +214,14 @@ class InferenceActor:
         # Wait for all the processing to finish.
         handleCudaError(cuda_runtime.cudaEventSynchronize(finished_d2h_event))
 
+        # Copy the Numpy arrays so that we can free the pinned host memory that currently
+        # holds them to be used by another inference request.
+        #
+        # This isn't very efficient, but I don't think we care because the GPU is queued
+        # up with other requests that it's asynchronously processing already.
+        values = values_numpy_result.copy()
+        policy = policy_numpy_result.copy()
+
         # Release the spots to be recycled elsewhere.
         self.spots.put(spots)
 
@@ -223,15 +231,16 @@ class InferenceActor:
         handleCudaError(cuda_runtime.cudaEventDestroy(finished_d2h_event))
 
         # Return the results.
-        return values_numpy_result, policy_numpy_result
+        return values, policy
 
     def get_times(self):
         return self.time_in_lock
 
 @ray.remote
 class GameplayActor:
-    def __init__(self, inference_actor):
+    def __init__(self, inference_actor, collection_actor):
         self.inference_actor = inference_actor
+        self.collection_actor = collection_actor
 
     def run(self):
         start_time = time.time()
@@ -239,12 +248,46 @@ class GameplayActor:
             stack = 5
             boards = np.random.randint(0, 1, size=(128, stack, 20, 20))
             values, policy = ray.get(self.inference_actor.evaluate_batch.remote(boards))
+            self.collection_actor.report_eval.remote({
+                "boards": boards,
+                "values": values,
+                "policy": policy,
+            })
             time.sleep(1e-3)
+
+@ray.remote
+class CollectionActor:
+    def __init__(self):
+        self.evals = []
+
+    def report_eval(self, eval):
+        self.evals.append(eval)
+
+    def test_evals(self):
+        print("Starting evals...")
+        for eval in self.evals:
+            boards = eval["boards"]
+            values = eval["values"]
+            policy = eval["policy"]
+
+            torch_model.cuda().eval()
+            with torch.inference_mode():
+                input_tensor = torch.tensor(boards, dtype=torch.float32)
+                expected_values, expected_policy = torch_model(input_tensor)
+
+            expected_values = expected_values.cpu().numpy()
+            expected_policy = expected_policy.cpu().numpy()
+
+            assert np.allclose(values, expected_values, atol=1e-3, rtol=1e-3), "Values do not match!"
+            assert np.allclose(policy, expected_policy, atol=1e-3, rtol=1e-3), "Policy does not match!"
+
+        print("Eval passed!")
 
 ray.init(log_to_driver=True)
 inference_actor = InferenceActor.options(max_concurrency=NUM_INFERENCE_THREADS).remote()
+collection_actor = CollectionActor.remote()
 gameplay_actors = [
-    GameplayActor.remote(inference_actor)
+    GameplayActor.remote(inference_actor, collection_actor)
     for _ in range(12)
 ]
 for gameplay_actor in gameplay_actors:
@@ -254,3 +297,5 @@ for gameplay_actor in gameplay_actors:
 time.sleep(70)
 
 print("Time in lock:", ray.get(inference_actor.get_times.remote()))
+
+collection_actor.test_evals.remote()
