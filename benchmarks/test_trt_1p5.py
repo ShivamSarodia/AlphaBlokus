@@ -96,14 +96,8 @@ def get_pinned_tensor_as_numpy(dtype, shape, pointer):
 generate_onnx_file()
 generate_engine_file()
 
-@ray.remote(
-    num_gpus=1,
-    runtime_env={
-        "nsight": {
-            "gpu-metrics-devices": "all",
-        }
-    },
-)
+print("Starting main run")
+
 class InferenceActor:
     def __init__(self) -> None:
         print("Starting InferenceActor...")
@@ -244,70 +238,23 @@ class InferenceActor:
             "in_lock": self.time_in_lock,
         }
 
-@ray.remote
-class GameplayActor:
-    def __init__(self, inference_actor, collection_actor):
-        self.inference_actor = inference_actor
-        self.collection_actor = collection_actor
+inference_actor = InferenceActor()
 
-    def run(self):
-        start_time = time.time()
-        while time.time() - start_time < 60:
-            stack = 5
-            boards = np.random.randint(0, 1, size=(128, stack, 20, 20))
-            values, policy = ray.get(self.inference_actor.evaluate_batch.remote(boards))
-            if self.collection_actor:
-                self.collection_actor.report_eval.remote({
-                    "boards": boards,
-                    "values": values,
-                    "policy": policy,
-                })
-            time.sleep(1e-3)
+def thread_function():
+    print("Thread started.")
+    start_time = time.perf_counter()
+    while True:
+        if time.perf_counter() - start_time > 10:
+            print("Thread finished.")
+            break
+        boards = np.random.randn(BATCH_SIZE, 5, 20, 20).astype(np.float32)
+        values, policy = inference_actor.evaluate_batch(boards)
 
-@ray.remote
-class CollectionActor:
-    def __init__(self):
-        self.evals = []
+threads = []
+for i in range(10):
+    t = threading.Thread(target=thread_function)
+    t.daemon = True  # Optional: makes threads exit when the main program exits
+    t.start()
+    threads.append(t)
 
-    def report_eval(self, eval):
-        self.evals.append(eval)
-
-    def test_evals(self):
-        print("Starting evals...")
-        for eval in self.evals:
-            boards = eval["boards"]
-            values = eval["values"]
-            policy = eval["policy"]
-
-            torch_model.eval()
-            with torch.inference_mode():
-                input_tensor = torch.tensor(boards, dtype=torch.float32)
-                expected_values, expected_policy = torch_model(input_tensor)
-
-            expected_values = expected_values.cpu().numpy()
-            expected_policy = expected_policy.cpu().numpy()
-
-            assert np.allclose(values, expected_values, atol=1e-3, rtol=1e-3), "Values do not match!"
-            assert np.allclose(policy, expected_policy, atol=1e-3, rtol=1e-3), "Policy does not match!"
-
-            print("Passed eval")
-
-        print("Eval passed!")
-
-ray.init(log_to_driver=True)
-inference_actor = InferenceActor.options(max_concurrency=NUM_INFERENCE_THREADS).remote()
-# collection_actor = CollectionActor.remote()
-gameplay_actors = [
-    GameplayActor.remote(inference_actor, None)
-    for _ in range(12)
-]
-for gameplay_actor in gameplay_actors:
-    gameplay_actor.run.remote()
-
-# Give the actors time to wrap up.
-time.sleep(70)
-
-print("Times:", ray.get(inference_actor.get_times.remote()))
-
-# print("Running test evals...")
-# ray.get(collection_actor.test_evals.remote())
+time.sleep(12)
