@@ -257,4 +257,4 @@ for i in range(10):
     t.start()
     threads.append(t)
 
-time.sleep(12)
+time.sleep(60)
