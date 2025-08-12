@@ -21,13 +21,10 @@ sudo apt install python3 python3-venv python3-pip -y
 python3 -m venv venv
 source venv/bin/activate
 
-# Install the torch-y packages
-pip install torch tensorrt onnx onnxscript cuda-python[all]
-
 # Install poetry and all remaining pacakges
 if ! command -v poetry &> /dev/null; then
     curl -sSL https://install.python-poetry.org | python3 -
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
-poetry install
+poetry install --extras linux
