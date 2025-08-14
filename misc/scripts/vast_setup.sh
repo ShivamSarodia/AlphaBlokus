@@ -27,4 +27,6 @@ if ! command -v poetry &> /dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
-poetry install --extras linux
+poetry install --extras linux,dev
+
+pre-commit install
