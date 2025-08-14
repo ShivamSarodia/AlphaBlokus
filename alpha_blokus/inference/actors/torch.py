@@ -6,6 +6,8 @@ class TorchInferenceActor:
         self.network_config = network_config
         self.cfg = cfg
 
-    @classmethod
-    def remote(cls, network_config, cfg) -> "TorchInferenceActor":
-        raise NotImplementedError("placeholder to make typechecker happy")
+    def maybe_create_initial_model(self):
+        raise NotImplementedError("""
+            implement this to check if the config indicates we need to create an
+            initial model if missing, and create the model if so.
+        """)
