@@ -1,6 +1,4 @@
-import ray
 
-@ray.remote(num_gpus=1)
 class TorchInferenceActor:
     def __init__(self, network_config, cfg):
         self.network_config = network_config
