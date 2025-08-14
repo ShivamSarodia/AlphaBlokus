@@ -40,6 +40,7 @@ dev = [
     "pytest-asyncio (>=1.1.0,<2.0.0)",
     "ruff (>=0.12.8,<1.0.0)",
     "pre-commit (>=4.0.0,<5.0.0)",
+    "ty",
 ]
 
 [tool.poetry]
@@ -56,6 +57,9 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 include = ["pyproject.toml", "alpha_blokus/**/*.py", "tests/**/*.py"]
+
+[tool.ty.src]
+include = ["alpha_blokus", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = "tests/"
