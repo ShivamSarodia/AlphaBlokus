@@ -5,7 +5,8 @@ from alpha_blokus.inference.client import InferenceClient
 
 
 def run(cfg):
-    ray.init(log_to_driver=cfg["log_to_console"])
+    if not ray.is_initialized():
+        ray.init(log_to_driver=cfg["log_to_console"])
     print("Running with working directory:", os.getcwd())
 
     inference_clients = start_inference_actors(cfg)
