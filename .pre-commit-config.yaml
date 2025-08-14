@@ -3,4 +3,4 @@ repos:
     rev: v0.12.8
     hooks:
       - id: ruff-check
-        files: ^(test/.*\.py|alpha_blokus/.*\.py)$
+        files: ^(pyproject\.toml|tests/.*\.py|alpha_blokus/.*\.py)$

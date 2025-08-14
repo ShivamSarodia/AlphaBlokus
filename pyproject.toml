@@ -55,4 +55,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
-include = ["pyproject.toml", "alpha_blokus/**/*.py"]
+include = ["pyproject.toml", "alpha_blokus/**/*.py", "tests/**/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = "tests/"
