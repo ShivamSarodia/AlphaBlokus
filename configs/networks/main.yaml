@@ -1,3 +1,5 @@
+backend: "torch"
+
 main_body_channels: 64
 residual_blocks: 10
 value_head_channels: 16

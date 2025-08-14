@@ -2,7 +2,7 @@
 # Configuration that'll change frequently.
 ########################################################
 
-entrypoint: simulation
+entrypoint: selfplay_loop
 runtime: 0
 log_flush_interval: 600
 log_to_console: false
