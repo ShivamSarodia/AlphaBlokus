@@ -2,7 +2,10 @@ import random
 import os
 import time
 
-from alpha_blokus.model_stores.local_directory_model_store import LocalDirectoryModelStore
+from alpha_blokus.model_stores.local_directory_model_store import (
+    LocalDirectoryModelStore,
+)
+
 
 def test_local_directory_model_store():
     randomint = random.randint(0, 1_000_000)
@@ -29,7 +32,7 @@ def test_local_directory_model_store():
     model_files = store.cached_list_model_files()
     assert len(model_files) == 1
     assert model_files[0].path == model_path + "model_1.pt"
-    
+
     # But getting latest with include_recent=False should return None due to recency threshold
     assert store.cached_get_latest_model_file(include_recent=False) is None
 
@@ -41,7 +44,10 @@ def test_local_directory_model_store():
     time.sleep(0.3)
 
     # Now, the cache will be refreshed. All models should be listed.
-    assert [f.path for f in store.cached_list_model_files()] == [model_path + "model_1.pt", model_path + "model_2.pt"]
+    assert [f.path for f in store.cached_list_model_files()] == [
+        model_path + "model_1.pt",
+        model_path + "model_2.pt",
+    ]
     # But the latest model excluding recent should be model_1 due to recency threshold.
     latest_file = store.cached_get_latest_model_file(include_recent=False)
     assert latest_file is not None
@@ -50,10 +56,10 @@ def test_local_directory_model_store():
     time.sleep(0.5)
 
     # Now, model_2 should be old enough to be included in latest.
-    assert [f.path for f in store.cached_list_model_files()] == [model_path + "model_1.pt", model_path + "model_2.pt"]
+    assert [f.path for f in store.cached_list_model_files()] == [
+        model_path + "model_1.pt",
+        model_path + "model_2.pt",
+    ]
     latest_file = store.cached_get_latest_model_file()
     assert latest_file is not None
     assert latest_file.path == model_path + "model_2.pt"
-
-    
-    

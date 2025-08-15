@@ -2,6 +2,7 @@ import numpy as np
 
 _MOVES_DATA_CACHE = None
 
+
 def _load_moves_data(cfg):
     print("Loading moves data...")
     moves_data_path = cfg["game"]["moves_data_path"]
@@ -12,10 +13,11 @@ def _load_moves_data(cfg):
     assert moves["new_occupieds"].shape[1] == cfg["game"]["board_size"]
 
     compressed_moves.close()
-    
+
     print("Moves data loaded.")
 
     return moves
+
 
 def moves_data(cfg):
     global _MOVES_DATA_CACHE

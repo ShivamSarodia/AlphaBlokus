@@ -3,9 +3,10 @@ import tempfile
 
 from alpha_blokus.model_stores.local_file_model_store import LocalFileModelStore
 
+
 def test_local_file_model_store():
     # Create a temporary file for testing
-    with tempfile.NamedTemporaryFile(suffix='.pt', delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
         f.write(b"test model data")
         temp_path = f.name
 

@@ -1,6 +1,6 @@
-# The network accepts an occupancies array and outputs both 
+# The network accepts an occupancies array and outputs both
 # a policy prediction and value. It expects inputs and outputs
-# to be in the perspective of the current player. (So e.g. the 
+# to be in the perspective of the current player. (So e.g. the
 # occupancies array should be rolled and rotated to the current
 # player's perspective.)
 
@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from omegaconf import DictConfig
 
 from alpha_blokus.utils.moves_data import moves_data
+
 
 class Debug(nn.Module):
     def __init__(self, label: str = ""):
@@ -22,6 +23,7 @@ class Debug(nn.Module):
         for x_i in x:
             print(x_i)
         return x
+
 
 class ResidualBlock(nn.Module):
     def __init__(self, net_config: DictConfig):
@@ -48,10 +50,11 @@ class ResidualBlock(nn.Module):
             ),
             nn.BatchNorm2d(net_config["main_body_channels"]),
         )
-    
+
     def forward(self, x):
         return F.relu(x + self.convolutional_block(x))
-    
+
+
 class PolicyFlatten(nn.Module):
     def __init__(self, cfg: DictConfig):
         super().__init__()
@@ -66,8 +69,11 @@ class PolicyFlatten(nn.Module):
             moves_data(self.cfg)["center_placement_y"],
         ]
 
+
 class NeuralNet(nn.Module):
-    def __init__(self, net_config: DictConfig, cfg: DictConfig, flatten_policy: bool = True):
+    def __init__(
+        self, net_config: DictConfig, cfg: DictConfig, flatten_policy: bool = True
+    ):
         super().__init__()
 
         self.cfg = cfg
@@ -85,10 +91,9 @@ class NeuralNet(nn.Module):
             nn.BatchNorm2d(net_config["main_body_channels"]),
             nn.ReLU(),
         )
-        self.residual_blocks = nn.ModuleList([
-            ResidualBlock(net_config)
-            for _ in range(net_config["residual_blocks"])
-        ])
+        self.residual_blocks = nn.ModuleList(
+            [ResidualBlock(net_config) for _ in range(net_config["residual_blocks"])]
+        )
         self.value_head = nn.Sequential(
             nn.Conv2d(
                 in_channels=net_config["main_body_channels"],
@@ -100,10 +105,12 @@ class NeuralNet(nn.Module):
             nn.ReLU(),
             nn.Flatten(),
             nn.Linear(
-                net_config["value_head_channels"] * self.cfg.game.board_size * self.cfg.game.board_size,
+                net_config["value_head_channels"]
+                * self.cfg.game.board_size
+                * self.cfg.game.board_size,
                 net_config["value_head_flat_layer_width"],
             ),
-            nn.ReLU(), 
+            nn.ReLU(),
             nn.Linear(
                 net_config["value_head_flat_layer_width"],
                 4,
@@ -134,9 +141,18 @@ class NeuralNet(nn.Module):
 
     def forward(self, occupancies):
         # Add an all-ones channel to the input for edge detection.
-        ones = torch.ones(occupancies.shape[0], 1, self.cfg.game.board_size, self.cfg.game.board_size, device=occupancies.device, dtype=torch.float16)
-        x = torch.cat([occupancies, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)
-        
+        ones = torch.ones(
+            occupancies.shape[0],
+            1,
+            self.cfg.game.board_size,
+            self.cfg.game.board_size,
+            device=occupancies.device,
+            dtype=torch.float16,
+        )
+        x = torch.cat(
+            [occupancies, ones], dim=1
+        )  # Shape: (batch, 5, board_size, board_size)
+
         x = self.convolutional_block(x)
         for residual_block in self.residual_blocks:
             x = residual_block(x)

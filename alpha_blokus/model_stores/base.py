@@ -2,6 +2,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Optional, NamedTuple, List
 
+
 class ModelFile(NamedTuple):
     path: str
     creation_time: float
@@ -11,6 +12,7 @@ class BaseModelStore(ABC):
     """
     An abstract base class for model stores.
     """
+
     def __init__(self, cache_duration: float, recency_threshold: float = 15):
         self.cache_duration = cache_duration
         self.recency_threshold = recency_threshold
@@ -48,7 +50,9 @@ class BaseModelStore(ABC):
         if time.time() < expiry:
             model_files = self.cached_model_files
         else:
-            model_files = sorted(self._list_model_files(), key=lambda x: x.creation_time)
+            model_files = sorted(
+                self._list_model_files(), key=lambda x: x.creation_time
+            )
             self.cached_model_files = model_files
             self.last_loaded_at = time.time()
 
@@ -65,7 +69,8 @@ class BaseModelStore(ABC):
         # Apply recency filtering if requested
         if not include_recent:
             model_files = [
-                model_file for model_file in model_files
+                model_file
+                for model_file in model_files
                 if model_file.creation_time < time.time() - self.recency_threshold
             ]
             if not model_files:

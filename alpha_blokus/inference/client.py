@@ -8,6 +8,7 @@ if False:
     from alpha_blokus.inference.actors.torch import TorchInferenceActor
     from alpha_blokus.inference.actors.tensorrt import TensorRTInferenceActor
 
+
 class InferenceClient:
     def __init__(
         self,

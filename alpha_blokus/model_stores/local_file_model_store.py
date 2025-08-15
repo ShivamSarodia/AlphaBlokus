@@ -3,10 +3,12 @@ from typing import List
 
 from alpha_blokus.model_stores.base import BaseModelStore, ModelFile
 
+
 class LocalFileModelStore(BaseModelStore):
     """
     A model store that returns just a single model.
     """
+
     def __init__(self, model_path: str):
         # The file model never updates, so we can cache it forever.
         super().__init__(cache_duration=1e9, recency_threshold=0)
@@ -25,7 +27,9 @@ class LocalFileModelStore(BaseModelStore):
         List all models in the store.
         """
         stat = os.stat(self.model_path)
-        return [ModelFile(
-            path=self.model_path,
-            creation_time=stat.st_mtime,
-        )]
+        return [
+            ModelFile(
+                path=self.model_path,
+                creation_time=stat.st_mtime,
+            )
+        ]

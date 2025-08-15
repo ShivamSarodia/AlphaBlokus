@@ -1,5 +1,6 @@
 import ray
 
+
 @ray.remote(num_gpus=1)
 class TensorRTInferenceActor:
     def __init__(self, network_config, cfg):

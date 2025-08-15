@@ -3,7 +3,10 @@ repos:
     rev: v0.12.8
     hooks:
       - id: ruff-check
+        args: [ --fix ]
         files: ^(pyproject\.toml|tests/.*\.py|alpha_blokus/.*\.py)$
+      - id: ruff-format
+        files: ^(tests/.*\.py|alpha_blokus/.*\.py)$
   - repo: local
     hooks:
       - id: ty-check

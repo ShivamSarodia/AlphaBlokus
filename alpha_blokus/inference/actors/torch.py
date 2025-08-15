@@ -5,9 +5,12 @@ from typing import Optional
 
 from alpha_blokus.model_stores.base import BaseModelStore, ModelFile
 from alpha_blokus.model_stores.local_file_model_store import LocalFileModelStore
-from alpha_blokus.model_stores.local_directory_model_store import LocalDirectoryModelStore
+from alpha_blokus.model_stores.local_directory_model_store import (
+    LocalDirectoryModelStore,
+)
 from alpha_blokus.torch_net import NeuralNet
 from alpha_blokus.utils.event_logger import log_event
+
 
 class TorchInferenceActor:
     def __init__(self, network_config, cfg):
@@ -25,7 +28,9 @@ class TorchInferenceActor:
         if os.path.isfile(model_read_path):
             self.model_store = LocalFileModelStore(model_read_path)
         else:
-            assert os.path.isdir(model_read_path), "model read path must be a file or directory"
+            assert os.path.isdir(model_read_path), (
+                "model read path must be a file or directory"
+            )
             self.model_store = LocalDirectoryModelStore(
                 model_path=model_read_path,
                 model_extension=".pt",
@@ -39,7 +44,9 @@ class TorchInferenceActor:
         """
         self.load_model_if_necessary()
 
-        boards_tensor = torch.tensor(boards.copy(), dtype=self.inference_dtype, device=self.device)
+        boards_tensor = torch.tensor(
+            boards.copy(), dtype=self.inference_dtype, device=self.device
+        )
         with torch.inference_mode():
             values_logits_tensor, policy_logits_tensor = self.model(boards_tensor)
 
@@ -48,9 +55,10 @@ class TorchInferenceActor:
 
         return values, policy_logits
 
-
     def load_model_if_necessary(self, maybe_create=False):
-        latest_model_file = self.model_store.cached_get_latest_model_file(include_recent=False)
+        latest_model_file = self.model_store.cached_get_latest_model_file(
+            include_recent=False
+        )
 
         # If the latest model on disk is the same as the current model, there's nothing to do.
         if latest_model_file and self.current_model_file.path == latest_model_file.path:
@@ -58,7 +66,9 @@ class TorchInferenceActor:
 
         # If there's a newer model on disk, load it.
         elif latest_model_file:
-            assert self.current_model_file.creation_time < latest_model_file.creation_time, "loaded model is newer than latest model on disk"
+            assert (
+                self.current_model_file.creation_time < latest_model_file.creation_time
+            ), "loaded model is newer than latest model on disk"
             self._load_model_from_file(latest_model_file)
 
         # If we're allowed to create a new model, do so.
@@ -84,6 +94,5 @@ class TorchInferenceActor:
         self.model.eval()
         self.current_model_file = model_file
         log_event(
-            "loaded_model",
-            { "model_name": model_file.path.split("/")[-1].split(".")[0] }
+            "loaded_model", {"model_name": model_file.path.split("/")[-1].split(".")[0]}
         )

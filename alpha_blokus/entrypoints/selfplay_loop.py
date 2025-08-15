@@ -21,12 +21,18 @@ def start_inference_actors(cfg) -> dict[str, InferenceClient]:
             print(f"Starting inference actor for network '{network_name}'...")
             if network_config.get("backend") == "torch":
                 from alpha_blokus.inference.actors.torch import TorchInferenceActor
+
                 actor_class = TorchInferenceActor
             elif network_config.get("backend") == "tensorrt":
-                from alpha_blokus.inference.actors.tensorrt import TensorRTInferenceActor
+                from alpha_blokus.inference.actors.tensorrt import (
+                    TensorRTInferenceActor,
+                )
+
                 actor_class = TensorRTInferenceActor
             else:
-                raise ValueError(f"Unsupported backend: {network_config.get('backend')}")
+                raise ValueError(
+                    f"Unsupported backend: {network_config.get('backend')}"
+                )
 
             inference_actor = ray.remote(actor_class).remote(network_config, cfg)
 
@@ -34,8 +40,10 @@ def start_inference_actors(cfg) -> dict[str, InferenceClient]:
             ray.get(inference_actor.load_model_if_necessary.remote(maybe_create=True))
 
             # Create the associated inference client.
-            inference_clients[network_name] = InferenceClient(inference_actor, network_config["batch_size"], cfg)
+            inference_clients[network_name] = InferenceClient(
+                inference_actor, network_config["batch_size"], cfg
+            )
 
             print("Done starting inference actor for network '{network_name}'.")
-    
+
     return inference_clients
