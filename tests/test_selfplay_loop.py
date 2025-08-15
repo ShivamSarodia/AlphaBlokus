@@ -18,4 +18,5 @@ def test_main(cfg):
     cfg["networks"]["main"]["model_read_path"] = model_dir_path
     main(cfg)
 
+    # Confirm the new model file was created.
     assert os.path.isfile(os.path.join(model_dir_path, "0.pt"))
