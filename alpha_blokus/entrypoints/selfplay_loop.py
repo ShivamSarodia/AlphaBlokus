@@ -30,8 +30,8 @@ def start_inference_actors(cfg) -> dict[str, InferenceClient]:
 
             inference_actor = ray.remote(actor_class).remote(network_config, cfg)
 
-            # Maybe create the initial model, and block until completion.
-            ray.get(inference_actor.maybe_create_initial_model.remote())
+            # Load or create the initial model, and block until completion.
+            ray.get(inference_actor.load_model_if_necessary.remote(maybe_create=True))
 
             # Create the associated inference client.
             inference_clients[network_name] = InferenceClient(inference_actor, network_config["batch_size"], cfg)

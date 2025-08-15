@@ -1,31 +1,21 @@
 import pytest
-from omegaconf import OmegaConf
+import random
+import os
+import hydra
 
 from alpha_blokus.__main__ import main
 
 @pytest.fixture
-def base_config():
-    return OmegaConf.create({
-        "log_to_console": False,
-        "entrypoint": "selfplay_loop",
-        "gameplay": True,
-        "networks": {
-            "main": {
-                "backend": "torch",
-            },
-        }
-    })
+def cfg():
+    with hydra.initialize(version_base=None, config_path="../configs"):
+        cfg = hydra.compose(config_name="test")
+    return cfg
 
-def test_main(base_config):
-    cfg = base_config
+def test_main(cfg):
+    model_dir_path = f"/tmp/alpha_blokus_{random.randint(0, 1000000)}/models/"
+    os.makedirs(model_dir_path, exist_ok=True)
 
-    del cfg.networks.main
-    cfg["networks"]["1"] = {
-        "backend": "torch",
-    }
-    cfg["networks"]["2"] = {
-        "backend": "torch",
-    }
+    cfg["networks"]["main"]["model_read_path"] = model_dir_path
+    main(cfg)
 
-    with pytest.raises(NotImplementedError):
-        main(cfg)
+    assert os.path.isfile(os.path.join(model_dir_path, "0.pt"))
