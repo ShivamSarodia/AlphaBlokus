@@ -9,8 +9,7 @@ from torch import nn
 import torch.nn.functional as F
 from omegaconf import DictConfig
 
-# TODO: Uncomment this when we have moves_data
-# from alpha_blokus.moves_data import moves_data
+from alpha_blokus.utils.moves_data import moves_data
 
 class Debug(nn.Module):
     def __init__(self, label: str = ""):
@@ -60,14 +59,12 @@ class PolicyFlatten(nn.Module):
         self.cfg = cfg
 
     def forward(self, x):
-        # TODO: Replace this using moves_data.
-        # return x[
-        #     :,
-        #     moves_data(self.cfg)["piece_orientation_indices"],
-        #     moves_data(self.cfg)["center_placement_x"],
-        #     moves_data(self.cfg)["center_placement_y"],
-        # ]
-        return nn.Flatten()(x)
+        return x[
+            :,
+            moves_data(self.cfg)["piece_orientation_indices"],
+            moves_data(self.cfg)["center_placement_x"],
+            moves_data(self.cfg)["center_placement_y"],
+        ]
 
 class NeuralNet(nn.Module):
     def __init__(self, net_config: DictConfig, cfg: DictConfig, flatten_policy: bool = True):
