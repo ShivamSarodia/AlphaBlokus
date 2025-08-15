@@ -37,7 +37,17 @@ class TorchInferenceActor:
         """
         Evaluate a batch of boards on the currently loaded model.
         """
-        raise NotImplementedError
+        self.load_model_if_necessary()
+
+        boards_tensor = torch.tensor(boards.copy(), dtype=self.inference_dtype, device=self.device)
+        with torch.inference_mode():
+            values_logits_tensor, policy_logits_tensor = self.model(boards_tensor)
+
+        values = torch.softmax(values_logits_tensor, dim=1).cpu().numpy()
+        policy_logits = policy_logits_tensor.cpu().numpy()
+
+        return values, policy_logits
+
 
     def load_model_if_necessary(self, maybe_create=False):
         latest_model_file = self.model_store.cached_get_latest_model_file(include_recent=False)

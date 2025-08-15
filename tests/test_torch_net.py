@@ -1,32 +1,15 @@
 import pytest
 import torch
-from omegaconf import DictConfig
 
 from alpha_blokus.torch_net import PolicyFlatten
 from alpha_blokus.utils.moves_data import moves_data
+from tests.test_config import create_test_config
 
 
 @pytest.fixture
 def test_config():
-    """Create test configuration using the existing static moves data file."""
-    return DictConfig({
-        "game": {
-            "moves_data_path": "static/moves_10.npz",
-            "board_size": 10,
-            "num_moves": 6233,
-            "num_piece_orientations": 91  # Max piece orientation index is 90, so we need 91 total
-        }
-    })
-    # Uncomment this to test on the larger board data -- but it takes longer to run.
-    #
-    # return DictConfig({
-    #     "game": {
-    #         "moves_data_path": "static/moves_20.npz",
-    #         "board_size": 20,
-    #         "num_moves": 30433,
-    #         "num_piece_orientations": 91
-    #     }
-    # })
+    """Create test configuration using the global test configuration."""
+    return create_test_config()
 
 
 @pytest.fixture

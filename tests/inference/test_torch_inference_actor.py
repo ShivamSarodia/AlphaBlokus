@@ -2,40 +2,16 @@ import os
 import random
 import time
 import torch
-from omegaconf import DictConfig
 
 from alpha_blokus.inference.actors.torch import TorchInferenceActor
 from alpha_blokus.model_stores.base import ModelFile
 from alpha_blokus.torch_net import NeuralNet
+from tests.test_config import create_inference_test_configs
 
 
 def create_test_configs(model_path):
     """Create test configuration objects for TorchInferenceActor."""
-    network_config = {
-        "backend": "torch",
-        "main_body_channels": 16,  # Even smaller for faster testing
-        "residual_blocks": 1,  # Minimal for speed
-        "value_head_channels": 8,
-        "value_head_flat_layer_width": 32,
-        "policy_head_channels": 16,
-        "policy_convolution_kernel": 3,
-        "device": "cpu",  # Use CPU for testing
-        "inference_dtype": "float32",
-        "new_model_check_interval": 120,
-        "batch_size": 128,
-        "initialize_model_if_empty": False,
-        "log_gpu_evaluation": False,
-        "model_read_path": model_path,
-    }
-    
-    cfg = DictConfig({
-        "game": {
-            "board_size": 20,
-            "num_piece_orientations": 91,
-        }
-    })
-    
-    return network_config, cfg
+    return create_inference_test_configs(model_path)
 
 
 def create_model_file(model_path, filename, network_config, cfg):
@@ -160,3 +136,52 @@ def test_load_model_if_necessary_create_new_model():
     state_dict = torch.load(model_file_path, weights_only=True)
     assert isinstance(state_dict, dict)
     assert len(state_dict) > 0  # Should have some parameters
+
+
+def test_evaluate_batch():
+    """Test that evaluate_batch returns correct output shapes and types."""
+    import numpy as np
+    
+    # Create a temporary directory for testing
+    randomint = random.randint(0, 1_000_000)
+    model_path = f"/tmp/alphablokus_test_{randomint}/"
+    os.makedirs(model_path, exist_ok=True)
+    
+    network_config, cfg = create_test_configs(model_path)
+    
+    # Create a real model file
+    model_file = create_model_file(model_path, "model_1.pt", network_config, cfg)
+    
+    actor = TorchInferenceActor(network_config, cfg)
+    actor.model_store.recency_threshold = 0
+    
+    # Load the model
+    actor._load_model_from_file(model_file)
+    
+    # Create dummy board data with correct shape
+    # Shape should be (batch_size, 4, board_size, board_size) for occupancies
+    batch_size = 2
+    board_size = cfg.game.board_size
+    boards = np.random.rand(batch_size, 4, board_size, board_size).astype(np.float32)
+    
+    # Call evaluate_batch
+    values, policy_logits = actor.evaluate_batch(boards)
+    
+    # Verify output shapes and types
+    assert isinstance(values, np.ndarray), "Values should be numpy array"
+    assert isinstance(policy_logits, np.ndarray), "Policy logits should be numpy array"
+    
+    # Check value output shape - should be (batch_size, 4) for 4 players
+    assert values.shape == (batch_size, 4), f"Expected values shape ({batch_size}, 4), got {values.shape}"
+    
+    # Check policy output shape - should be (batch_size, num_moves) due to PolicyFlatten
+    expected_policy_shape = (batch_size, cfg.game.num_moves)
+    assert policy_logits.shape == expected_policy_shape, f"Expected policy shape {expected_policy_shape}, got {policy_logits.shape}"
+    
+    # Check that values are properly normalized (softmaxed)
+    # Each row should sum to approximately 1.0
+    row_sums = np.sum(values, axis=1)
+    np.testing.assert_allclose(row_sums, 1.0, rtol=1e-6, err_msg="Values should be properly softmaxed (sum to 1)")
+    
+    # Check that all values are non-negative (softmax property)
+    assert np.all(values >= 0), "All values should be non-negative after softmax"
