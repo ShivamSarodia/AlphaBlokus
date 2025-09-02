@@ -1,0 +1,6 @@
+#!/bin/bash
+
+claude "You are an experienced Rust developer. \
+Review the uncommitted changes and provide feedback on any improvements \
+to be more idiomatic, modern, or effective Rust. \
+Do not make any changes yourself, just provide feedback."
