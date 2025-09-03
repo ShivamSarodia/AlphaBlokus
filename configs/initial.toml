@@ -1,0 +1,6 @@
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+moves_file_path = ""
