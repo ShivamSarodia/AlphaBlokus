@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::Path;
 
 #[derive(Deserialize, Debug)]
 pub struct GameConfig {
@@ -28,11 +28,9 @@ impl SelfPlayConfig {
         Ok(Config::SelfPlay(self_play_config))
     }
 
-    pub fn from_file(path: &PathBuf) -> Result<Config> {
-        let contents = std::fs::read_to_string(path).context(format!(
-            "Failed to read config from path: {}",
-            path.display()
-        ))?;
+    pub fn from_file(path: &Path) -> Result<Config> {
+        let contents = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read config from path: {}", path.display()))?;
         Self::from_string(&contents)
     }
 }
@@ -47,20 +45,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loads_from_string() -> Result<()> {
-        let Config::SelfPlay(config) = SelfPlayConfig::from_string(
-            r#"
-            [game]
-            board_size = 20
-            num_moves = 30433
-            num_pieces = 21
-            num_piece_orientations = 91
-            moves_file_path = ""
-        "#,
-        )?;
+    fn loads_from_file() -> Result<()> {
+        let path = Path::new("tests/fixtures/self_play_config.toml");
+        let Config::SelfPlay(config) = SelfPlayConfig::from_file(path)?;
         assert_eq!(config.game.board_size, 20);
         Ok(())
     }
-
-    // TODO: Test from_file as well.
 }
