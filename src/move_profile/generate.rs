@@ -65,23 +65,57 @@ pub fn save(move_profiles: MovesArray<MoveProfile>, config: &PreprocessMovesConf
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_generate() -> Result<()> {
-        let num_moves = 958;
+        // Run generation on a 5-by-5 board.
         let game_config = GameConfig {
             board_size: 5,
-            num_moves: num_moves,
+            num_moves: 958,
             num_pieces: 21,
             num_piece_orientations: 91,
             moves_file_path: "".to_string(),
         };
         let move_profiles = generate(&game_config)?;
+        let pieces = piece_list(game_config.num_pieces, game_config.board_size).unwrap();
 
-        // Confirm the output indices are correct.
-        for i in 0..num_moves {
-            assert_eq!(move_profiles.get(i).index, i);
+        let mut center_occupied_count = 0;
+        let mut piece_orientation_to_piece = HashMap::<usize, usize>::new();
+
+        for i in 0..game_config.num_moves {
+            let move_profile = move_profiles.get(i);
+
+            // Confirm the stored index matches the move's position in the list.
+            assert_eq!(move_profile.index, i);
+
+            // Confirm the occupied cells match the piece's size.
+            let piece_size = pieces[move_profile.piece_index].coords().len();
+            assert_eq!(move_profile.occupied_cells.count(), piece_size);
+
+            // Help confirm the center is usually occupied.
+            if move_profile
+                .occupied_cells
+                .get((move_profile.center.0, move_profile.center.1))
+            {
+                center_occupied_count += 1;
+            }
+
+            let expected_piece_index =
+                piece_orientation_to_piece.get(&move_profile.piece_orientation_index);
+            if expected_piece_index.is_none() {
+                piece_orientation_to_piece.insert(
+                    move_profile.piece_orientation_index,
+                    move_profile.piece_index,
+                );
+            } else {
+                assert_eq!(*expected_piece_index.unwrap(), move_profile.piece_index);
+            }
         }
+
+        // Confirm the center is almost always occupied.
+        // For some pieces, it may not be -- e.g. the L piece.
+        assert!((center_occupied_count as f64) / (game_config.num_moves as f64) > 0.95);
 
         Ok(())
     }

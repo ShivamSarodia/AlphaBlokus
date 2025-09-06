@@ -36,22 +36,19 @@ pub fn compute_stage_1_move_profiles(
                 // piece-orientations that differ only by a translation or
                 // reordering of coordinates map to the same coordinate list.
                 piece.recenter();
-                piece.sort();
 
                 // Skip any piece orientations we've already seen in the loop
-                if piece_orientations_visited.contains(&piece) {
+                // We add only the coordinates to the set because the center can vary
+                // even for pieces with the same coordinates. For example, the 1x4 piece
+                // can have a piece on either of the two center cells, depending on the
+                // orientation, but those don't constitute different piece-orientations.
+                if piece_orientations_visited.contains(piece.coords()) {
                     continue;
                 }
-                piece_orientations_visited.insert(piece.clone());
+                piece_orientations_visited.insert(piece.coords().clone());
 
                 // At this point, we know this is a new piece-orientation.
                 let top_right = piece.top_right();
-                let center = Coord {
-                    x: top_right.x / 2,
-                    y: top_right.y / 2,
-                    board_size: game_config.board_size,
-                };
-
                 for x in 0..(game_config.board_size - top_right.x) {
                     for y in 0..(game_config.board_size - top_right.y) {
                         // We have found a valid move!
@@ -62,7 +59,7 @@ pub fn compute_stage_1_move_profiles(
                             x: c_x,
                             y: c_y,
                             board_size: _,
-                        } in &piece.coords
+                        } in piece.coords()
                         {
                             occupied_cells.set(((*c_x + x), (*c_y + y)), true);
                         }
@@ -71,7 +68,7 @@ pub fn compute_stage_1_move_profiles(
                         stage_1_move_profiles.push(Stage1MoveProfile {
                             index: move_index,
                             occupied_cells,
-                            center: (center.x, center.y),
+                            center: (piece.center().x + x, piece.center().y + y),
                             piece_orientation_index: piece_orientations_visited.len() - 1,
                             piece_index,
                         });

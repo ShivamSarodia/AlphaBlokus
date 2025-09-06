@@ -87,6 +87,10 @@ impl BoardSlice {
         self.cells[i] = value;
     }
 
+    pub fn count(&self) -> usize {
+        self.cells.iter().filter(|&&value| value).count()
+    }
+
     /// Rotate the given board by the given number of turns. Each turn
     /// is a 90deg rotation in the direction of play.
     pub fn rotate(&self, turns: i32) -> Self {
