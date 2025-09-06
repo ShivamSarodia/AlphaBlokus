@@ -3,6 +3,8 @@ use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+use config::{LoadableConfig, SelfPlayConfig};
+
 #[derive(Parser)]
 #[command()]
 struct Cli {
@@ -13,7 +15,7 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let config = config::SelfPlayConfig::from_file(&cli.config)?;
+    let config = SelfPlayConfig::from_file(&cli.config)?;
 
     println!("Running with config:\n\n{config:#?}");
     Ok(())
