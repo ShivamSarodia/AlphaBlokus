@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::game::display::{BoardDisplay, BoardDisplayLayer};
+
 // Structure representing an board_size x board_size slice of a board, like
 // a single player's pieces on a board.
 #[derive(PartialEq, Eq, Clone, Deserialize, Serialize)]
@@ -92,39 +94,11 @@ impl BoardSlice {
 
 impl fmt::Display for BoardSlice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Print column letters header
-        f.write_str("\n   ")?;
-        for x in 0..self.size {
-            let col_letter = (b'A' + x as u8) as char;
-            f.write_str(&format!("{:2}", col_letter))?;
-        }
-        f.write_str("\n")?;
-
-        // Print top border
-        f.write_str(" ┌")?;
-        f.write_str(&"─".repeat(self.size * 2 + 1))?;
-        f.write_str("┐\n")?;
-
-        // Print rows with letters
-        for y in 0..self.size {
-            // Print row letter
-            let row_letter = (b'A' + y as u8) as char;
-            f.write_str(&format!("{}│ ", row_letter))?;
-
-            for x in 0..self.size {
-                if self.get((x, y)) {
-                    f.write_str("■ ")?;
-                } else {
-                    f.write_str("· ")?;
-                }
-            }
-            f.write_str("│\n")?;
-        }
-
-        // Print bottom border
-        f.write_str(" └")?;
-        f.write_str(&"─".repeat(self.size * 2 + 1))?;
-        f.write_str("┘")?;
+        let display = BoardDisplay::new(vec![BoardDisplayLayer {
+            color: "black",
+            board_slice: self,
+        }]);
+        f.write_str(&display.render())?;
         Ok(())
     }
 }
