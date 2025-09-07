@@ -196,7 +196,7 @@ mod tests {
                     && !move_profile.moves_ruled_out_for_others.contains(move_index)
                 {
                     let same_piece_index =
-                        (other_move_profile.piece_index == move_profile.piece_index);
+                        other_move_profile.piece_index == move_profile.piece_index;
                     let edges_overlap = edge_overlap(
                         &move_profile.occupied_cells,
                         &other_move_profile.occupied_cells,
@@ -232,22 +232,22 @@ mod tests {
     }
 
     fn edge_overlap(board_slice_1: &BoardSlice, board_slice_2: &BoardSlice) -> bool {
-        for x in 0..board_slice_1.size {
-            for y in 0..board_slice_1.size {
+        for x in 0..board_slice_1.size() {
+            for y in 0..board_slice_1.size() {
                 if !board_slice_1.get((x, y)) {
                     continue;
                 }
 
-                if x > 0 && board_slice_2.get((x - 1, y)) {
+                if board_slice_2.get_padded((x as i32 - 1, y as i32)) {
                     return true;
                 }
-                if y > 0 && board_slice_2.get((x, y - 1)) {
+                if board_slice_2.get_padded((x as i32, y as i32 - 1)) {
                     return true;
                 }
-                if x < board_slice_2.size - 1 && board_slice_2.get((x + 1, y)) {
+                if board_slice_2.get_padded((x as i32 + 1, y as i32)) {
                     return true;
                 }
-                if y < board_slice_2.size - 1 && board_slice_2.get((x, y + 1)) {
+                if board_slice_2.get_padded((x as i32, y as i32 + 1)) {
                     return true;
                 }
             }
@@ -256,25 +256,22 @@ mod tests {
     }
 
     fn corner_overlap(board_slice_1: &BoardSlice, board_slice_2: &BoardSlice) -> bool {
-        for x in 0..board_slice_1.size {
-            for y in 0..board_slice_1.size {
+        for x in 0..board_slice_1.size() {
+            for y in 0..board_slice_1.size() {
                 if !board_slice_1.get((x, y)) {
                     continue;
                 }
 
-                if x > 0 && y > 0 && board_slice_2.get((x - 1, y - 1)) {
+                if board_slice_2.get_padded((x as i32 - 1, y as i32 - 1)) {
                     return true;
                 }
-                if x > 0 && y < board_slice_2.size - 1 && board_slice_2.get((x - 1, y + 1)) {
+                if board_slice_2.get_padded((x as i32 - 1, y as i32 + 1)) {
                     return true;
                 }
-                if x < board_slice_2.size - 1 && y > 0 && board_slice_2.get((x + 1, y - 1)) {
+                if board_slice_2.get_padded((x as i32 + 1, y as i32 - 1)) {
                     return true;
                 }
-                if x < board_slice_2.size - 1
-                    && y < board_slice_2.size - 1
-                    && board_slice_2.get((x + 1, y + 1))
-                {
+                if board_slice_2.get_padded((x as i32 + 1, y as i32 + 1)) {
                     return true;
                 }
             }

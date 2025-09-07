@@ -49,7 +49,7 @@ impl<T> MovesArray<T> {
 #[derive(PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub struct BoardSlice {
     cells: Vec<bool>,
-    pub size: usize,
+    size: usize,
 }
 
 impl BoardSlice {
@@ -58,6 +58,10 @@ impl BoardSlice {
             cells: vec![false; size * size],
             size,
         }
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 
     fn index(&self, at: (usize, usize)) -> usize {
@@ -72,6 +76,13 @@ impl BoardSlice {
 
     pub fn get(&self, at: (usize, usize)) -> bool {
         self.cells[self.index(at)]
+    }
+
+    pub fn get_padded(&self, at: (i32, i32)) -> bool {
+        if at.0 < 0 || at.1 < 0 || at.0 >= self.size as i32 || at.1 >= self.size as i32 {
+            return false;
+        }
+        self.get((at.0 as usize, at.1 as usize))
     }
 
     pub fn set(&mut self, at: (usize, usize), value: bool) {

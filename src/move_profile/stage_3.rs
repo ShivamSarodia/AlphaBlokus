@@ -33,27 +33,36 @@ pub fn compute_stage_3_move_profiles(
                 for y in 0..size {
                     // An edge cell is horizontally or vertically adjacent to an occupied cell,
                     // but not itself occupied by this piece.
-                    let is_edge_cell = ((x > 0 && stage_2_move.occupied_cells.get((x - 1, y)))
-                        || (x < size - 1 && stage_2_move.occupied_cells.get((x + 1, y)))
-                        || (y > 0 && stage_2_move.occupied_cells.get((x, y - 1)))
-                        || (y < size - 1 && stage_2_move.occupied_cells.get((x, y + 1))))
+                    let is_edge_cell = (stage_2_move
+                        .occupied_cells
+                        .get_padded((x as i32 - 1, y as i32))
+                        || stage_2_move
+                            .occupied_cells
+                            .get_padded((x as i32 + 1, y as i32))
+                        || stage_2_move
+                            .occupied_cells
+                            .get_padded((x as i32, y as i32 - 1))
+                        || stage_2_move
+                            .occupied_cells
+                            .get_padded((x as i32, y as i32 + 1)))
                         && !stage_2_move.occupied_cells.get((x, y));
 
                     // A corner cell is diagonally adjacent to an occupied cell, but is not an
                     // edge cell or itself occupied by this piece.
-                    let is_corner_cell =
-                        ((x > 0 && y > 0 && stage_2_move.occupied_cells.get((x - 1, y - 1)))
-                            || (x > 0
-                                && y < size - 1
-                                && stage_2_move.occupied_cells.get((x - 1, y + 1)))
-                            || (x < size - 1
-                                && y > 0
-                                && stage_2_move.occupied_cells.get((x + 1, y - 1)))
-                            || (x < size - 1
-                                && y < size - 1
-                                && stage_2_move.occupied_cells.get((x + 1, y + 1))))
-                            && !is_edge_cell
-                            && !stage_2_move.occupied_cells.get((x, y));
+                    let is_corner_cell = (stage_2_move
+                        .occupied_cells
+                        .get_padded((x as i32 - 1, y as i32 - 1))
+                        || stage_2_move
+                            .occupied_cells
+                            .get_padded((x as i32 - 1, y as i32 + 1))
+                        || stage_2_move
+                            .occupied_cells
+                            .get_padded((x as i32 + 1, y as i32 - 1))
+                        || stage_2_move
+                            .occupied_cells
+                            .get_padded((x as i32 + 1, y as i32 + 1)))
+                        && !is_edge_cell
+                        && !stage_2_move.occupied_cells.get((x, y));
 
                     if is_corner_cell {
                         corner_cells.set((x, y), true);
