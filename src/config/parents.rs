@@ -4,10 +4,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-mod components;
-pub use components::*;
-
-pub const NUM_PLAYERS: usize = 4;
+use crate::config::components::GameConfig;
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
     fn from_string(string: &str) -> Result<Self> {
