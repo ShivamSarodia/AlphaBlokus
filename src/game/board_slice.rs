@@ -102,3 +102,15 @@ impl fmt::Display for BoardSlice {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display() {
+        let mut board_slice = BoardSlice::new(5);
+        board_slice.set((0, 0), true);
+        println!("{}", board_slice);
+    }
+}
