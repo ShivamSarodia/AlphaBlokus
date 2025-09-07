@@ -1,48 +1,5 @@
-use crate::config::GameConfig;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-
-// List of one-value-per-move.
-#[derive(Serialize, Deserialize)]
-pub struct MovesArray<T> {
-    values: Vec<T>,
-}
-
-impl<T: Clone> MovesArray<T> {
-    pub fn new_with(value: T, game_config: &GameConfig) -> Self {
-        MovesArray {
-            values: vec![value; game_config.num_moves],
-        }
-    }
-}
-
-impl<T> MovesArray<T> {
-    pub fn new_from_vec(values: Vec<T>, game_config: &GameConfig) -> Self {
-        if values.len() != game_config.num_moves {
-            panic!(
-                "Number of values ({}) does not match num_moves ({})",
-                values.len(),
-                game_config.num_moves
-            );
-        }
-        MovesArray { values }
-    }
-
-    pub fn get(&self, index: usize) -> &T {
-        &self.values[index]
-    }
-}
-
-// Structure representing one MovesArray per player.
-// pub struct MultiPlayerMovesArray<T>([MovesArray<T>; NUM_PLAYERS]);
-//
-// impl<T: Clone> MultiPlayerMovesArray<T> {
-//     pub fn new_with(value: T, game_config: &GameConfig) -> Self {
-//         return MultiPlayerMovesArray(std::array::from_fn(|_| {
-//             MovesArray::new_with(value.clone(), &game_config)
-//         }));
-//     }
-// }
 
 // Structure representing an board_size x board_size slice of a board, like
 // a single player's pieces on a board.
@@ -171,25 +128,3 @@ impl fmt::Display for BoardSlice {
         Ok(())
     }
 }
-
-// Structure representing a board state, with each player
-// on a different slice of the provided values.
-// pub struct Board {
-//     slices: [BoardSlice; NUM_PLAYERS],
-//     size: usize,
-// }
-//
-// impl Board {
-//     pub fn new(game_config: &GameConfig) -> Self {
-//         return Board {
-//             slices: std::array::from_fn(|_| BoardSlice::new(game_config.board_size)),
-//             size: game_config.board_size,
-//         };
-//     }
-// }
-//
-// pub struct State {
-//     board: Board,
-//     moves_enabled: MultiPlayerMovesArray<bool>,
-//     moves_ruled_out: MultiPlayerMovesArray<bool>,
-// }
