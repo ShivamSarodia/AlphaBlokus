@@ -68,3 +68,32 @@ impl<'a> BoardDisplay<'a> {
         result
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_display() {
+        let mut board_slice_1 = BoardSlice::new(5);
+        let mut board_slice_2 = BoardSlice::new(5);
+        board_slice_1.set((0, 0), true);
+        board_slice_2.set((0, 0), true);
+        board_slice_2.set((1, 1), true);
+        let display = BoardDisplay::new(vec![
+            BoardDisplayLayer {
+                color: "black",
+                board_slice: &board_slice_1,
+            },
+            BoardDisplayLayer {
+                color: "red",
+                board_slice: &board_slice_2,
+            },
+        ]);
+        let result = display.render();
+        // Board slice 1 is rendered for (0,0) and board slice 2 is rendered
+        // for (1,1).
+        assert_eq!(result.matches("⬛").count(), 1);
+        assert_eq!(result.matches("🟥").count(), 1);
+    }
+}
