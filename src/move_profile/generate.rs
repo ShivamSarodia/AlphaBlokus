@@ -1,6 +1,8 @@
 use anyhow::Result;
 use bincode;
 use std::fs::File;
+use std::io::{BufWriter, Write};
+use zstd::stream::write::Encoder;
 
 use crate::config::{GameConfig, PreprocessMovesConfig};
 use crate::game::MovesArray;
@@ -42,9 +44,9 @@ pub fn generate(config: &GameConfig) -> Result<MovesArray<MoveProfile>> {
             piece_orientation_index: stage_4_move_profile.piece_orientation_index,
             piece_index: stage_4_move_profile.piece_index,
             rotated_move_indexes: stage_4_move_profile.rotated_move_indexes,
-            moves_ruled_out_for_player: stage_4_move_profile.moves_ruled_out_for_player,
-            moves_ruled_out_for_all: stage_4_move_profile.moves_ruled_out_for_all,
-            moves_enabled_for_player: stage_4_move_profile.moves_enabled_for_player,
+            moves_ruled_out_for_self: stage_4_move_profile.moves_ruled_out_for_self,
+            moves_ruled_out_for_others: stage_4_move_profile.moves_ruled_out_for_others,
+            moves_enabled_for_self: stage_4_move_profile.moves_enabled_for_self,
         })
         .collect::<Vec<MoveProfile>>();
 
@@ -53,9 +55,18 @@ pub fn generate(config: &GameConfig) -> Result<MovesArray<MoveProfile>> {
 
 pub fn save(move_profiles: MovesArray<MoveProfile>, config: &PreprocessMovesConfig) -> Result<()> {
     println!("Saving move profiles...");
-    let mut file = File::create(&config.output_file)?;
+
+    // Open file with buffered writer.
+    let file = File::create(&config.output_file)?;
+    let buf = BufWriter::new(file);
+    let mut enc = Encoder::new(buf, 6)?;
+
     let bincode_config = bincode::config::standard().with_variable_int_encoding();
-    bincode::serde::encode_into_std_write(&move_profiles, &mut file, bincode_config)?;
+    bincode::serde::encode_into_std_write(&move_profiles, &mut enc, bincode_config)?;
+
+    let mut buf = enc.finish()?;
+    buf.flush()?;
+
     println!("Wrote move profiles to disk at {}", config.output_file);
 
     println!("Finished!");
@@ -65,11 +76,11 @@ pub fn save(move_profiles: MovesArray<MoveProfile>, config: &PreprocessMovesConf
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::BoardSlice;
     use std::collections::HashMap;
 
     #[test]
     fn test_generate() -> Result<()> {
-        // Run generation on a 5-by-5 board.
         let game_config = GameConfig {
             board_size: 5,
             num_moves: 958,
@@ -101,6 +112,8 @@ mod tests {
                 center_occupied_count += 1;
             }
 
+            // Confirm that a piece orientation index only ever has exactly one associated
+            // piece index.
             let expected_piece_index =
                 piece_orientation_to_piece.get(&move_profile.piece_orientation_index);
             if expected_piece_index.is_none() {
@@ -111,12 +124,161 @@ mod tests {
             } else {
                 assert_eq!(*expected_piece_index.unwrap(), move_profile.piece_index);
             }
+
+            // Confirm that each rotate move uses the same piece as the original move.
+            for turns in 1..4 {
+                let rotated_move_profile =
+                    move_profiles.get(move_profile.rotated_move_indexes[turns]);
+                assert_eq!(
+                    rotated_move_profile.piece_index,
+                    move_profile.piece_index,
+                    "Move {} uses piece {}, which doesn't match its rotated move {} which uses piece {}",
+                    move_profile.index,
+                    move_profile.piece_index,
+                    rotated_move_profile.index,
+                    rotated_move_profile.piece_index,
+                )
+            }
+
+            // Confirm that the rotated move indexes cycle as expected.
+            assert_eq!(
+                move_profile.rotated_move_indexes[0], move_profile.index,
+                "The unrotated move should match the original move. Index: {}",
+                move_profile.index,
+            );
+            assert_eq!(
+                move_profiles
+                    .get(
+                        move_profiles
+                            .get(
+                                move_profiles
+                                    .get(move_profile.rotated_move_indexes[1])
+                                    .rotated_move_indexes[1],
+                            )
+                            .rotated_move_indexes[1]
+                    )
+                    .rotated_move_indexes[1],
+                move_profile.index,
+                "Rotating the move four times by 90 degrees should return the original move. Index: {}",
+                move_profile.index
+            );
+            assert_eq!(
+                move_profiles
+                    .get(move_profile.rotated_move_indexes[2])
+                    .rotated_move_indexes[2],
+                move_profile.index,
+                "Rotating the move twice by 180 degrees should return the original move. Index: {}",
+                move_profile.index
+            );
+            assert_eq!(
+                move_profiles
+                    .get(
+                        move_profiles
+                            .get(
+                                move_profiles
+                                    .get(move_profile.rotated_move_indexes[3])
+                                    .rotated_move_indexes[3],
+                            )
+                            .rotated_move_indexes[3]
+                    )
+                    .rotated_move_indexes[3],
+                move_profile.index,
+                "Rotating the move four times by 270 degrees should return the original move. Index: {}",
+                move_profile.index
+            );
+
+            for move_index in 0..game_config.num_moves {
+                let other_move_profile = move_profiles.get(move_index);
+
+                // If a move is ruled out for self but NOT others, it must either share a piece index with this move
+                // or one must occupy the edges of another.
+                if move_profile.moves_ruled_out_for_self.contains(move_index)
+                    && !move_profile.moves_ruled_out_for_others.contains(move_index)
+                {
+                    let same_piece_index =
+                        (other_move_profile.piece_index == move_profile.piece_index);
+                    let edges_overlap = edge_overlap(
+                        &move_profile.occupied_cells,
+                        &other_move_profile.occupied_cells,
+                    );
+
+                    assert!(same_piece_index || edges_overlap);
+                }
+
+                // If a move is ruled out for others, it must overlap occupied cells.
+                if move_profile.moves_ruled_out_for_others.contains(move_index) {
+                    assert!(
+                        move_profile
+                            .occupied_cells
+                            .overlaps(&other_move_profile.occupied_cells)
+                    );
+                }
+
+                // If a move is enabled, it must overlap a corner cell.
+                if move_profile.moves_enabled_for_self.contains(move_index) {
+                    assert!(corner_overlap(
+                        &move_profile.occupied_cells,
+                        &other_move_profile.occupied_cells
+                    ));
+                }
+            }
         }
 
-        // Confirm the center is almost always occupied.
-        // For some pieces, it may not be -- e.g. the L piece.
+        // Confirm the center was almost always occupied.
+        // For a few pieces, it isn't: e.g. the L piece.
         assert!((center_occupied_count as f64) / (game_config.num_moves as f64) > 0.95);
 
         Ok(())
+    }
+
+    fn edge_overlap(board_slice_1: &BoardSlice, board_slice_2: &BoardSlice) -> bool {
+        for x in 0..board_slice_1.size {
+            for y in 0..board_slice_1.size {
+                if !board_slice_1.get((x, y)) {
+                    continue;
+                }
+
+                if x > 0 && board_slice_2.get((x - 1, y)) {
+                    return true;
+                }
+                if y > 0 && board_slice_2.get((x, y - 1)) {
+                    return true;
+                }
+                if x < board_slice_2.size - 1 && board_slice_2.get((x + 1, y)) {
+                    return true;
+                }
+                if y < board_slice_2.size - 1 && board_slice_2.get((x, y + 1)) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    fn corner_overlap(board_slice_1: &BoardSlice, board_slice_2: &BoardSlice) -> bool {
+        for x in 0..board_slice_1.size {
+            for y in 0..board_slice_1.size {
+                if !board_slice_1.get((x, y)) {
+                    continue;
+                }
+
+                if x > 0 && y > 0 && board_slice_2.get((x - 1, y - 1)) {
+                    return true;
+                }
+                if x > 0 && y < board_slice_2.size - 1 && board_slice_2.get((x - 1, y + 1)) {
+                    return true;
+                }
+                if x < board_slice_2.size - 1 && y > 0 && board_slice_2.get((x + 1, y - 1)) {
+                    return true;
+                }
+                if x < board_slice_2.size - 1
+                    && y < board_slice_2.size - 1
+                    && board_slice_2.get((x + 1, y + 1))
+                {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }

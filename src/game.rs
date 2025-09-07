@@ -49,7 +49,7 @@ impl<T> MovesArray<T> {
 #[derive(PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub struct BoardSlice {
     cells: Vec<bool>,
-    size: usize,
+    pub size: usize,
 }
 
 impl BoardSlice {
@@ -58,14 +58,6 @@ impl BoardSlice {
             cells: vec![false; size * size],
             size,
         }
-    }
-
-    fn wrap_indices(&self, at: (i32, i32)) -> (usize, usize) {
-        let size: i32 = self.size as i32;
-        (
-            at.0.rem_euclid(size) as usize,
-            at.1.rem_euclid(size) as usize,
-        )
     }
 
     fn index(&self, at: (usize, usize)) -> usize {
@@ -103,15 +95,15 @@ impl BoardSlice {
             return rotated_board;
         }
 
-        for x in 0..(self.size as i32) {
-            for y in 0..(self.size as i32) {
-                let src_coordinates = self.wrap_indices(match k {
-                    1 => (y, -x),
-                    2 => (-x, -y),
-                    3 => (-y, x),
+        for x in 0..self.size {
+            for y in 0..self.size {
+                let src_coordinates = match k {
+                    1 => (y, self.size - 1 - x),
+                    2 => (self.size - 1 - x, self.size - 1 - y),
+                    3 => (self.size - 1 - y, x),
                     _ => unreachable!(),
-                });
-                rotated_board.set((x as usize, y as usize), self.get(src_coordinates));
+                };
+                rotated_board.set((x, y), self.get(src_coordinates));
             }
         }
 

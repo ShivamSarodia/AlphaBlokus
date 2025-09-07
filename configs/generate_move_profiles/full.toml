@@ -1,4 +1,4 @@
-output_file = "/tmp/output.json"
+output_file = "static/move_profiles_size_20.bin"
 
 [game]
 board_size = 20

@@ -1,5 +1,5 @@
 use crate::game::BoardSlice;
-use anyhow::{Result, bail};
+use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 
@@ -33,6 +33,7 @@ pub fn compute_stage_2_move_profiles(
                     }
                 }
             }
+
             Stage2MoveProfile {
                 index: stage_1_move.index,
                 occupied_cells: stage_1_move.occupied_cells.clone(),
@@ -43,12 +44,6 @@ pub fn compute_stage_2_move_profiles(
             }
         })
         .collect::<Vec<Stage2MoveProfile>>();
-
-    for stage_2_move_profile in stage_2_move_profiles.iter() {
-        if stage_2_move_profile.rotated_move_indexes[0] != stage_2_move_profile.index {
-            bail!("Expected the 0-rotated index to always match the index of the move itself.")
-        };
-    }
 
     Ok(stage_2_move_profiles)
 }
