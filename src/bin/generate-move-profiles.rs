@@ -19,7 +19,7 @@ fn main() -> Result<()> {
     println!("Running with config:\n\n{config:#?}");
 
     let move_profiles = move_profile::generate(&config.game)?;
-    move_profile::save(move_profiles, &config)?;
+    move_profile::save(move_profiles, &config.output_file)?;
 
     Ok(())
 }

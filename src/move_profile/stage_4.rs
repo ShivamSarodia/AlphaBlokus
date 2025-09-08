@@ -1,6 +1,6 @@
 use crate::game::BoardSlice;
+use crate::game::MovesBitSet;
 use anyhow::Result;
-use bit_set::BitSet;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 
@@ -13,9 +13,9 @@ pub struct Stage4MoveProfile {
     pub piece_orientation_index: usize,
     pub piece_index: usize,
     pub rotated_move_indexes: [usize; 4],
-    pub moves_ruled_out_for_self: BitSet,
-    pub moves_ruled_out_for_others: BitSet,
-    pub moves_enabled_for_self: BitSet,
+    pub moves_ruled_out_for_self: MovesBitSet,
+    pub moves_ruled_out_for_others: MovesBitSet,
+    pub moves_enabled_for_self: MovesBitSet,
 }
 
 /// Stage 4 is responsible for computing which moves are ruled out or enabled for each other
@@ -28,9 +28,9 @@ pub fn compute_stage_4_move_profiles(
         .par_iter()
         .progress_count(stage_3_move_profiles.len() as u64)
         .map(|stage_3_move| {
-            let mut moves_ruled_out_for_self = BitSet::with_capacity(num_moves);
-            let mut moves_ruled_out_for_others = BitSet::with_capacity(num_moves);
-            let mut moves_enabled_for_self = BitSet::with_capacity(num_moves);
+            let mut moves_ruled_out_for_self = MovesBitSet::new(num_moves);
+            let mut moves_ruled_out_for_others = MovesBitSet::new(num_moves);
+            let mut moves_enabled_for_self = MovesBitSet::new(num_moves);
 
             for other_stage_3_move in &stage_3_move_profiles {
                 let mut ruled_out_for_self = false;

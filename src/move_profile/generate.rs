@@ -1,10 +1,6 @@
 use anyhow::Result;
-use bincode;
-use std::fs::File;
-use std::io::{BufWriter, Write};
-use zstd::stream::write::Encoder;
 
-use crate::config::{GameConfig, PreprocessMovesConfig};
+use crate::config::GameConfig;
 use crate::game::MovesArray;
 use crate::move_profile::MoveProfile;
 use crate::move_profile::pieces::piece_list;
@@ -53,26 +49,6 @@ pub fn generate(config: &GameConfig) -> Result<MovesArray<MoveProfile>> {
     Ok(MovesArray::new_from_vec(move_profile_vec, config))
 }
 
-pub fn save(move_profiles: MovesArray<MoveProfile>, config: &PreprocessMovesConfig) -> Result<()> {
-    println!("Saving move profiles...");
-
-    // Open file with buffered writer.
-    let file = File::create(&config.output_file)?;
-    let buf = BufWriter::new(file);
-    let mut enc = Encoder::new(buf, 6)?;
-
-    let bincode_config = bincode::config::standard().with_variable_int_encoding();
-    bincode::serde::encode_into_std_write(&move_profiles, &mut enc, bincode_config)?;
-
-    let mut buf = enc.finish()?;
-    buf.flush()?;
-
-    println!("Wrote move profiles to disk at {}", config.output_file);
-
-    println!("Finished!");
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,7 +62,8 @@ mod tests {
             num_moves: 958,
             num_pieces: 21,
             num_piece_orientations: 91,
-            moves_file_path: "".to_string(),
+            move_profiles_file: "".to_string(),
+            move_profiles: None,
         };
         let move_profiles = generate(&game_config)?;
         let pieces = piece_list(game_config.num_pieces, game_config.board_size).unwrap();

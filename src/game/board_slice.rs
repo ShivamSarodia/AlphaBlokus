@@ -5,7 +5,7 @@ use crate::game::display::{BoardDisplay, BoardDisplayLayer};
 
 // Structure representing an board_size x board_size slice of a board, like
 // a single player's pieces on a board.
-#[derive(PartialEq, Eq, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
 pub struct BoardSlice {
     cells: Vec<bool>,
     size: usize,
@@ -47,6 +47,17 @@ impl BoardSlice {
     pub fn set(&mut self, at: (usize, usize), value: bool) {
         let i = self.index(at);
         self.cells[i] = value;
+    }
+
+    /// For all cells in `other` that are true, set the corresponding cell in self to true.
+    pub fn add(&mut self, other: &Self) {
+        for x in 0..self.size {
+            for y in 0..self.size {
+                if other.get((x, y)) {
+                    self.set((x, y), true);
+                }
+            }
+        }
     }
 
     pub fn count(&self) -> usize {

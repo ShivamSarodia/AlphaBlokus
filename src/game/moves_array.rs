@@ -1,8 +1,9 @@
 use crate::config::GameConfig;
+use bit_set::BitSet;
 use serde::{Deserialize, Serialize};
 
 // List of one-value-per-move.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct MovesArray<T> {
     values: Vec<T>,
 }
@@ -29,6 +30,37 @@ impl<T> MovesArray<T> {
 
     pub fn get(&self, index: usize) -> &T {
         &self.values[index]
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MovesBitSet {
+    values: BitSet,
+    num_moves: usize,
+}
+
+impl MovesBitSet {
+    pub fn new(num_moves: usize) -> Self {
+        MovesBitSet {
+            values: BitSet::with_capacity(num_moves),
+            num_moves,
+        }
+    }
+
+    pub fn contains(&self, index: usize) -> bool {
+        self.values.contains(index)
+    }
+
+    pub fn insert(&mut self, index: usize) {
+        self.values.insert(index);
+    }
+
+    pub fn num_moves(&self) -> usize {
+        self.num_moves
+    }
+
+    pub fn add(&mut self, other: &Self) {
+        self.values.union_with(&other.values);
     }
 }
 
