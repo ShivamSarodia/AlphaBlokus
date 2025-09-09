@@ -3,4 +3,4 @@ board_size = 6
 num_moves = 10
 num_pieces = 21
 num_piece_orientations = 91
-move_profiles_file = ""
+move_data_file = ""

@@ -3,7 +3,7 @@ use anyhow::Result;
 use indicatif::ParallelProgressIterator;
 use rayon::prelude::*;
 
-use crate::move_profile::stage_1::Stage1MoveProfile;
+use crate::move_data::stage_1::Stage1MoveProfile;
 
 pub struct Stage2MoveProfile {
     pub index: usize,

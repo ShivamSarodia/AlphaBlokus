@@ -1,15 +1,17 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::Deserialize;
 
-use crate::game::MovesArray;
-use crate::move_profile::MoveProfile;
+use crate::config::NUM_PLAYERS;
+use crate::game::{MovesArray, MovesBitSet};
+use crate::move_data;
+use crate::move_data::{MoveData, MoveProfile};
 
 #[derive(Deserialize, Debug)]
 pub struct GameConfig {
     // Size of one side of the Blokus board.
     pub board_size: usize,
     // Path to the file containing the static move profiles.
-    pub move_profiles_file: String,
+    pub move_data_file: String,
     // Number of valid moves.
     pub num_moves: usize,
     // Number of pieces that can be played. (For standard Blokus, this is 21)
@@ -17,9 +19,8 @@ pub struct GameConfig {
     // Number of (piece, orientation) tuples that produce a unique shape. (For standard Blokus, this is 91)
     pub num_piece_orientations: usize,
 
-    // Move profiles themselves. These are loaded from the provided file when load_move_profiles is
-    // called.
-    pub move_profiles: Option<MovesArray<MoveProfile>>,
+    // Move data. This is loaded from the provided file when load_move_data is called.
+    pub move_data: Option<MoveData>,
 }
 
 impl GameConfig {
@@ -28,10 +29,24 @@ impl GameConfig {
     }
 
     pub fn move_profiles(&self) -> &MovesArray<MoveProfile> {
-        self.move_profiles.as_ref().unwrap()
+        &self.move_data.as_ref().unwrap().profiles
+    }
+
+    pub fn cloned_initial_moves_enabled(&self) -> [MovesBitSet; NUM_PLAYERS] {
+        self.move_data
+            .as_ref()
+            .unwrap()
+            .initial_moves_enabled
+            .clone()
     }
 
     pub fn load_move_profiles(&mut self) -> Result<()> {
-        panic!("Not implemented");
+        self.move_data = Some(move_data::load(&self.move_data_file).with_context(|| {
+            format!(
+                "Failed to load move profiles from file: {}",
+                self.move_data_file
+            )
+        })?);
+        Ok(())
     }
 }

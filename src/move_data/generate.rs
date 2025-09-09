@@ -2,14 +2,15 @@ use anyhow::Result;
 
 use crate::config::GameConfig;
 use crate::game::MovesArray;
-use crate::move_profile::MoveProfile;
-use crate::move_profile::pieces::piece_list;
-use crate::move_profile::stage_1::compute_stage_1_move_profiles;
-use crate::move_profile::stage_2::compute_stage_2_move_profiles;
-use crate::move_profile::stage_3::compute_stage_3_move_profiles;
-use crate::move_profile::stage_4::compute_stage_4_move_profiles;
+use crate::move_data::initial_moves_enabled::compute_initial_moves_enabled;
+use crate::move_data::pieces::piece_list;
+use crate::move_data::stage_1::compute_stage_1_move_profiles;
+use crate::move_data::stage_2::compute_stage_2_move_profiles;
+use crate::move_data::stage_3::compute_stage_3_move_profiles;
+use crate::move_data::stage_4::compute_stage_4_move_profiles;
+use crate::move_data::{MoveData, MoveProfile};
 
-pub fn generate(config: &GameConfig) -> Result<MovesArray<MoveProfile>> {
+pub fn generate(config: &GameConfig) -> Result<MoveData> {
     println!("Generating piece list...");
     let pieces = piece_list(config.num_pieces, config.board_size)?;
     println!("Generated piece list!");
@@ -46,7 +47,15 @@ pub fn generate(config: &GameConfig) -> Result<MovesArray<MoveProfile>> {
         })
         .collect::<Vec<MoveProfile>>();
 
-    Ok(MovesArray::new_from_vec(move_profile_vec, config))
+    let move_profiles = MovesArray::new_from_vec(move_profile_vec, config);
+
+    let initial_moves_enabled =
+        compute_initial_moves_enabled(&move_profiles, config.num_moves, config.board_size);
+
+    Ok(MoveData {
+        profiles: move_profiles,
+        initial_moves_enabled,
+    })
 }
 
 #[cfg(test)]
@@ -62,10 +71,11 @@ mod tests {
             num_moves: 958,
             num_pieces: 21,
             num_piece_orientations: 91,
-            move_profiles_file: "".to_string(),
-            move_profiles: None,
+            move_data_file: "".to_string(),
+            move_data: None,
         };
-        let move_profiles = generate(&game_config)?;
+        let move_data = generate(&game_config)?;
+        let move_profiles = &move_data.profiles;
         let pieces = piece_list(game_config.num_pieces, game_config.board_size).unwrap();
 
         let mut center_occupied_count = 0;

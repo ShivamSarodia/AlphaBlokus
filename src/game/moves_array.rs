@@ -33,7 +33,7 @@ impl<T> MovesArray<T> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MovesBitSet {
     values: BitSet,
     num_moves: usize,
@@ -59,8 +59,12 @@ impl MovesBitSet {
         self.num_moves
     }
 
-    pub fn add(&mut self, other: &Self) {
+    pub fn add_mut(&mut self, other: &Self) {
         self.values.union_with(&other.values);
+    }
+
+    pub fn subtract_iter<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = usize> + 'a {
+        self.values.difference(&other.values)
     }
 }
 

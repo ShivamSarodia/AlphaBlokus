@@ -3,7 +3,7 @@ use clap::Parser;
 use std::path::PathBuf;
 
 use alpha_blokus::config::{LoadableConfig, PreprocessMovesConfig};
-use alpha_blokus::move_profile;
+use alpha_blokus::move_data;
 
 #[derive(Parser)]
 #[command()]
@@ -18,8 +18,8 @@ fn main() -> Result<()> {
     let config = PreprocessMovesConfig::from_file(&cli.config)?;
     println!("Running with config:\n\n{config:#?}");
 
-    let move_profiles = move_profile::generate(&config.game)?;
-    move_profile::save(move_profiles, &config.output_file)?;
+    let move_profiles = move_data::generate(&config.game)?;
+    move_data::save(move_profiles, &config.output_file)?;
 
     Ok(())
 }
