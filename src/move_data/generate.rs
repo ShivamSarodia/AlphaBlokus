@@ -61,7 +61,7 @@ pub fn generate(config: &GameConfig) -> Result<MoveData> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::BoardSlice;
+    use crate::{config::NUM_PLAYERS, game::BoardSlice};
     use std::collections::HashMap;
 
     #[test]
@@ -214,6 +214,26 @@ mod tests {
         // Confirm the center was almost always occupied.
         // For a few pieces, it isn't: e.g. the L piece.
         assert!((center_occupied_count as f64) / (game_config.num_moves as f64) > 0.95);
+
+        // Confirm that a move is in initial_moves_enabled for a player iff it occupies
+        // that player's corner cell.
+        for player in 0..NUM_PLAYERS {
+            let player_start_corner = match player {
+                0 => (0, 0),
+                1 => (0, game_config.board_size - 1),
+                2 => (game_config.board_size - 1, game_config.board_size - 1),
+                3 => (game_config.board_size - 1, 0),
+                _ => unreachable!(),
+            };
+
+            for move_index in 0..game_config.num_moves {
+                let move_profile = move_profiles.get(move_index);
+                assert_eq!(
+                    move_data.initial_moves_enabled[player].contains(move_index),
+                    move_profile.occupied_cells.get(player_start_corner)
+                );
+            }
+        }
 
         Ok(())
     }

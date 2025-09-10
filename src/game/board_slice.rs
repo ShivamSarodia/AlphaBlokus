@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use crate::game::display::{BoardDisplay, BoardDisplayLayer};
+use crate::game::display::{BoardDisplay, BoardDisplayColor, BoardDisplayLayer, BoardDisplayShape};
 
 // Structure representing an board_size x board_size slice of a board, like
 // a single player's pieces on a board.
@@ -106,7 +106,8 @@ impl BoardSlice {
 impl fmt::Display for BoardSlice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = BoardDisplay::new(vec![BoardDisplayLayer {
-            color: "black",
+            color: BoardDisplayColor::Black,
+            shape: BoardDisplayShape::Square,
             board_slice: self,
         }]);
         f.write_str(&display.render())?;

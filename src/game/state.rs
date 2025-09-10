@@ -1,6 +1,7 @@
 use crate::config::{GameConfig, NUM_PLAYERS};
-use crate::game::Board;
 use crate::game::MovesBitSet;
+use crate::game::display::{BoardDisplay, BoardDisplayLayer, BoardDisplayShape};
+use crate::game::{Board, BoardSlice};
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -13,6 +14,8 @@ pub struct State<'c> {
     board: Board,
     player: usize,
     turn: u8,
+    // Stored as a tuple of (move_index, player).
+    last_move_played: Option<(usize, usize)>,
     moves_enabled: [MovesBitSet; NUM_PLAYERS],
     moves_ruled_out: [MovesBitSet; NUM_PLAYERS],
     game_config: &'c GameConfig,
@@ -24,6 +27,7 @@ impl<'c> State<'c> {
             board: Board::new(game_config),
             player: 0,
             turn: 0,
+            last_move_played: None,
             moves_enabled: game_config.cloned_initial_moves_enabled(),
             moves_ruled_out: std::array::from_fn(|_| MovesBitSet::new(game_config.num_moves)),
             game_config,
@@ -54,6 +58,9 @@ impl<'c> State<'c> {
         // Update turn
         self.turn += 1;
 
+        // Update the last move played, for display purposes.
+        self.last_move_played = Some((move_index, self.player));
+
         // Set the player to the next player who has valid moves.
         // If no player does, return GAME_OVER.
         for _ in 0..NUM_PLAYERS {
@@ -80,9 +87,32 @@ impl<'c> State<'c> {
 
 impl<'c> fmt::Display for State<'c> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut layers = Vec::new();
+        let mut latest_move_slice = BoardSlice::new(self.game_config.board_size);
+
+        if let Some((move_index, player)) = self.last_move_played {
+            let move_profile = self.game_config.move_profiles().get(move_index);
+            latest_move_slice.add(&move_profile.occupied_cells);
+            layers.push(BoardDisplayLayer {
+                color: BoardDisplay::player_to_color(player),
+                shape: BoardDisplayShape::Circle,
+                board_slice: &latest_move_slice,
+            });
+        }
+
+        for player in 0..NUM_PLAYERS {
+            layers.push(BoardDisplayLayer {
+                color: BoardDisplay::player_to_color(player),
+                board_slice: self.board.slice(player),
+                shape: BoardDisplayShape::Square,
+            });
+        }
+
+        let board_display = BoardDisplay::new(layers).render();
+
         f.write_str(&format!(
-            "Player: {}, Turn: {}{}",
-            self.player, self.turn, self.board
+            "Player: {}, Turn: {}\n{}",
+            self.player, self.turn, board_display
         ))?;
         Ok(())
     }

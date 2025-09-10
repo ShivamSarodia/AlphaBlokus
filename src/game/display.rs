@@ -1,8 +1,25 @@
 use crate::game::BoardSlice;
 
+#[derive(Copy, Clone)]
+
+pub enum BoardDisplayShape {
+    Square,
+    Circle,
+}
+
+#[derive(Copy, Clone)]
+pub enum BoardDisplayColor {
+    Black,
+    Blue,
+    Yellow,
+    Red,
+    Green,
+}
+
 pub struct BoardDisplayLayer<'a> {
-    pub color: &'a str,
+    pub color: BoardDisplayColor,
     pub board_slice: &'a BoardSlice,
+    pub shape: BoardDisplayShape,
 }
 
 pub struct BoardDisplay<'a> {
@@ -12,6 +29,16 @@ pub struct BoardDisplay<'a> {
 impl<'a> BoardDisplay<'a> {
     pub fn new(layers: Vec<BoardDisplayLayer<'a>>) -> Self {
         BoardDisplay { layers }
+    }
+
+    pub fn player_to_color(player: usize) -> BoardDisplayColor {
+        match player {
+            0 => BoardDisplayColor::Blue,
+            1 => BoardDisplayColor::Yellow,
+            2 => BoardDisplayColor::Red,
+            3 => BoardDisplayColor::Green,
+            _ => unreachable!(),
+        }
     }
 
     pub fn render(&self) -> String {
@@ -44,13 +71,17 @@ impl<'a> BoardDisplay<'a> {
                 let mut cell_representation = "· ";
                 for layer in &self.layers {
                     if layer.board_slice.get((x, y)) {
-                        cell_representation = match layer.color {
-                            "black" => "⬛",
-                            "red" => "🟥",
-                            "blue" => "🟦",
-                            "green" => "🟩",
-                            "yellow" => "🟨",
-                            _ => "⬛",
+                        cell_representation = match (layer.color, layer.shape) {
+                            (BoardDisplayColor::Black, BoardDisplayShape::Square) => "⬛",
+                            (BoardDisplayColor::Black, BoardDisplayShape::Circle) => "⚫",
+                            (BoardDisplayColor::Red, BoardDisplayShape::Square) => "🟥",
+                            (BoardDisplayColor::Red, BoardDisplayShape::Circle) => "🔴",
+                            (BoardDisplayColor::Blue, BoardDisplayShape::Square) => "🟦",
+                            (BoardDisplayColor::Blue, BoardDisplayShape::Circle) => "🔵",
+                            (BoardDisplayColor::Green, BoardDisplayShape::Square) => "🟩",
+                            (BoardDisplayColor::Green, BoardDisplayShape::Circle) => "🟢",
+                            (BoardDisplayColor::Yellow, BoardDisplayShape::Square) => "🟨",
+                            (BoardDisplayColor::Yellow, BoardDisplayShape::Circle) => "🟡",
                         };
                         break;
                     }
@@ -82,12 +113,14 @@ mod tests {
         board_slice_2.set((1, 1), true);
         let display = BoardDisplay::new(vec![
             BoardDisplayLayer {
-                color: "black",
+                color: BoardDisplayColor::Black,
                 board_slice: &board_slice_1,
+                shape: BoardDisplayShape::Square,
             },
             BoardDisplayLayer {
-                color: "red",
+                color: BoardDisplayColor::Red,
                 board_slice: &board_slice_2,
+                shape: BoardDisplayShape::Square,
             },
         ]);
         let result = display.render();

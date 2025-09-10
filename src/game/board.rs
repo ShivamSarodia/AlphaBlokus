@@ -1,6 +1,7 @@
 use crate::config::GameConfig;
 use crate::config::NUM_PLAYERS;
 use crate::game::BoardSlice;
+use crate::game::display::BoardDisplayShape;
 use crate::game::display::{BoardDisplay, BoardDisplayLayer};
 use std::fmt;
 
@@ -23,25 +24,33 @@ impl Board {
     pub fn add(&mut self, player: usize, slice: &BoardSlice) {
         self.slices[player].add(slice);
     }
+
+    pub fn slice(&self, player: usize) -> &BoardSlice {
+        &self.slices[player]
+    }
 }
 
 impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = BoardDisplay::new(vec![
             BoardDisplayLayer {
-                color: "blue",
+                color: BoardDisplay::player_to_color(0),
+                shape: BoardDisplayShape::Square,
                 board_slice: &self.slices[0],
             },
             BoardDisplayLayer {
-                color: "yellow",
+                color: BoardDisplay::player_to_color(1),
+                shape: BoardDisplayShape::Square,
                 board_slice: &self.slices[1],
             },
             BoardDisplayLayer {
-                color: "red",
+                color: BoardDisplay::player_to_color(2),
+                shape: BoardDisplayShape::Square,
                 board_slice: &self.slices[2],
             },
             BoardDisplayLayer {
-                color: "green",
+                color: BoardDisplay::player_to_color(3),
+                shape: BoardDisplayShape::Square,
                 board_slice: &self.slices[3],
             },
         ]);
