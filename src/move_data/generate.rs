@@ -61,19 +61,12 @@ pub fn generate(config: &GameConfig) -> Result<MoveData> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{config::NUM_PLAYERS, game::BoardSlice};
+    use crate::{config::NUM_PLAYERS, game::BoardSlice, testing::create_game_config_without_data};
     use std::collections::HashMap;
 
     #[test]
     fn test_generate() -> Result<()> {
-        let game_config = GameConfig {
-            board_size: 5,
-            num_moves: 958,
-            num_pieces: 21,
-            num_piece_orientations: 91,
-            move_data_file: "".to_string(),
-            move_data: None,
-        };
+        let game_config = create_game_config_without_data();
         let move_data = generate(&game_config)?;
         let move_profiles = &move_data.profiles;
         let pieces = piece_list(game_config.num_pieces, game_config.board_size).unwrap();

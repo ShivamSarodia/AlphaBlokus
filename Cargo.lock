@@ -12,6 +12,7 @@ dependencies = [
  "clap",
  "indicatif",
  "itertools",
+ "once_cell",
  "rand",
  "rayon",
  "serde",
