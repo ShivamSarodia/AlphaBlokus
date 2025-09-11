@@ -29,7 +29,6 @@ impl LoadableConfig for SelfPlayConfig {}
 #[derive(Deserialize, Debug)]
 pub struct PreprocessMovesConfig {
     pub game: GameConfig,
-    pub output_file: String,
 }
 
 impl LoadableConfig for PreprocessMovesConfig {}
