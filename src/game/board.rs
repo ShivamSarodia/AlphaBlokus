@@ -35,22 +35,22 @@ impl fmt::Display for Board {
         let display = BoardDisplay::new(vec![
             BoardDisplayLayer {
                 color: BoardDisplay::player_to_color(0),
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
                 board_slice: &self.slices[0],
             },
             BoardDisplayLayer {
                 color: BoardDisplay::player_to_color(1),
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
                 board_slice: &self.slices[1],
             },
             BoardDisplayLayer {
                 color: BoardDisplay::player_to_color(2),
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
                 board_slice: &self.slices[2],
             },
             BoardDisplayLayer {
                 color: BoardDisplay::player_to_color(3),
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
                 board_slice: &self.slices[3],
             },
         ]);

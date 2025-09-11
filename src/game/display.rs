@@ -3,8 +3,8 @@ use crate::game::BoardSlice;
 #[derive(Copy, Clone)]
 
 pub enum BoardDisplayShape {
-    Square,
-    Circle,
+    Primary,
+    Secondary,
 }
 
 #[derive(Copy, Clone)]
@@ -72,16 +72,16 @@ impl<'a> BoardDisplay<'a> {
                 for layer in &self.layers {
                     if layer.board_slice.get((x, y)) {
                         cell_representation = match (layer.color, layer.shape) {
-                            (BoardDisplayColor::Black, BoardDisplayShape::Square) => "⬛",
-                            (BoardDisplayColor::Black, BoardDisplayShape::Circle) => "⚫",
-                            (BoardDisplayColor::Red, BoardDisplayShape::Square) => "🟥",
-                            (BoardDisplayColor::Red, BoardDisplayShape::Circle) => "🔴",
-                            (BoardDisplayColor::Blue, BoardDisplayShape::Square) => "🟦",
-                            (BoardDisplayColor::Blue, BoardDisplayShape::Circle) => "🔵",
-                            (BoardDisplayColor::Green, BoardDisplayShape::Square) => "🟩",
-                            (BoardDisplayColor::Green, BoardDisplayShape::Circle) => "🟢",
-                            (BoardDisplayColor::Yellow, BoardDisplayShape::Square) => "🟨",
-                            (BoardDisplayColor::Yellow, BoardDisplayShape::Circle) => "🟡",
+                            (BoardDisplayColor::Black, BoardDisplayShape::Primary) => "⬛",
+                            (BoardDisplayColor::Black, BoardDisplayShape::Secondary) => "⚫",
+                            (BoardDisplayColor::Red, BoardDisplayShape::Primary) => "🟥",
+                            (BoardDisplayColor::Red, BoardDisplayShape::Secondary) => "❌",
+                            (BoardDisplayColor::Blue, BoardDisplayShape::Primary) => "🟦",
+                            (BoardDisplayColor::Blue, BoardDisplayShape::Secondary) => "🌀",
+                            (BoardDisplayColor::Green, BoardDisplayShape::Primary) => "🟩",
+                            (BoardDisplayColor::Green, BoardDisplayShape::Secondary) => "✅",
+                            (BoardDisplayColor::Yellow, BoardDisplayShape::Primary) => "🟨",
+                            (BoardDisplayColor::Yellow, BoardDisplayShape::Secondary) => "🌞",
                         };
                         break;
                     }
@@ -115,12 +115,12 @@ mod tests {
             BoardDisplayLayer {
                 color: BoardDisplayColor::Black,
                 board_slice: &board_slice_1,
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
             },
             BoardDisplayLayer {
                 color: BoardDisplayColor::Red,
                 board_slice: &board_slice_2,
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
             },
         ]);
         let result = display.render();

@@ -107,7 +107,7 @@ impl fmt::Display for BoardSlice {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = BoardDisplay::new(vec![BoardDisplayLayer {
             color: BoardDisplayColor::Black,
-            shape: BoardDisplayShape::Square,
+            shape: BoardDisplayShape::Primary,
             board_slice: self,
         }]);
         f.write_str(&display.render())?;

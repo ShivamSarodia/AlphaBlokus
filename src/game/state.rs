@@ -95,7 +95,7 @@ impl<'c> fmt::Display for State<'c> {
             latest_move_slice.add(&move_profile.occupied_cells);
             layers.push(BoardDisplayLayer {
                 color: BoardDisplay::player_to_color(player),
-                shape: BoardDisplayShape::Circle,
+                shape: BoardDisplayShape::Secondary,
                 board_slice: &latest_move_slice,
             });
         }
@@ -104,7 +104,7 @@ impl<'c> fmt::Display for State<'c> {
             layers.push(BoardDisplayLayer {
                 color: BoardDisplay::player_to_color(player),
                 board_slice: self.board.slice(player),
-                shape: BoardDisplayShape::Square,
+                shape: BoardDisplayShape::Primary,
             });
         }
 
