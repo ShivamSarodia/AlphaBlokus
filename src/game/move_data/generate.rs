@@ -2,13 +2,13 @@ use anyhow::Result;
 
 use crate::config::GameConfig;
 use crate::game::MovesArray;
-use crate::move_data::initial_moves_enabled::compute_initial_moves_enabled;
-use crate::move_data::pieces::piece_list;
-use crate::move_data::stage_1::compute_stage_1_move_profiles;
-use crate::move_data::stage_2::compute_stage_2_move_profiles;
-use crate::move_data::stage_3::compute_stage_3_move_profiles;
-use crate::move_data::stage_4::compute_stage_4_move_profiles;
-use crate::move_data::{MoveData, MoveProfile};
+use crate::game::move_data::initial_moves_enabled::compute_initial_moves_enabled;
+use crate::game::move_data::pieces::piece_list;
+use crate::game::move_data::stage_1::compute_stage_1_move_profiles;
+use crate::game::move_data::stage_2::compute_stage_2_move_profiles;
+use crate::game::move_data::stage_3::compute_stage_3_move_profiles;
+use crate::game::move_data::stage_4::compute_stage_4_move_profiles;
+use crate::game::move_data::{MoveData, MoveProfile};
 
 pub fn generate(config: &GameConfig) -> Result<MoveData> {
     println!("Generating piece list...");

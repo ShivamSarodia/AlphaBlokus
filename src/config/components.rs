@@ -2,9 +2,9 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::config::NUM_PLAYERS;
+use crate::game::move_data;
+use crate::game::move_data::{MoveData, MoveProfile};
 use crate::game::{MovesArray, MovesBitSet};
-use crate::move_data;
-use crate::move_data::{MoveData, MoveProfile};
 
 #[derive(Deserialize, Debug)]
 pub struct GameConfig {

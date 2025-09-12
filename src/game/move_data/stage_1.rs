@@ -3,8 +3,8 @@ use anyhow::{Result, bail};
 use config::GameConfig;
 use std::collections::HashSet;
 
-use crate::move_data::pieces::Coord;
-use crate::move_data::pieces::Piece;
+use crate::game::move_data::pieces::Coord;
+use crate::game::move_data::pieces::Piece;
 
 pub struct Stage1MoveProfile {
     pub index: usize,

@@ -4,7 +4,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use zstd::stream::{read::Decoder, write::Encoder};
 
-use crate::move_data::MoveData;
+use crate::game::move_data::MoveData;
 
 fn bincode_config() -> impl bincode::config::Config {
     bincode::config::standard().with_variable_int_encoding()

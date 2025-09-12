@@ -3,7 +3,7 @@ use clap::Parser;
 use std::path::PathBuf;
 
 use alpha_blokus::config::{LoadableConfig, PreprocessMovesConfig};
-use alpha_blokus::move_data;
+use alpha_blokus::game::move_data;
 
 #[derive(Parser)]
 #[command()]

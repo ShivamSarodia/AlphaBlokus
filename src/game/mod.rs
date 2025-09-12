@@ -4,6 +4,7 @@ mod display;
 mod moves_array;
 mod state;
 
+pub mod move_data;
 pub use board::Board;
 pub use board_slice::BoardSlice;
 pub use moves_array::MovesArray;

@@ -1,7 +1,7 @@
 use crate::{
     config::NUM_PLAYERS,
+    game::move_data::MoveProfile,
     game::{MovesArray, MovesBitSet},
-    move_data::MoveProfile,
 };
 
 pub fn compute_initial_moves_enabled(
