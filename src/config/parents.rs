@@ -22,6 +22,8 @@ pub trait LoadableConfig: Sized + DeserializeOwned {
 #[derive(Deserialize, Debug)]
 pub struct SelfPlayConfig {
     pub game: GameConfig,
+    pub num_concurrent_games: u32,
+    pub num_total_games: u32,
 }
 
 impl LoadableConfig for SelfPlayConfig {}
@@ -41,7 +43,7 @@ mod tests {
     fn loads_from_file() -> Result<()> {
         let path = Path::new("tests/fixtures/configs/self_play.toml");
         let self_play_config = SelfPlayConfig::from_file(path)?;
-        assert_eq!(self_play_config.game.board_size, 20);
+        assert_eq!(self_play_config.game.board_size, 5);
         Ok(())
     }
 }

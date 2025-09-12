@@ -1,4 +1,4 @@
-use alpha_blokus::config;
+use alpha_blokus::{config, gameplay::run_selfplay};
 use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
@@ -15,8 +15,12 @@ struct Cli {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let config = SelfPlayConfig::from_file(&cli.config)?;
+    println!("Starting self-play with config:\n\n{:#?}", cli.config);
 
-    println!("Running with config:\n\n{config:#?}");
+    let mut config = SelfPlayConfig::from_file(&cli.config)?;
+    config.game.load_move_profiles()?;
+
+    run_selfplay(config);
+
     Ok(())
 }
