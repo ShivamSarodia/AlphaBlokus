@@ -2,6 +2,7 @@ use crate::config::{GameConfig, NUM_PLAYERS};
 use crate::game::MovesBitSet;
 use crate::game::display::{BoardDisplay, BoardDisplayLayer, BoardDisplayShape};
 use crate::game::{Board, BoardSlice};
+
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -80,8 +81,20 @@ impl<'c> State<'c> {
         return self.valid_moves().next().is_some();
     }
 
+    pub fn first_valid_move(&self) -> Option<usize> {
+        self.valid_moves().next()
+    }
+
     pub fn player(&self) -> usize {
         self.player
+    }
+
+    pub fn turn(&self) -> u8 {
+        self.turn
+    }
+
+    pub fn board(&self) -> &Board {
+        &self.board
     }
 }
 
@@ -115,5 +128,83 @@ impl<'c> fmt::Display for State<'c> {
             self.player, self.turn, board_display
         ))?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing::create_game_config;
+
+    #[test]
+    fn test_state_new_initialization() {
+        let config = create_game_config();
+        let state = State::new(config);
+
+        assert_eq!(state.player(), 0);
+        assert_eq!(state.turn(), 0);
+        assert!(state.any_valid_moves());
+    }
+
+    #[test]
+    fn test_apply_move_updates_state() {
+        let config = create_game_config();
+        let mut state = State::new(config);
+
+        let move_index = state.first_valid_move().expect("Should have valid moves");
+        let status = state.apply_move(move_index);
+
+        // Should still be in progress after first move
+        assert_eq!(status, GameStatus::InProgress);
+
+        // Turn should increment
+        assert_eq!(state.turn(), 1);
+
+        // Player should change
+        assert_ne!(state.player(), 0);
+    }
+
+    #[test]
+    fn test_apply_multiple_moves() {
+        let config = create_game_config();
+        let mut state = State::new(config);
+
+        loop {
+            let move_index = state.first_valid_move().expect("Should have valid moves");
+            let game_state = state.apply_move(move_index);
+            if game_state == GameStatus::GameOver {
+                break;
+            }
+        }
+
+        assert_eq!(state.any_valid_moves(), false);
+        assert_eq!(state.valid_moves().count(), 0);
+    }
+
+    #[test]
+    fn test_display_implementation() {
+        let config = create_game_config();
+        let mut state = State::new(config);
+
+        let display_string = format!("{}", state);
+        assert!(!display_string.is_empty());
+
+        let move_index = state.first_valid_move().expect("Should have valid moves");
+
+        state.apply_move(move_index);
+
+        let display_string = format!("{}", state);
+        assert!(!display_string.is_empty());
+    }
+
+    #[test]
+    fn test_first_valid_move_same() {
+        let config = create_game_config();
+        let state = State::new(config);
+
+        let move_index_1 = state.first_valid_move().expect("Should have valid moves");
+        let move_index_2 = state.first_valid_move().expect("Should have valid moves");
+
+        assert_eq!(move_index_1, move_index_2);
     }
 }
