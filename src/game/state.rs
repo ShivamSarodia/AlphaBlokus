@@ -2,7 +2,6 @@ use crate::config::{GameConfig, NUM_PLAYERS};
 use crate::game::MovesBitSet;
 use crate::game::display::{BoardDisplay, BoardDisplayLayer, BoardDisplayShape};
 use crate::game::{Board, BoardSlice};
-
 use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -36,6 +35,10 @@ impl<'c> State<'c> {
     }
 
     pub fn apply_move(&mut self, move_index: usize) -> GameStatus {
+        if !self.is_valid_move(move_index) {
+            panic!("Invalid move: {}", move_index);
+        }
+
         let move_profile = self.game_config.move_profiles().get(move_index);
 
         // Update the board occupancies with the newly occupied cells of the
@@ -79,6 +82,11 @@ impl<'c> State<'c> {
 
     pub fn any_valid_moves(&self) -> bool {
         return self.valid_moves().next().is_some();
+    }
+
+    pub fn is_valid_move(&self, move_index: usize) -> bool {
+        self.moves_enabled[self.player].contains(move_index)
+            && !self.moves_ruled_out[self.player].contains(move_index)
     }
 
     pub fn first_valid_move(&self) -> Option<usize> {
@@ -135,6 +143,7 @@ impl<'c> fmt::Display for State<'c> {
 mod tests {
     use super::*;
     use crate::testing::create_game_config;
+    use itertools::Itertools;
 
     #[test]
     fn test_state_new_initialization() {
@@ -206,5 +215,29 @@ mod tests {
         let move_index_2 = state.first_valid_move().expect("Should have valid moves");
 
         assert_eq!(move_index_1, move_index_2);
+    }
+
+    #[test]
+    fn test_is_valid_move() {
+        let config = create_game_config();
+        let state = State::new(config);
+
+        for move_index in 0..config.num_moves {
+            assert_eq!(
+                state.is_valid_move(move_index),
+                state.valid_moves().contains(&move_index),
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid move:")]
+    fn test_apply_invalid_move_panics() {
+        let config = create_game_config();
+        let mut state = State::new(config);
+
+        // Try to apply an invalid move (using a move index that's out of bounds)
+        let invalid_move_index = config.num_moves + 100;
+        state.apply_move(invalid_move_index);
     }
 }
