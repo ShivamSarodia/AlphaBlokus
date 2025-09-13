@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::config::GameConfig;
 use once_cell::sync::Lazy;
 
@@ -14,24 +16,25 @@ fn create_base_game_config() -> GameConfig {
 }
 
 /// Static GameConfig without move data, cached using once_cell
-static GAME_CONFIG_WITHOUT_DATA: Lazy<GameConfig> = Lazy::new(create_base_game_config);
+static GAME_CONFIG_WITHOUT_DATA: Lazy<Arc<GameConfig>> =
+    Lazy::new(|| Arc::new(create_base_game_config()));
 
 /// Static GameConfig with move data loaded, cached using once_cell
-static GAME_CONFIG_WITH_DATA: Lazy<GameConfig> = Lazy::new(|| {
+static GAME_CONFIG_WITH_DATA: Lazy<Arc<GameConfig>> = Lazy::new(|| {
     let mut config = create_base_game_config();
     config.load_move_profiles().unwrap();
-    config
+    Arc::new(config)
 });
 
 /// Creates a GameConfig for testing with board size 5 without loading move profiles.
 /// This function returns the same cached instance on every call.
-pub fn create_game_config_without_data() -> &'static GameConfig {
-    &GAME_CONFIG_WITHOUT_DATA
+pub fn create_game_config_without_data() -> Arc<GameConfig> {
+    Arc::clone(&GAME_CONFIG_WITHOUT_DATA)
 }
 
 /// Creates a GameConfig for testing with board size 5 with move profiles loaded.
 /// This function calls create_game_config_without_data() and then loads move profiles.
 /// Returns the same cached instance on every call to avoid reloading.
-pub fn create_game_config() -> &'static GameConfig {
-    &GAME_CONFIG_WITH_DATA
+pub fn create_game_config() -> Arc<GameConfig> {
+    Arc::clone(&GAME_CONFIG_WITH_DATA)
 }

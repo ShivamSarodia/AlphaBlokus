@@ -10,6 +10,7 @@ pub enum GameStatus {
     GameOver,
 }
 
+#[derive(Clone)]
 pub struct State<'c> {
     board: Board,
     player: usize,
@@ -148,7 +149,7 @@ mod tests {
     #[test]
     fn test_state_new_initialization() {
         let config = create_game_config();
-        let state = State::new(config);
+        let state = State::new(&config);
 
         assert_eq!(state.player(), 0);
         assert_eq!(state.turn(), 0);
@@ -158,7 +159,7 @@ mod tests {
     #[test]
     fn test_apply_move_updates_state() {
         let config = create_game_config();
-        let mut state = State::new(config);
+        let mut state = State::new(&config);
 
         let move_index = state.first_valid_move().expect("Should have valid moves");
         let status = state.apply_move(move_index);
@@ -176,7 +177,7 @@ mod tests {
     #[test]
     fn test_apply_multiple_moves() {
         let config = create_game_config();
-        let mut state = State::new(config);
+        let mut state = State::new(&config);
 
         loop {
             let move_index = state.first_valid_move().expect("Should have valid moves");
@@ -193,7 +194,7 @@ mod tests {
     #[test]
     fn test_display_implementation() {
         let config = create_game_config();
-        let mut state = State::new(config);
+        let mut state = State::new(&config);
 
         let display_string = format!("{}", state);
         assert!(!display_string.is_empty());
@@ -209,7 +210,7 @@ mod tests {
     #[test]
     fn test_first_valid_move_same() {
         let config = create_game_config();
-        let state = State::new(config);
+        let state = State::new(&config);
 
         let move_index_1 = state.first_valid_move().expect("Should have valid moves");
         let move_index_2 = state.first_valid_move().expect("Should have valid moves");
@@ -220,7 +221,7 @@ mod tests {
     #[test]
     fn test_is_valid_move() {
         let config = create_game_config();
-        let state = State::new(config);
+        let state = State::new(&config);
 
         for move_index in 0..config.num_moves {
             assert_eq!(
@@ -234,7 +235,7 @@ mod tests {
     #[should_panic(expected = "Invalid move:")]
     fn test_apply_invalid_move_panics() {
         let config = create_game_config();
-        let mut state = State::new(config);
+        let mut state = State::new(&config);
 
         // Try to apply an invalid move (using a move index that's out of bounds)
         let invalid_move_index = config.num_moves + 100;
