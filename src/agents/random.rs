@@ -21,8 +21,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_choose_move() {
+        let config = testing::create_game_config();
         let agent = RandomAgent {};
-        let state = State::new(testing::create_game_config());
+        let state = State::new(&config);
         let move_index = agent.choose_move(&state).await;
         assert!(state.valid_moves().contains(&move_index));
     }

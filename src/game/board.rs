@@ -7,6 +7,7 @@ use std::fmt;
 
 /// Structure representing a board state, with each player
 /// on a different slice of the provided values.
+#[derive(Clone, Debug)]
 pub struct Board {
     slices: [BoardSlice; NUM_PLAYERS],
     #[allow(dead_code)]
@@ -27,6 +28,10 @@ impl Board {
 
     pub fn slice(&self, player: usize) -> &BoardSlice {
         &self.slices[player]
+    }
+
+    pub fn slice_mut(&mut self, player: usize) -> &mut BoardSlice {
+        &mut self.slices[player]
     }
 }
 
