@@ -1,6 +1,6 @@
 use crate::game::BoardSlice;
 use anyhow::Result;
-use indicatif::ParallelProgressIterator;
+use indicatif::{ParallelProgressIterator, ProgressBar};
 use rayon::prelude::*;
 
 use crate::game::move_data::stage_2::Stage2MoveProfile;
@@ -22,9 +22,15 @@ pub fn compute_stage_3_move_profiles(
     stage_2_move_profiles: Vec<Stage2MoveProfile>,
     size: usize,
 ) -> Result<Vec<Stage3MoveProfile>> {
+    let pb = if stage_2_move_profiles.len() > 1000 {
+        ProgressBar::new(stage_2_move_profiles.len() as u64)
+    } else {
+        ProgressBar::hidden()
+    };
+
     let stage_3_move_profiles = stage_2_move_profiles
         .par_iter()
-        .progress_count(stage_2_move_profiles.len() as u64)
+        .progress_with(pb)
         .map(|stage_2_move| {
             let mut corner_cells = BoardSlice::new(size);
             let mut edge_cells = BoardSlice::new(size);
