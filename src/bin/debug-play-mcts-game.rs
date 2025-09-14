@@ -1,0 +1,50 @@
+use std::sync::Arc;
+
+use alpha_blokus::agents::Agent;
+use alpha_blokus::inference::OrtExecutor;
+use anyhow::Result;
+
+use alpha_blokus::agents::MCTSAgent;
+use alpha_blokus::config::GameConfig;
+use alpha_blokus::config::MCTSConfig;
+use alpha_blokus::game::State;
+use alpha_blokus::inference;
+
+fn main() -> Result<()> {
+    let mut game_config = GameConfig {
+        board_size: 10,
+        num_moves: 6233,
+        num_pieces: 21,
+        num_piece_orientations: 91,
+        move_data: None,
+        move_data_file: "static/move_data_size_10.bin".to_string(),
+    };
+    game_config.load_move_profiles()?;
+    let game_config = Arc::new(game_config);
+
+    let mcts_config = Arc::new(MCTSConfig {
+        num_rollouts: 10,
+        total_dirichlet_noise_alpha: 10.83,
+        root_dirichlet_noise_fraction: 0.25,
+        ucb_exploration_factor: 1.05,
+        temperature_turn_cutoff: 24,
+        move_selection_temperature: 1.0,
+    });
+
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let executor = OrtExecutor::build(
+            "static/networks/trivial_net_half.onnx",
+            Arc::clone(&game_config),
+        );
+
+        let inference_client = Arc::new(inference::Client::build_and_start(executor, 100, 1));
+
+        let agent = MCTSAgent::new(mcts_config, Arc::clone(&game_config), inference_client);
+        let mut state = State::new(&game_config);
+        let move_index = agent.choose_move(&state).await;
+        state.apply_move(move_index);
+        println!("{}", state);
+    });
+
+    Ok(())
+}

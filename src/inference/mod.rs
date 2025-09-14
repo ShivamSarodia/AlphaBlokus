@@ -2,7 +2,7 @@ mod batcher;
 mod client;
 mod ort_executor;
 
-pub use batcher::{Batcher, Executor};
+pub use batcher::Executor;
 pub use client::Client;
 pub use client::Request;
 pub use client::Response;

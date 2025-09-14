@@ -1,6 +1,7 @@
 use crate::{
     config::NUM_PLAYERS,
     game::{Board, MovesArray},
+    inference::{Executor, batcher::Batcher},
 };
 use tokio::sync::{mpsc, oneshot};
 
@@ -25,6 +26,26 @@ pub struct Client {
 }
 
 impl Client {
+    /// Builds a client and starts the batcher.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The executor to use for inference.
+    /// * `channel_size` - The size of the channel to use for communication from the client
+    ///   to the batcher. To be safe, this should be large enough to hold the maximum possible
+    ///   number of concurrent requests, which is usually the number of concurrent games.
+    /// * `batch_size` - The size of batch at which the batcher execute requests.
+    pub fn build_and_start<T: Executor>(
+        executor: T,
+        channel_size: usize,
+        batch_size: usize,
+    ) -> Self {
+        let (request_sender, request_receiver) = mpsc::channel(channel_size);
+        let mut batcher = Batcher::new(batch_size, executor, request_receiver);
+        tokio::spawn(async move { batcher.run().await });
+        Self { request_sender }
+    }
+
     pub fn new(sender: mpsc::Sender<RequestChannelMessage>) -> Self {
         Self {
             request_sender: sender,
@@ -54,11 +75,7 @@ impl Client {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{
-        config::GameConfig,
-        inference::{batcher::Batcher, batcher::Executor},
-        testing,
-    };
+    use crate::{config::GameConfig, inference::batcher::Executor, testing};
 
     use super::*;
 
@@ -93,20 +110,13 @@ mod tests {
         // Create a game config.
         let game_config = testing::create_game_config();
 
-        // Create the executor.
-        let executor = MockExecutor {
-            game_config: Arc::clone(&game_config),
-        };
-
-        // Create a channel for communication.
-        let (request_sender, request_receiver) = mpsc::channel(100);
-
-        // Create the batcher and start it.
-        let mut batcher = Batcher::new(3, executor, request_receiver);
-        tokio::spawn(async move { batcher.run().await });
-
-        // Create a client that publishes to the request sender.
-        let client = Arc::new(Client::new(request_sender));
+        let client = Arc::new(Client::build_and_start(
+            MockExecutor {
+                game_config: Arc::clone(&game_config),
+            },
+            100,
+            3,
+        ));
 
         // Generate four requests.
         let requests = (0..4)

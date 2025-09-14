@@ -68,6 +68,7 @@ impl Node {
             children_prior_probabilities: Vec::new(),
         };
         result.initialize_move_mappings(state);
+        result.initialize_children();
         result
             .initialize_inference_results(state, inference_client)
             .await;
@@ -153,14 +154,16 @@ impl Node {
         self.value
     }
 
+    #[allow(dead_code)]
     pub fn get_value_as_player_pov(&self) -> [f32; NUM_PLAYERS] {
-        let mut value_clone = self.value.clone();
+        let mut value_clone = self.value;
         // Suppose self.player is 1. Then, self.value[1] should be returned as
         // result[0]. Rotating left accomplishes this.
-        value_clone.rotate_left(self.player as usize);
+        value_clone.rotate_left(self.player);
         value_clone
     }
 
+    #[allow(dead_code)]
     fn set_value_from_universal_pov(&mut self, value: [f32; NUM_PLAYERS]) {
         self.value = value;
     }
@@ -169,7 +172,7 @@ impl Node {
         self.value = value;
         // Suppose self.player is 1. Then, value[0] is the value for player 1. By
         // rotating right, we correctly move player 1's value in value[1].
-        self.value.rotate_right(self.player as usize);
+        self.value.rotate_right(self.player);
     }
 
     fn set_policy_from_player_pov(&mut self, policy: MovesArray<f32>) {
@@ -180,7 +183,7 @@ impl Node {
             let universal_move_index = self.array_index_to_move_index[array_index];
             let move_profile = move_profiles.get(universal_move_index);
             let player_pov_move_index =
-                move_profile.rotated_move_indexes[NUM_PLAYERS - self.player];
+                move_profile.rotated_move_indexes[NUM_PLAYERS - 1 - self.player];
 
             self.children_prior_probabilities
                 .push(policy.get_copy(player_pov_move_index));
@@ -252,7 +255,7 @@ impl Node {
                 .children_visit_counts
                 .iter()
                 .enumerate()
-                .max_by_key(|(_, x)| x)
+                .max_by_key(|&(_, x)| x)
                 .unwrap()
                 .0;
         }
@@ -281,12 +284,12 @@ impl Node {
     }
 
     pub fn get_child(&self, move_index: usize) -> Option<&Node> {
-        return self.children[self.get_array_index(move_index)].as_ref();
+        self.children[self.get_array_index(move_index)].as_ref()
     }
 
     pub fn get_child_mut(&mut self, move_index: usize) -> Option<&mut Node> {
         let array_index = self.get_array_index(move_index);
-        return self.children[array_index].as_mut();
+        self.children[array_index].as_mut()
     }
 
     pub fn has_child(&self, move_index: usize) -> bool {
@@ -300,9 +303,9 @@ impl Node {
 
     pub fn increment_child_value_sum(&mut self, move_index: usize, values: [f32; NUM_PLAYERS]) {
         let array_index = self.get_array_index(move_index);
-        for i in 0..NUM_PLAYERS {
-            self.children_value_sums[array_index][i] += values[i];
-        }
+        values.iter().enumerate().for_each(|(i, &value)| {
+            self.children_value_sums[array_index][i] += value;
+        });
     }
 
     pub fn increment_child_visit_count(&mut self, move_index: usize) {
