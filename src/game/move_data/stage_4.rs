@@ -2,6 +2,7 @@ use crate::game::BoardSlice;
 use crate::game::MovesBitSet;
 use anyhow::Result;
 use indicatif::ParallelProgressIterator;
+use indicatif::ProgressBar;
 use rayon::prelude::*;
 
 use crate::game::move_data::stage_3::Stage3MoveProfile;
@@ -24,9 +25,16 @@ pub fn compute_stage_4_move_profiles(
     stage_3_move_profiles: Vec<Stage3MoveProfile>,
 ) -> Result<Vec<Stage4MoveProfile>> {
     let num_moves = stage_3_move_profiles.len();
+
+    let pb = if num_moves > 1000 {
+        ProgressBar::new(num_moves as u64)
+    } else {
+        ProgressBar::hidden()
+    };
+
     let stage_4_move_profiles = stage_3_move_profiles
         .par_iter()
-        .progress_count(stage_3_move_profiles.len() as u64)
+        .progress_with(pb)
         .map(|stage_3_move| {
             let mut moves_ruled_out_for_self = MovesBitSet::new(num_moves);
             let mut moves_ruled_out_for_others = MovesBitSet::new(num_moves);
