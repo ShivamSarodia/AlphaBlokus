@@ -15,7 +15,7 @@ def save_as_onnx(net: nn.Module, game_config: GameConfig, path: str):
         path,
         dynamo=True,
         input_names=["board"],
-        output_names=["values", "policy"],
+        output_names=["value", "policy"],
         dynamic_shapes={
             "board": {
                 0: batch_size,
