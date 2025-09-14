@@ -1,9 +1,9 @@
 mod batcher;
 mod client;
-mod executor;
+mod ort_executor;
 
-pub use batcher::Batcher;
+pub use batcher::{Batcher, Executor};
 pub use client::Client;
 pub use client::Request;
 pub use client::Response;
-pub use executor::Executor;
+pub use ort_executor::OrtExecutor;

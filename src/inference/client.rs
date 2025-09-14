@@ -11,7 +11,7 @@ pub struct Request {
 
 #[derive(Debug)]
 pub struct Response {
-    pub values: [f32; NUM_PLAYERS],
+    pub value: [f32; NUM_PLAYERS],
     pub policy: MovesArray<f32>,
 }
 
@@ -56,7 +56,7 @@ mod tests {
 
     use crate::{
         config::GameConfig,
-        inference::{batcher::Batcher, executor::Executor},
+        inference::{batcher::Batcher, batcher::Executor},
         testing,
     };
 
@@ -76,7 +76,7 @@ mod tests {
             requests
                 .into_iter()
                 .map(|request| Response {
-                    values: [
+                    value: [
                         request.board.slice(0).count() as f32,
                         request.board.slice(1).count() as f32,
                         request.board.slice(2).count() as f32,
@@ -166,9 +166,9 @@ mod tests {
         assert!(handle_0.is_finished());
         assert!(handle_1.is_finished());
         assert!(handle_2.is_finished());
-        assert!(handle_0.await.unwrap().values == [1.0, 0.0, 0.0, 0.0]);
-        assert!(handle_1.await.unwrap().values == [0.0, 1.0, 0.0, 0.0]);
-        assert!(handle_2.await.unwrap().values == [0.0, 0.0, 1.0, 0.0]);
+        assert!(handle_0.await.unwrap().value == [1.0, 0.0, 0.0, 0.0]);
+        assert!(handle_1.await.unwrap().value == [0.0, 1.0, 0.0, 0.0]);
+        assert!(handle_2.await.unwrap().value == [0.0, 0.0, 1.0, 0.0]);
 
         // Evaluation 3 should still be waiting, because it didn't make it
         // into the batch.

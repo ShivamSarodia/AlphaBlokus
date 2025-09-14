@@ -1,6 +1,11 @@
-use crate::inference::{client::RequestChannelMessage, executor::Executor};
+use crate::inference;
+use crate::inference::client::RequestChannelMessage;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+
+pub trait Executor: Send + Sync + 'static {
+    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response>;
+}
 
 #[allow(dead_code)]
 pub struct Batcher<T: Executor> {

@@ -1,9 +1,10 @@
 use crate::config::GameConfig;
+use anyhow::Result;
 use bit_set::BitSet;
 use serde::{Deserialize, Serialize};
 
 // List of one-value-per-move.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MovesArray<T> {
     values: Vec<T>,
 }
@@ -13,6 +14,19 @@ impl<T: Clone> MovesArray<T> {
         MovesArray {
             values: vec![value; game_config.num_moves],
         }
+    }
+
+    pub fn try_from(slice: &[T], game_config: &GameConfig) -> Result<Self> {
+        if slice.len() != game_config.num_moves {
+            return Err(anyhow::anyhow!(
+                "Number of values ({}) does not match num_moves ({})",
+                slice.len(),
+                game_config.num_moves
+            ));
+        }
+        Ok(MovesArray {
+            values: slice.to_vec(),
+        })
     }
 }
 
