@@ -30,6 +30,10 @@ impl Board {
         &self.slices[player]
     }
 
+    pub fn slices(&self) -> &[BoardSlice; NUM_PLAYERS] {
+        &self.slices
+    }
+
     pub fn slice_mut(&mut self, player: usize) -> &mut BoardSlice {
         &mut self.slices[player]
     }

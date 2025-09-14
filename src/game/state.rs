@@ -94,6 +94,37 @@ impl<'c> State<'c> {
         self.valid_moves().next()
     }
 
+    /// Returns the result of the game for each player. If the game is still in progress,
+    /// this method returns values based off the current state of the game.
+    pub fn result(&self) -> [f32; NUM_PLAYERS] {
+        // Get the number of pieces each player has on the board.
+        let piece_counts = self
+            .board
+            .slices()
+            .iter()
+            .map(|slice| slice.count())
+            .collect::<Vec<usize>>();
+
+        // Get the maximum number of pieces on the board.
+        let max_piece_count = piece_counts.iter().copied().max().unwrap();
+
+        // Get the number of players sharing that maximum number of pieces.
+        // (Usually 1, but can be more in case of a tie.)
+        let num_players_sharing_max_piece_count = piece_counts
+            .iter()
+            .copied()
+            .filter(|&count| count == max_piece_count)
+            .count();
+
+        std::array::from_fn(|player| {
+            if piece_counts[player] == max_piece_count {
+                1.0f32 / num_players_sharing_max_piece_count as f32
+            } else {
+                0.0f32
+            }
+        })
+    }
+
     pub fn player(&self) -> usize {
         self.player
     }
@@ -240,5 +271,19 @@ mod tests {
         // Try to apply an invalid move (using a move index that's out of bounds)
         let invalid_move_index = config.num_moves + 100;
         state.apply_move(invalid_move_index);
+    }
+
+    #[test]
+    fn test_result() {
+        let config = create_game_config();
+        let mut state = State::new(&config);
+
+        // Initially, all players should be tied.
+        assert_eq!(state.result(), [0.25f32, 0.25f32, 0.25f32, 0.25f32]);
+
+        // After the first player moves, they should be the only player
+        // with a good score.
+        state.apply_move(state.first_valid_move().unwrap());
+        assert_eq!(state.result(), [1f32, 0.0f32, 0.0f32, 0.0f32]);
     }
 }
