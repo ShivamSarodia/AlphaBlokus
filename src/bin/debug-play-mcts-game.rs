@@ -3,14 +3,19 @@ use std::sync::Arc;
 use alpha_blokus::agents::Agent;
 use alpha_blokus::inference::OrtExecutor;
 use anyhow::Result;
+use log::debug;
 
 use alpha_blokus::agents::MCTSAgent;
 use alpha_blokus::config::GameConfig;
 use alpha_blokus::config::MCTSConfig;
-use alpha_blokus::game::State;
+use alpha_blokus::game::{GameStatus, State};
 use alpha_blokus::inference;
 
 fn main() -> Result<()> {
+    env_logger::init();
+
+    debug!("Debug logging enabled.");
+
     let mut game_config = GameConfig {
         board_size: 10,
         num_moves: 6233,
@@ -41,9 +46,14 @@ fn main() -> Result<()> {
 
         let agent = MCTSAgent::new(mcts_config, Arc::clone(&game_config), inference_client);
         let mut state = State::new(&game_config);
-        let move_index = agent.choose_move(&state).await;
-        state.apply_move(move_index);
-        println!("{}", state);
+        loop {
+            let move_index = agent.choose_move(&state).await;
+            let status = state.apply_move(move_index);
+            println!("{}", state);
+            if status == GameStatus::GameOver {
+                break;
+            }
+        }
     });
 
     Ok(())

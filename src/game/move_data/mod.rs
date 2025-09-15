@@ -11,5 +11,6 @@ mod stage_4;
 pub use generate::generate;
 pub use model::MoveData;
 pub use model::MoveProfile;
+pub use model::move_index_to_player_pov;
 pub use serialize::load;
 pub use serialize::save;

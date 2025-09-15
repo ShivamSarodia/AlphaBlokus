@@ -4,6 +4,10 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 
 pub trait Executor: Send + Sync + 'static {
+    /// Accept a vector of requests and return a vector of response in the same order.
+    ///
+    /// Each Request includes a vector of valid move indexes. The Response's policy should
+    /// be returned in the same order as the specified move indexes.
     fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response>;
 }
 

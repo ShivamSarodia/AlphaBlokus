@@ -1,6 +1,6 @@
 use crate::{
     config::NUM_PLAYERS,
-    game::{Board, MovesArray},
+    game::Board,
     inference::{Executor, batcher::Batcher},
 };
 use tokio::sync::{mpsc, oneshot};
@@ -8,12 +8,13 @@ use tokio::sync::{mpsc, oneshot};
 #[derive(Debug, Clone)]
 pub struct Request {
     pub board: Board,
+    pub valid_move_indexes: Vec<usize>,
 }
 
 #[derive(Debug)]
 pub struct Response {
     pub value: [f32; NUM_PLAYERS],
-    pub policy: MovesArray<f32>,
+    pub policy: Vec<f32>,
 }
 
 pub struct RequestChannelMessage {
@@ -99,7 +100,7 @@ mod tests {
                         request.board.slice(2).count() as f32,
                         request.board.slice(3).count() as f32,
                     ],
-                    policy: MovesArray::new_with(0.0, &self.game_config),
+                    policy: vec![1.0; self.game_config.num_moves],
                 })
                 .collect()
         }
@@ -123,7 +124,10 @@ mod tests {
             .map(|i| {
                 let mut board = Board::new(&game_config);
                 board.slice_mut(i).set((0, 0), true);
-                Request { board }
+                Request {
+                    board,
+                    valid_move_indexes: vec![i],
+                }
             })
             .collect::<Vec<_>>();
 

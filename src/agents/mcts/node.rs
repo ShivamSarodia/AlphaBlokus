@@ -1,11 +1,12 @@
 use itertools::Itertools;
+use log::debug;
 use rand_distr::Distribution;
 use rand_distr::weighted::WeightedIndex;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::config::GameConfig;
-use crate::game::MovesArray;
+use crate::game::move_data::move_index_to_player_pov;
 use crate::inference;
 use crate::{config::MCTSConfig, config::NUM_PLAYERS, game::State};
 
@@ -22,6 +23,8 @@ pub struct Node {
     move_index_to_array_index: HashMap<usize, usize>,
     /// Mapping from array index to move index for this node.
     array_index_to_move_index: Vec<usize>,
+    /// Mapping from array index to move index from player POV for this node.
+    array_index_to_player_pov_move_index: Vec<usize>,
     /// Summed values for each child of this node, computed over time
     /// from backpropagation.
     children_value_sums: Vec<[f32; NUM_PLAYERS]>,
@@ -58,6 +61,7 @@ impl Node {
             num_valid_moves: 0,
             move_index_to_array_index: HashMap::new(),
             array_index_to_move_index: Vec::new(),
+            array_index_to_player_pov_move_index: Vec::new(),
             // Initialized by initialize_children
             children: Vec::new(),
             children_value_sums: vec![[0.0; NUM_PLAYERS]; 0],
@@ -104,6 +108,7 @@ impl Node {
     fn initialize_move_mappings(&mut self, state: &State<'_>) {
         self.move_index_to_array_index = HashMap::new();
         self.array_index_to_move_index = Vec::new();
+        self.array_index_to_player_pov_move_index = Vec::new();
         state
             .valid_moves()
             // I don't think sorting is technically necessary here, but it may reduce risk
@@ -114,6 +119,12 @@ impl Node {
                 self.move_index_to_array_index
                     .insert(move_index, array_index);
                 self.array_index_to_move_index.push(move_index);
+                self.array_index_to_player_pov_move_index
+                    .push(move_index_to_player_pov(
+                        move_index,
+                        self.player,
+                        self.game_config.move_profiles(),
+                    ));
             });
         self.num_valid_moves = self.array_index_to_move_index.len();
     }
@@ -133,21 +144,20 @@ impl Node {
         state: &State<'_>,
         inference_client: &inference::Client,
     ) {
-        // Convert the board to the perspective of the player at this node before passing
-        // to the network.
-        let player_pov_board = state.board().clone_with_player_pov(self.player as i32);
+        // Pass the board  and player POV move indexes to the network from the player's
+        // own perspective.
 
         // Perform inference on this board.
         let inference_result = inference_client
             .evaluate(inference::Request {
-                board: player_pov_board,
+                board: state.board().clone_with_player_pov(self.player as i32),
+                valid_move_indexes: self.array_index_to_player_pov_move_index.clone(),
             })
             .await;
 
-        // The inference results are in the player perspective. The methods below internally
-        // convert to the universal perspective, which is how these values are stored.
+        // Store the results back into the node.
         self.set_value_from_player_pov(inference_result.value);
-        self.set_policy_from_player_pov(inference_result.policy);
+        self.set_prior_probabilities(inference_result.policy);
     }
 
     pub fn get_value_as_universal_pov(&self) -> [f32; NUM_PLAYERS] {
@@ -175,19 +185,17 @@ impl Node {
         self.value.rotate_right(self.player);
     }
 
-    fn set_policy_from_player_pov(&mut self, policy: MovesArray<f32>) {
-        let move_profiles = self.game_config.move_profiles();
-
-        self.children_prior_probabilities = Vec::with_capacity(self.num_valid_moves);
-        for array_index in 0..self.num_valid_moves {
-            let universal_move_index = self.array_index_to_move_index[array_index];
-            let move_profile = move_profiles.get(universal_move_index);
-            let player_pov_move_index =
-                move_profile.rotated_move_indexes[NUM_PLAYERS - 1 - self.player];
-
-            self.children_prior_probabilities
-                .push(policy.get_copy(player_pov_move_index));
+    /// Sets the prior probabilities for the child nodes. Expects `policy` to be provided
+    /// in the same order as the move indexes in `self.array_index_to_move_index`.
+    fn set_prior_probabilities(&mut self, policy: Vec<f32>) {
+        if policy.len() != self.num_valid_moves {
+            panic!(
+                "Policy length {} does not match number of valid moves {}",
+                policy.len(),
+                self.num_valid_moves
+            );
         }
+        self.children_prior_probabilities = policy;
     }
 
     /// Returns the move index (in universal perspective) with the highest UCB score at
@@ -273,6 +281,15 @@ impl Node {
             .map(|x| x / normalization_factor)
             .collect::<Vec<f32>>();
 
+        debug!(
+            "Selecting move to play.\nWeights: {:?}\nUnnormalized Weights: {:?}\nPrior Probabilities: {:?}\nValue Sums: {:?}\nVisit Counts: {:?}\nMove Indexes: {:?}",
+            weights,
+            unnormalized_weights,
+            self.children_prior_probabilities,
+            self.children_value_sums,
+            self.children_visit_counts,
+            self.array_index_to_move_index
+        );
         let dist = WeightedIndex::new(&weights).unwrap();
         let array_index = dist.sample(&mut rand::rng());
         self.array_index_to_move_index[array_index]

@@ -1,6 +1,7 @@
 mod batcher;
 mod client;
 mod ort_executor;
+mod softmax;
 
 pub use batcher::Executor;
 pub use client::Client;

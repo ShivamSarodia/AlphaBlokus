@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use log::trace;
+
 use crate::agents::Agent;
 use crate::agents::mcts::node::Node;
 use crate::config::{GameConfig, MCTSConfig};
@@ -26,6 +28,8 @@ impl MCTSAgent {
     }
 
     async fn rollout_once(&self, state: &State<'_>, search_root: &mut Node) {
+        trace!("Rolling out once from state: {}", state);
+
         let mut moves_played = Vec::new();
 
         let value = {
@@ -35,22 +39,39 @@ impl MCTSAgent {
             let mut current_node = &mut *search_root;
 
             loop {
+                trace!(
+                    "Rollout traversal iteration. Moves played: {:?}, current state: {}",
+                    moves_played, current_state,
+                );
+
                 // Select the next child node to explore.
                 let move_index = current_node.select_move_by_ucb();
 
-                // Record the selected move, and play it.
-                moves_played.push(move_index);
+                // Play and record the selected move.
                 let game_status = current_state.apply_move(move_index);
+                moves_played.push(move_index);
 
                 // If the game is now over, we just assign values based on the final state.
                 if game_status == GameStatus::GameOver {
+                    trace!(
+                        "Iteration terminated because game is over. Current state: {}",
+                        current_state
+                    );
                     break current_state.result();
                 }
 
                 // Try to find an existing child node for the selected move.
                 if current_node.has_child(move_index) {
+                    trace!(
+                        "Proceeding to next iteration: found existing child node for move index: {}",
+                        move_index
+                    );
                     current_node = current_node.get_child_mut(move_index).unwrap();
                 } else {
+                    trace!(
+                        "Expanding new node: no existing child node for move index: {}",
+                        move_index
+                    );
                     let new_node = Node::build_and_expand(
                         &current_state,
                         &self.inference_client,
@@ -61,17 +82,24 @@ impl MCTSAgent {
                     .await;
                     let value = new_node.get_value_as_universal_pov();
                     current_node.add_child(move_index, new_node);
+                    trace!("Added new node to parent node. Terminating iteration.");
                     break value;
                 }
             }
         };
 
+        trace!("Backpropagating through moves played: {:?}", moves_played);
+
         // Now, backpropagate the value we just learned up the tree.
-        let mut node = &mut *search_root;
-        for move_index in moves_played.iter().copied() {
-            node.increment_child_value_sum(move_index, value);
-            node.increment_child_visit_count(move_index);
-            node = node.get_child_mut(move_index).unwrap();
+        let mut node: Option<&mut Node> = Some(&mut *search_root);
+        for &move_index in moves_played.iter() {
+            node.as_deref_mut()
+                .unwrap()
+                .increment_child_value_sum(move_index, value);
+            node.as_deref_mut()
+                .unwrap()
+                .increment_child_visit_count(move_index);
+            node = node.unwrap().get_child_mut(move_index);
         }
     }
 }

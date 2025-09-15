@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 
-use ndarray::Axis;
+use ndarray::{Array2, Axis};
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Tensor;
 
 use crate::{
     config::{GameConfig, NUM_PLAYERS},
-    game::MovesArray,
     inference,
     inference::batcher::Executor,
+    inference::softmax::softmax_inplace,
 };
 
 /// The ORT executor runs inference using the ORT library. This executor isn't
@@ -62,16 +62,29 @@ impl Executor for OrtExecutor {
         let values = outputs["value"].try_extract_array().unwrap();
         let policies = outputs["policy"].try_extract_array().unwrap();
 
+        dbg!(&policies[0][0..4]);
+        dbg!(&policies[1][0..4]);
+        dbg!(&policies[2][0..4]);
+
         values
             .axis_iter(Axis(0))
             .zip(policies.axis_iter(Axis(0)))
-            .map(|(value, policy)| {
+            .zip(
+                requests
+                    .into_iter()
+                    .map(|request| request.valid_move_indexes),
+            )
+            .map(|((value, policy), valid_move_indexes)| {
                 let value_slice = value.as_slice().unwrap();
-                let value = <[f32; 4]>::try_from(value_slice).expect("value must have length 4");
+                let mut value =
+                    <[f32; 4]>::try_from(value_slice).expect("value must have length 4");
+                softmax_inplace(&mut value);
 
-                let policy_slice = policy.as_slice().unwrap();
-                let policy = MovesArray::<f32>::try_from(policy_slice, &self.game_config)
-                    .expect("policy must have length 4");
+                let mut policy = valid_move_indexes
+                    .iter()
+                    .map(|&index| *policy.get(index).unwrap())
+                    .collect::<Vec<f32>>();
+                softmax_inplace(&mut policy);
 
                 inference::Response { value, policy }
             })
@@ -94,29 +107,40 @@ mod tests {
 
         let mut board_1 = Board::new(&testing::create_game_config());
         board_1.slice_mut(0).set((0, 0), true);
-        let request_1 = inference::Request { board: board_1 };
+        let request_1 = inference::Request {
+            board: board_1,
+            valid_move_indexes: vec![3, 1, 2],
+        };
 
         let mut board_1_copy = Board::new(&testing::create_game_config());
         board_1_copy.slice_mut(0).set((0, 0), true);
         let request_1_copy = inference::Request {
             board: board_1_copy,
+            valid_move_indexes: vec![2, 1, 0],
         };
 
         let mut board_2 = Board::new(&testing::create_game_config());
         board_2.slice_mut(1).set((2, 2), true);
-        let request_2 = inference::Request { board: board_2 };
+        let request_2 = inference::Request {
+            board: board_2,
+            valid_move_indexes: vec![0, 1, 2],
+        };
 
         let results = executor.execute(vec![request_1, request_1_copy, request_2]);
 
         assert_eq!(results.len(), 3);
-        // The first and second results should match, because the inputs were
-        // identical.
+
+        // Confirm the first and second results line up where they should.
         assert_eq!(results[0].value, results[1].value);
         assert_eq!(results[0].policy, results[1].policy);
+        assert_eq!(results[0].policy[1], results[1].policy[1]);
+        assert_eq!(results[0].policy[2], results[1].policy[0]);
 
-        // The first and third results should not match, because the inputs were
+        // Confirm the first and third results do not match, because the inputs were
         // different.
         assert_ne!(results[0].value, results[2].value);
-        assert_ne!(results[0].policy, results[2].policy);
+        assert_ne!(results[0].policy[0], results[2].policy[0]);
+        assert_ne!(results[0].policy[1], results[2].policy[1]);
+        assert_ne!(results[0].policy[2], results[2].policy[2]);
     }
 }
