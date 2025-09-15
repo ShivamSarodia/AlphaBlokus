@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ndarray::{Array2, Axis};
+use ndarray::Axis;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Tensor;
 
@@ -62,9 +62,24 @@ impl Executor for OrtExecutor {
         let values = outputs["value"].try_extract_array().unwrap();
         let policies = outputs["policy"].try_extract_array().unwrap();
 
-        dbg!(&policies[0][0..4]);
-        dbg!(&policies[1][0..4]);
-        dbg!(&policies[2][0..4]);
+        dbg!(
+            &policies[[0, 0]],
+            &policies[[0, 1]],
+            &policies[[0, 2]],
+            &policies[[0, 3]]
+        );
+        dbg!(
+            &policies[[1, 0]],
+            &policies[[1, 1]],
+            &policies[[1, 2]],
+            &policies[[1, 3]]
+        );
+        dbg!(
+            &policies[[2, 0]],
+            &policies[[2, 1]],
+            &policies[[2, 2]],
+            &policies[[2, 3]]
+        );
 
         values
             .axis_iter(Axis(0))
@@ -109,7 +124,7 @@ mod tests {
         board_1.slice_mut(0).set((0, 0), true);
         let request_1 = inference::Request {
             board: board_1,
-            valid_move_indexes: vec![3, 1, 2],
+            valid_move_indexes: vec![0, 1, 2],
         };
 
         let mut board_1_copy = Board::new(&testing::create_game_config());
@@ -130,11 +145,18 @@ mod tests {
 
         assert_eq!(results.len(), 3);
 
-        // Confirm the first and second results line up where they should.
+        // Confirm the first and second values match but the policies are reversals of
+        // each other, because the valid moves input was reversed.
         assert_eq!(results[0].value, results[1].value);
-        assert_eq!(results[0].policy, results[1].policy);
-        assert_eq!(results[0].policy[1], results[1].policy[1]);
-        assert_eq!(results[0].policy[2], results[1].policy[0]);
+        assert_eq!(
+            results[0].policy,
+            results[1]
+                .policy
+                .iter()
+                .copied()
+                .rev()
+                .collect::<Vec<f32>>()
+        );
 
         // Confirm the first and third results do not match, because the inputs were
         // different.
