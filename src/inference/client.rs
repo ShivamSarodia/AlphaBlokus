@@ -22,11 +22,18 @@ pub struct RequestChannelMessage {
     pub response_sender: oneshot::Sender<Response>,
 }
 
-pub struct Client {
+pub struct DefaultClient {
     request_sender: mpsc::Sender<RequestChannelMessage>,
 }
 
-impl Client {
+#[allow(async_fn_in_trait)]
+pub trait Client {
+    async fn evaluate(&self, request: Request) -> Response;
+}
+
+/// DefaultClient is the only production implementation of the Client trait. We separate the
+/// two to simplify testing.
+impl DefaultClient {
     /// Builds a client and starts the batcher.
     ///
     /// # Arguments
@@ -46,14 +53,10 @@ impl Client {
         tokio::spawn(async move { batcher.run().await });
         Self { request_sender }
     }
+}
 
-    pub fn new(sender: mpsc::Sender<RequestChannelMessage>) -> Self {
-        Self {
-            request_sender: sender,
-        }
-    }
-
-    pub async fn evaluate(&self, request: Request) -> Response {
+impl Client for DefaultClient {
+    async fn evaluate(&self, request: Request) -> Response {
         // Generate a sender/receiver pair for the oneshot channel
         // used to pass back a response.
         let (response_sender, response_receiver) = oneshot::channel();
@@ -111,7 +114,7 @@ mod tests {
         // Create a game config.
         let game_config = testing::create_game_config();
 
-        let client = Arc::new(Client::build_and_start(
+        let client = Arc::new(DefaultClient::build_and_start(
             MockExecutor {
                 game_config: Arc::clone(&game_config),
             },

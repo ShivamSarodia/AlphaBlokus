@@ -45,9 +45,9 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn build_and_expand(
+    pub async fn build_and_expand<T: inference::Client>(
         state: &State<'_>,
-        inference_client: &inference::Client,
+        inference_client: &T,
         mcts_config: Arc<MCTSConfig>,
         game_config: Arc<GameConfig>,
         add_noise: bool,
@@ -139,10 +139,10 @@ impl Node {
         self.children_visit_counts_sum = 0;
     }
 
-    async fn initialize_inference_results(
+    async fn initialize_inference_results<T: inference::Client>(
         &mut self,
         state: &State<'_>,
-        inference_client: &inference::Client,
+        inference_client: &T,
     ) {
         // Pass the board  and player POV move indexes to the network from the player's
         // own perspective.
@@ -258,40 +258,40 @@ impl Node {
         };
 
         // With temperature 0, just select the move with highest visit count.
-        if temperature == 0.0 {
-            return self
-                .children_visit_counts
+        let array_index = if temperature.abs() < f32::EPSILON {
+            self.children_visit_counts
                 .iter()
                 .enumerate()
                 .max_by_key(|&(_, x)| x)
                 .unwrap()
-                .0;
-        }
+                .0
+        } else {
+            // Otherwise, remotely sample.
+            let unnormalized_weights = self
+                .children_visit_counts
+                .iter()
+                .map(|&x| (x as f32).powf(1.0 / temperature))
+                .collect::<Vec<f32>>();
 
-        // Otherwise, randomly sample.
-        let unnormalized_weights = self
-            .children_visit_counts
-            .iter()
-            .map(|&x| (x as f32).powf(1.0 / temperature))
-            .collect::<Vec<f32>>();
+            let normalization_factor = unnormalized_weights.iter().sum::<f32>();
+            let weights = unnormalized_weights
+                .iter()
+                .map(|x| x / normalization_factor)
+                .collect::<Vec<f32>>();
 
-        let normalization_factor = unnormalized_weights.iter().sum::<f32>();
-        let weights = unnormalized_weights
-            .iter()
-            .map(|x| x / normalization_factor)
-            .collect::<Vec<f32>>();
+            debug!(
+                "Selecting move to play.\nWeights: {:?}\nUnnormalized Weights: {:?}\nPrior Probabilities: {:?}\nValue Sums: {:?}\nVisit Counts: {:?}\nMove Indexes: {:?}",
+                weights,
+                unnormalized_weights,
+                self.children_prior_probabilities,
+                self.children_value_sums,
+                self.children_visit_counts,
+                self.array_index_to_move_index
+            );
+            let dist = WeightedIndex::new(&weights).unwrap();
+            dist.sample(&mut rand::rng())
+        };
 
-        debug!(
-            "Selecting move to play.\nWeights: {:?}\nUnnormalized Weights: {:?}\nPrior Probabilities: {:?}\nValue Sums: {:?}\nVisit Counts: {:?}\nMove Indexes: {:?}",
-            weights,
-            unnormalized_weights,
-            self.children_prior_probabilities,
-            self.children_value_sums,
-            self.children_visit_counts,
-            self.array_index_to_move_index
-        );
-        let dist = WeightedIndex::new(&weights).unwrap();
-        let array_index = dist.sample(&mut rand::rng());
         self.array_index_to_move_index[array_index]
     }
 

@@ -62,25 +62,6 @@ impl Executor for OrtExecutor {
         let values = outputs["value"].try_extract_array().unwrap();
         let policies = outputs["policy"].try_extract_array().unwrap();
 
-        dbg!(
-            &policies[[0, 0]],
-            &policies[[0, 1]],
-            &policies[[0, 2]],
-            &policies[[0, 3]]
-        );
-        dbg!(
-            &policies[[1, 0]],
-            &policies[[1, 1]],
-            &policies[[1, 2]],
-            &policies[[1, 3]]
-        );
-        dbg!(
-            &policies[[2, 0]],
-            &policies[[2, 1]],
-            &policies[[2, 2]],
-            &policies[[2, 3]]
-        );
-
         values
             .axis_iter(Axis(0))
             .zip(policies.axis_iter(Axis(0)))

@@ -20,3 +20,15 @@ pub fn softmax_inplace(x: &mut [f32]) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_softmax_inplace() {
+        let mut x = [1.0, 2.0, 3.0];
+        softmax_inplace(&mut x);
+        assert_eq!(x, [0.09003057, 0.24472847, 0.66524094]);
+    }
+}

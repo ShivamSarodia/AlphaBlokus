@@ -5,6 +5,7 @@ mod softmax;
 
 pub use batcher::Executor;
 pub use client::Client;
+pub use client::DefaultClient;
 pub use client::Request;
 pub use client::Response;
 pub use ort_executor::OrtExecutor;

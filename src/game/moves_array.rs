@@ -47,12 +47,6 @@ impl<T> MovesArray<T> {
     }
 }
 
-impl<T: Copy> MovesArray<T> {
-    pub fn get_copy(&self, index: usize) -> T {
-        self.values[index]
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MovesBitSet {
     values: BitSet,

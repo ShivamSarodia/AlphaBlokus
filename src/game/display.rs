@@ -59,12 +59,12 @@ impl<'a> BoardDisplay<'a> {
         result.push_str("┐\n");
 
         // Print rows with letters
-        for y in 0..size {
+        for x in 0..size {
             // Print row letter
-            let row_letter = (b'A' + y as u8) as char;
+            let row_letter = (b'A' + x as u8) as char;
             result.push_str(&format!("{}│ ", row_letter));
 
-            for x in 0..size {
+            for y in 0..size {
                 // For the first layer where the cell is occupied,
                 // produce output for that layer.
 

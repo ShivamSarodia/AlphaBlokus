@@ -7,7 +7,7 @@ use std::fmt;
 
 /// Structure representing a board state, with each player
 /// on a different slice of the provided values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
     slices: [BoardSlice; NUM_PLAYERS],
     #[allow(dead_code)]

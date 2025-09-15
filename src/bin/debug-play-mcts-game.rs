@@ -42,7 +42,8 @@ fn main() -> Result<()> {
             Arc::clone(&game_config),
         );
 
-        let inference_client = Arc::new(inference::Client::build_and_start(executor, 100, 1));
+        let inference_client =
+            Arc::new(inference::DefaultClient::build_and_start(executor, 100, 1));
 
         let agent = MCTSAgent::new(mcts_config, Arc::clone(&game_config), inference_client);
         let mut state = State::new(&game_config);
