@@ -1,13 +1,14 @@
 use tokio::task::JoinSet;
 
 use crate::agents::{Agent, RandomAgent};
-use crate::config::{GameConfig, NUM_PLAYERS};
+use crate::config::{AgentConfig, AgentGroupConfig, GameConfig, NUM_PLAYERS};
 use crate::game::{GameStatus, State};
 
 pub struct Engine {
     num_concurrent_games: u32,
     num_total_games: u32,
     game_config: &'static GameConfig,
+    agent_group_config: &'static AgentGroupConfig,
     num_finished_games: u32,
 }
 
@@ -16,11 +17,13 @@ impl Engine {
         num_concurrent_games: u32,
         num_total_games: u32,
         game_config: &'static GameConfig,
+        agent_group_config: &'static AgentGroupConfig,
     ) -> Self {
         Self {
             num_concurrent_games,
             num_total_games,
             game_config,
+            agent_group_config,
             num_finished_games: 0,
         }
     }
@@ -43,12 +46,18 @@ impl Engine {
     }
 
     fn generate_agents(&self) -> [Box<dyn Agent>; NUM_PLAYERS] {
-        [
-            Box::new(RandomAgent::default()),
-            Box::new(RandomAgent::default()),
-            Box::new(RandomAgent::default()),
-            Box::new(RandomAgent::default()),
-        ]
+        match self.agent_group_config {
+            AgentGroupConfig::Single(agent_config) => {
+                std::array::from_fn(|_| self.generate_single_agent(agent_config))
+            }
+        }
+    }
+
+    fn generate_single_agent(&self, agent_config: &'static AgentConfig) -> Box<dyn Agent> {
+        match agent_config {
+            AgentConfig::MCTS(_mcts_config) => panic!("MCTS agent not supported yet"),
+            AgentConfig::Random => Box::new(RandomAgent::default()),
+        }
     }
 
     pub async fn play_games(&mut self) -> u32 {
