@@ -9,15 +9,15 @@ use crate::game::{GameStatus, State};
 use crate::inference;
 
 pub struct MCTSAgent<T: inference::Client> {
-    mcts_config: Arc<MCTSConfig>,
-    game_config: Arc<GameConfig>,
+    mcts_config: &'static MCTSConfig,
+    game_config: &'static GameConfig,
     inference_client: Arc<T>,
 }
 
 impl<T: inference::Client> MCTSAgent<T> {
     pub fn new(
-        mcts_config: Arc<MCTSConfig>,
-        game_config: Arc<GameConfig>,
+        mcts_config: &'static MCTSConfig,
+        game_config: &'static GameConfig,
         inference_client: Arc<T>,
     ) -> Self {
         Self {
@@ -45,7 +45,7 @@ impl<T: inference::Client> MCTSAgent<T> {
                 );
 
                 // Select the next child node to explore.
-                let move_index = current_node.select_move_by_ucb(&self.mcts_config);
+                let move_index = current_node.select_move_by_ucb(self.mcts_config);
 
                 // Play and record the selected move.
                 let game_status = current_state.apply_move(move_index);
@@ -75,8 +75,8 @@ impl<T: inference::Client> MCTSAgent<T> {
                     let new_node = Node::build_and_expand(
                         &current_state,
                         self.inference_client.as_ref(),
-                        &self.mcts_config,
-                        &self.game_config,
+                        self.mcts_config,
+                        self.game_config,
                         false,
                     )
                     .await;
@@ -111,8 +111,8 @@ impl<T: inference::Client> Agent for MCTSAgent<T> {
         let mut search_root = Node::build_and_expand(
             state,
             self.inference_client.as_ref(),
-            &self.mcts_config,
-            &self.game_config,
+            self.mcts_config,
+            self.game_config,
             true,
         )
         .await;
@@ -122,7 +122,7 @@ impl<T: inference::Client> Agent for MCTSAgent<T> {
             self.rollout_once(state, &mut search_root).await;
         }
 
-        search_root.select_move_to_play(state, &self.mcts_config)
+        search_root.select_move_to_play(state, self.mcts_config)
     }
 }
 
@@ -160,15 +160,15 @@ mod tests {
         }
     }
 
-    fn create_mcts_config(num_rollouts: u32, temperature: f32) -> Arc<MCTSConfig> {
-        Arc::new(MCTSConfig {
+    fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSConfig {
+        Box::leak(Box::new(MCTSConfig {
             num_rollouts: num_rollouts,
             total_dirichlet_noise_alpha: 1.0,
             root_dirichlet_noise_fraction: 0.0,
             ucb_exploration_factor: 1.0,
             temperature_turn_cutoff: 10,
             move_selection_temperature: temperature,
-        })
+        }))
     }
 
     #[tokio::test]
@@ -183,11 +183,7 @@ mod tests {
             requests: RefCell::new(Vec::new()),
         });
 
-        let agent = MCTSAgent::new(
-            mcts_config,
-            Arc::clone(&game_config),
-            Arc::clone(&mock_client),
-        );
+        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
 
         let mut state = State::new(&game_config);
         let move_index_0 = agent.choose_move(&state).await;
@@ -389,11 +385,7 @@ mod tests {
         let game_config = testing::create_half_game_config();
         let mock_client = Arc::new(ValuesInferenceClient {});
 
-        let agent = MCTSAgent::new(
-            mcts_config,
-            Arc::clone(&game_config),
-            Arc::clone(&mock_client),
-        );
+        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
         let mut state = State::new(&game_config);
 
         for player in 0..4 {
@@ -417,11 +409,7 @@ mod tests {
             requests: RefCell::new(Vec::new()),
         });
 
-        let agent = MCTSAgent::new(
-            mcts_config,
-            Arc::clone(&game_config),
-            Arc::clone(&mock_client),
-        );
+        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
 
         let state = State::new(&game_config);
 

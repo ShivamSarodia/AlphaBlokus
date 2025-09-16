@@ -7,12 +7,16 @@ use serde::de::DeserializeOwned;
 use crate::config::game::GameConfig;
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
-    fn from_string(string: &str) -> Result<Self> {
+    /// Given a string, parse it into a config and produce a static
+    /// reference to it.
+    fn from_string(string: &str) -> Result<&'static mut Self> {
         let config = toml::from_str::<Self>(string).context("Failed to parse config")?;
-        Ok(config)
+        Ok(Box::leak(Box::new(config)))
     }
 
-    fn from_file(path: &Path) -> Result<Self> {
+    /// Given a path, read the file into a string and produce a static
+    /// reference to it.
+    fn from_file(path: &Path) -> Result<&'static mut Self> {
         let contents = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read config from path: {}", path.display()))?;
         Self::from_string(&contents)

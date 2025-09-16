@@ -84,7 +84,7 @@ mod tests {
     use super::*;
 
     struct MockExecutor {
-        pub game_config: Arc<GameConfig>,
+        pub game_config: &'static GameConfig,
     }
     impl Executor for MockExecutor {
         fn execute(&self, requests: Vec<Request>) -> Vec<Response> {
@@ -116,7 +116,7 @@ mod tests {
 
         let client = Arc::new(DefaultClient::build_and_start(
             MockExecutor {
-                game_config: Arc::clone(&game_config),
+                game_config: game_config,
             },
             100,
             3,
