@@ -43,7 +43,7 @@ pub struct Node {
 
 impl Node {
     pub async fn build_and_expand<T: inference::Client>(
-        state: &State<'_>,
+        state: &State,
         inference_client: &T,
         mcts_config: &'static MCTSConfig,
         game_config: &'static GameConfig,
@@ -102,7 +102,7 @@ impl Node {
             });
     }
 
-    fn initialize_move_mappings(&mut self, state: &State<'_>) {
+    fn initialize_move_mappings(&mut self, state: &State) {
         self.move_index_to_array_index = HashMap::new();
         self.array_index_to_move_index = Vec::new();
         self.array_index_to_player_pov_move_index = Vec::new();
@@ -138,7 +138,7 @@ impl Node {
 
     async fn initialize_inference_results<T: inference::Client>(
         &mut self,
-        state: &State<'_>,
+        state: &State,
         inference_client: &T,
     ) {
         // Pass the board and player POV move indexes to the network from the player's
@@ -247,7 +247,7 @@ impl Node {
         result
     }
 
-    pub fn select_move_to_play(&self, state: &State<'_>) -> usize {
+    pub fn select_move_to_play(&self, state: &State) -> usize {
         let temperature = if state.turn() < self.mcts_config.temperature_turn_cutoff {
             self.mcts_config.move_selection_temperature
         } else {

@@ -60,7 +60,7 @@ impl Engine {
     }
 }
 
-pub async fn play_one_game(game_config: &GameConfig) {
+pub async fn play_one_game(game_config: &'static GameConfig) {
     let mut agents = [
         RandomAgent::default(),
         RandomAgent::default(),
