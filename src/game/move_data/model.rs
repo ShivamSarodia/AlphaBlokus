@@ -22,3 +22,12 @@ pub struct MoveData {
     pub profiles: MovesArray<MoveProfile>,
     pub initial_moves_enabled: [MovesBitSet; NUM_PLAYERS],
 }
+
+pub fn move_index_to_player_pov(
+    move_index: usize,
+    player: usize,
+    move_profiles: &MovesArray<MoveProfile>,
+) -> usize {
+    let move_profile = move_profiles.get(move_index);
+    move_profile.rotated_move_indexes[(NUM_PLAYERS - player) % NUM_PLAYERS]
+}

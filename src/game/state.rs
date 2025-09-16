@@ -14,7 +14,7 @@ pub enum GameStatus {
 pub struct State<'c> {
     board: Board,
     player: usize,
-    turn: u8,
+    turn: u16,
     // Stored as a tuple of (move_index, player).
     last_move_played: Option<(usize, usize)>,
     moves_enabled: [MovesBitSet; NUM_PLAYERS],
@@ -129,7 +129,7 @@ impl<'c> State<'c> {
         self.player
     }
 
-    pub fn turn(&self) -> u8 {
+    pub fn turn(&self) -> u16 {
         self.turn
     }
 
