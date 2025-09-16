@@ -29,5 +29,5 @@ pub fn move_index_to_player_pov(
     move_profiles: &MovesArray<MoveProfile>,
 ) -> usize {
     let move_profile = move_profiles.get(move_index);
-    move_profile.rotated_move_indexes[player]
+    move_profile.rotated_move_indexes[(NUM_PLAYERS - player) % NUM_PLAYERS]
 }

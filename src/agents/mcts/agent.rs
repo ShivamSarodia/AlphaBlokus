@@ -7,7 +7,6 @@ use crate::agents::mcts::node::Node;
 use crate::config::{GameConfig, MCTSConfig};
 use crate::game::{GameStatus, State};
 use crate::inference;
-use itertools::Itertools;
 
 pub struct MCTSAgent<T: inference::Client> {
     mcts_config: Arc<MCTSConfig>,
@@ -46,7 +45,7 @@ impl<T: inference::Client> MCTSAgent<T> {
                 );
 
                 // Select the next child node to explore.
-                let move_index = current_node.select_move_by_ucb();
+                let move_index = current_node.select_move_by_ucb(&self.mcts_config);
 
                 // Play and record the selected move.
                 let game_status = current_state.apply_move(move_index);
@@ -76,8 +75,8 @@ impl<T: inference::Client> MCTSAgent<T> {
                     let new_node = Node::build_and_expand(
                         &current_state,
                         self.inference_client.as_ref(),
-                        Arc::clone(&self.mcts_config),
-                        Arc::clone(&self.game_config),
+                        &self.mcts_config,
+                        &self.game_config,
                         false,
                     )
                     .await;
@@ -112,8 +111,8 @@ impl<T: inference::Client> Agent for MCTSAgent<T> {
         let mut search_root = Node::build_and_expand(
             state,
             self.inference_client.as_ref(),
-            Arc::clone(&self.mcts_config),
-            Arc::clone(&self.game_config),
+            &self.mcts_config,
+            &self.game_config,
             true,
         )
         .await;
@@ -123,7 +122,7 @@ impl<T: inference::Client> Agent for MCTSAgent<T> {
             self.rollout_once(state, &mut search_root).await;
         }
 
-        search_root.select_move_to_play(state)
+        search_root.select_move_to_play(state, &self.mcts_config)
     }
 }
 
@@ -132,60 +131,58 @@ mod tests {
     use std::cell::RefCell;
 
     use super::*;
+    use crate::inference::softmax_inplace;
+    use crate::{config::NUM_PLAYERS, testing};
+    use itertools::Itertools;
 
-    #[tokio::test]
-    async fn test_rotations_and_rolls() {
-        let mcts_config = Arc::new(MCTSConfig {
-            // For this test, perform just one rollout so that there's only one substantial
-            // call to the inference client evaluation.
-            num_rollouts: 1,
+    struct MockInferenceClient {
+        pub requests: RefCell<Vec<inference::Request>>,
+    }
+
+    impl inference::Client for MockInferenceClient {
+        async fn evaluate(&self, request: inference::Request) -> inference::Response {
+            // Push the requests onto the vector.
+            self.requests.borrow_mut().push(request.clone());
+
+            // Return a response where the current player's value is 1.0 and the other
+            // players values are 0.0. It also returns a policy where move 1 is preferred.
+            let value = [1.0, 0.0, 0.0, 0.0];
+            let mut policy = vec![0.0; request.valid_move_indexes.len()];
+            request
+                .valid_move_indexes
+                .iter()
+                .position(|&move_index| move_index == 1008)
+                .inspect(|&index_to_prefer| {
+                    policy[index_to_prefer] = 1.0;
+                });
+
+            inference::Response { value, policy }
+        }
+    }
+
+    fn create_mcts_config(num_rollouts: u32, temperature: f32) -> Arc<MCTSConfig> {
+        Arc::new(MCTSConfig {
+            num_rollouts: num_rollouts,
             total_dirichlet_noise_alpha: 1.0,
             root_dirichlet_noise_fraction: 0.0,
             ucb_exploration_factor: 1.0,
-            temperature_turn_cutoff: 0,
-            move_selection_temperature: 0.0,
-        });
+            temperature_turn_cutoff: 10,
+            move_selection_temperature: temperature,
+        })
+    }
 
-        // Generate a slightly larger game config than the standard 5x5 for testing
-        // so that there's no concern about one move blocking the others.
-        let mut raw_game_config = GameConfig {
-            board_size: 10,
-            num_moves: 6233,
-            num_pieces: 21,
-            num_piece_orientations: 91,
-            move_data: None,
-            move_data_file: "static/move_data_size_10.bin".to_string(),
-        };
-        raw_game_config.load_move_profiles().unwrap();
-        let game_config = Arc::new(raw_game_config);
+    #[tokio::test]
+    async fn test_board_and_policy_rotations() {
+        let mcts_config = create_mcts_config(1, 0.0);
 
-        struct MockInferenceClient {
-            pub requests: RefCell<Vec<inference::Request>>,
-        }
-
-        impl inference::Client for MockInferenceClient {
-            async fn evaluate(&self, request: inference::Request) -> inference::Response {
-                // Push the requests onto the vector.
-                self.requests.borrow_mut().push(request.clone());
-
-                // Return a response where the current player's value is 1.0 and the other
-                // players values are 0.0. It also returns a policy where move 1 is preferred.
-                let value = [1.0, 0.0, 0.0, 0.0];
-                let mut policy = vec![0.0; request.valid_move_indexes.len()];
-                let index_to_prefer = request
-                    .valid_move_indexes
-                    .iter()
-                    .position(|&move_index| move_index == 1008)
-                    .unwrap();
-                policy[index_to_prefer] = 1.0;
-
-                inference::Response { value, policy }
-            }
-        }
+        // Generate a larger game config so that there's no concern about
+        // one move blocking the others.
+        let game_config = testing::create_half_game_config();
 
         let mock_client = Arc::new(MockInferenceClient {
             requests: RefCell::new(Vec::new()),
         });
+
         let agent = MCTSAgent::new(
             mcts_config,
             Arc::clone(&game_config),
@@ -240,6 +237,7 @@ mod tests {
         );
         println!("State: {}", state);
         println!("Request 1 board: {}", request_1.board);
+        // The player who just went should always be at slice 3 and spot (0, 9).
         assert_eq!(request_1.board.slice(0).count(), 0);
         assert_eq!(request_1.board.slice(1).count(), 0);
         assert_eq!(request_1.board.slice(2).count(), 0);
@@ -278,23 +276,159 @@ mod tests {
         assert_eq!(request_2.board.slice(3).count(), 5);
         assert_eq!(request_2.board.slice(3).get((0, 9)), true);
 
-        // Something is VERY wrong!!
-        // Look at state at Turn 1 vs Turn 2. It's clear that the second player
-        // corner is in top right. However, the request 1 board is not correct
-        // for that -- the request 1 board is showing the POV from the bottom
-        // left corner instead of the top right.
-
         assert_eq!(move_profile_0.piece_index, move_profile_2.piece_index);
 
-        // Confirm the board looks right
-        // Confirm the valid move indexes look right
-        // first_request.vali
+        // Now apply the move to get to player 3.
+        mock_client.requests.borrow_mut().clear();
+        state.apply_move(move_index_2);
 
-        // state.apply_move(move_index);
-        // assert_eq!(state.player(), 1);
+        let move_index_3 = agent.choose_move(&state).await;
+        let move_profile_3 = game_config.move_profiles().get(move_index_3);
 
-        // Now, we're on to player 2.
+        let request_3 = mock_client.requests.borrow()[0].clone();
+        assert_eq!(
+            request_0
+                .valid_move_indexes
+                .iter()
+                .cloned()
+                .sorted()
+                .collect::<Vec<usize>>(),
+            request_3
+                .valid_move_indexes
+                .iter()
+                .cloned()
+                .sorted()
+                .collect::<Vec<usize>>(),
+        );
+        println!("State: {}", state);
+        println!("Request 3 board: {}", request_3.board);
+        assert_eq!(request_3.board.slice(0).count(), 0);
+        assert_eq!(request_3.board.slice(1).count(), 5);
+        assert_eq!(request_3.board.slice(1).get((9, 0)), true);
+        assert_eq!(request_3.board.slice(2).count(), 5);
+        assert_eq!(request_3.board.slice(2).get((9, 9)), true);
+        assert_eq!(request_3.board.slice(3).count(), 5);
+        assert_eq!(request_3.board.slice(3).get((0, 9)), true);
 
-        // TODO: Still need to confirm the *values* rotate ok.
+        assert_eq!(move_profile_0.piece_index, move_profile_3.piece_index);
+
+        state.apply_move(move_index_3);
+        assert_eq!(state.player(), 0);
+        assert_eq!(state.board().slice(0).get((0, 0)), true);
+        assert_eq!(state.board().slice(1).count(), 5);
+        assert_eq!(state.board().slice(1).get((9, 0)), true);
+        assert_eq!(state.board().slice(2).count(), 5);
+        assert_eq!(state.board().slice(2).get((9, 9)), true);
+        assert_eq!(state.board().slice(3).count(), 5);
+        assert_eq!(state.board().slice(3).get((0, 9)), true);
+    }
+
+    #[tokio::test]
+    async fn test_value_rotation() {
+        let mcts_config = create_mcts_config(1, 0.0);
+
+        // Generate a larger game config so that there's no concern about
+        // one move blocking the others.
+        let game_config = testing::create_half_game_config();
+
+        let mock_client = Arc::new(MockInferenceClient {
+            requests: RefCell::new(Vec::new()),
+        });
+
+        for player in 0..NUM_PLAYERS {
+            let mut state = State::new(&game_config);
+            for _ in 0..player {
+                state.apply_move(state.first_valid_move().unwrap());
+            }
+
+            let search_root = Node::build_and_expand(
+                &state,
+                mock_client.as_ref(),
+                &mcts_config,
+                &game_config,
+                true,
+            )
+            .await;
+
+            let universal_value = search_root.get_value_as_universal_pov();
+            for i in 0..NUM_PLAYERS {
+                if i == player {
+                    assert_eq!(universal_value[i], 1.0);
+                } else {
+                    assert_eq!(universal_value[i], 0.0);
+                }
+            }
+        }
+    }
+
+    struct ValuesInferenceClient {}
+    impl inference::Client for ValuesInferenceClient {
+        async fn evaluate(&self, request: inference::Request) -> inference::Response {
+            // Define "value" to prefer players with fewer pieces on the board, so that
+            // if MCTS is working correctly all four players will play the single piece
+            // move.
+
+            let policy = vec![0.0; request.valid_move_indexes.len()];
+            let mut value = [
+                -(request.board.slice(0).count() as f32),
+                -(request.board.slice(1).count() as f32),
+                -(request.board.slice(2).count() as f32),
+                -(request.board.slice(3).count() as f32),
+            ];
+            softmax_inplace(&mut value);
+
+            inference::Response { value, policy }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_values_used_in_search() {
+        // Play a good number of rollouts to ensure we land on the conclusion move
+        // that has the best value (i.e. the one-square).
+        let mcts_config = create_mcts_config(100, 0.0);
+        let game_config = testing::create_half_game_config();
+        let mock_client = Arc::new(ValuesInferenceClient {});
+
+        let agent = MCTSAgent::new(
+            mcts_config,
+            Arc::clone(&game_config),
+            Arc::clone(&mock_client),
+        );
+        let mut state = State::new(&game_config);
+
+        for player in 0..4 {
+            assert_eq!(state.player(), player);
+            let move_index = agent.choose_move(&state).await;
+            let move_profile = game_config.move_profiles().get(move_index);
+            assert_eq!(move_profile.occupied_cells.count(), 1);
+
+            state.apply_move(move_index);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_select_move_to_play_with_temperature() {
+        // Test that select_move_to_play works when temperature is non-zero.
+        // We don't verify the exact distribution, just that it doesn't crash
+        // and returns a valid move.
+        let mcts_config = create_mcts_config(50, 1.0); // Non-zero temperature
+        let game_config = testing::create_half_game_config();
+        let mock_client = Arc::new(MockInferenceClient {
+            requests: RefCell::new(Vec::new()),
+        });
+
+        let agent = MCTSAgent::new(
+            mcts_config,
+            Arc::clone(&game_config),
+            Arc::clone(&mock_client),
+        );
+
+        let state = State::new(&game_config);
+
+        // Run the test multiple times to make sure it consistently works
+        for _ in 0..5 {
+            let move_index = agent.choose_move(&state).await;
+            assert!(state.is_valid_move(move_index));
+        }
     }
 }
