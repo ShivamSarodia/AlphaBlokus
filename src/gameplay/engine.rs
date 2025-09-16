@@ -1,7 +1,7 @@
 use tokio::task::JoinSet;
 
 use crate::agents::{Agent, RandomAgent};
-use crate::config::GameConfig;
+use crate::config::{GameConfig, NUM_PLAYERS};
 use crate::game::{GameStatus, State};
 
 pub struct Engine {
@@ -36,7 +36,13 @@ impl Engine {
         join_set.spawn({
             let game_config = self.game_config;
             async move {
-                play_one_game(game_config).await;
+                let agents: [Box<dyn Agent>; NUM_PLAYERS] = [
+                    Box::new(RandomAgent::default()),
+                    Box::new(RandomAgent::default()),
+                    Box::new(RandomAgent::default()),
+                    Box::new(RandomAgent::default()),
+                ];
+                play_one_game(game_config, agents).await;
             }
         });
     }
@@ -60,14 +66,10 @@ impl Engine {
     }
 }
 
-pub async fn play_one_game(game_config: &'static GameConfig) {
-    let mut agents = [
-        RandomAgent::default(),
-        RandomAgent::default(),
-        RandomAgent::default(),
-        RandomAgent::default(),
-    ];
-
+pub async fn play_one_game(
+    game_config: &'static GameConfig,
+    mut agents: [Box<dyn Agent>; NUM_PLAYERS],
+) {
     let mut state = State::new(game_config);
     loop {
         let agent = &mut agents[state.player()];
