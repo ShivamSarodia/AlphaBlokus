@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.99"
+async-trait = "0.1.89"
 bincode = { version = "2.0.1", features = ["serde"] }
 bit-set = { version = "0.8.0", features = ["serde"] }
 clap = { version = "4.5.46", features = ["derive"] }

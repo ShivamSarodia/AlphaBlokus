@@ -7,14 +7,15 @@ use crate::agents::mcts::node::Node;
 use crate::config::{GameConfig, MCTSConfig};
 use crate::game::{GameStatus, State};
 use crate::inference;
+use async_trait::async_trait;
 
-pub struct MCTSAgent<T: inference::Client> {
+pub struct MCTSAgent<T: inference::Client + Send + Sync> {
     mcts_config: &'static MCTSConfig,
     game_config: &'static GameConfig,
     inference_client: Arc<T>,
 }
 
-impl<T: inference::Client> MCTSAgent<T> {
+impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
     pub fn new(
         mcts_config: &'static MCTSConfig,
         game_config: &'static GameConfig,
@@ -104,7 +105,8 @@ impl<T: inference::Client> MCTSAgent<T> {
     }
 }
 
-impl<T: inference::Client> Agent for MCTSAgent<T> {
+#[async_trait]
+impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
     async fn choose_move(&self, state: &State) -> usize {
         // Create a new node to represent the root of the search tree. Start by expanding the
         // node immediately.
@@ -128,7 +130,7 @@ impl<T: inference::Client> Agent for MCTSAgent<T> {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
+    use std::sync::Mutex;
 
     use super::*;
     use crate::inference::softmax_inplace;
@@ -136,13 +138,13 @@ mod tests {
     use itertools::Itertools;
 
     struct MockInferenceClient {
-        pub requests: RefCell<Vec<inference::Request>>,
+        pub requests: Mutex<Vec<inference::Request>>,
     }
 
     impl inference::Client for MockInferenceClient {
         async fn evaluate(&self, request: inference::Request) -> inference::Response {
             // Push the requests onto the vector.
-            self.requests.borrow_mut().push(request.clone());
+            self.requests.lock().unwrap().push(request.clone());
 
             // Return a response where the current player's value is 1.0 and the other
             // players values are 0.0. It also returns a policy where move 1 is preferred.
@@ -180,7 +182,7 @@ mod tests {
         let game_config = testing::create_half_game_config();
 
         let mock_client = Arc::new(MockInferenceClient {
-            requests: RefCell::new(Vec::new()),
+            requests: Mutex::new(Vec::new()),
         });
 
         let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
@@ -198,7 +200,7 @@ mod tests {
 
         // On the first request, the valid move indexes and board should just match the state's
         // valid moves and board.
-        let request_0 = mock_client.requests.borrow()[0].clone();
+        let request_0 = mock_client.requests.lock().unwrap()[0].clone();
         assert_eq!(
             request_0.valid_move_indexes,
             state.valid_moves().collect::<Vec<usize>>(),
@@ -208,7 +210,7 @@ mod tests {
         assert_eq!(request_0.board, *state.board());
 
         // Now, apply the move and run a second rollout on the new state.
-        mock_client.requests.borrow_mut().clear();
+        mock_client.requests.lock().unwrap().clear();
         state.apply_move(move_index_0);
         let move_index_1 = agent.choose_move(&state).await;
         let move_profile_1 = game_config.move_profiles().get(move_index_1);
@@ -216,7 +218,7 @@ mod tests {
         // On the second request, the valid move indexes should match the first request
         // because from the player's own perspective, the legal moves are the same in both
         // cases.
-        let request_1 = mock_client.requests.borrow()[0].clone();
+        let request_1 = mock_client.requests.lock().unwrap()[0].clone();
         assert_eq!(
             request_0
                 .valid_move_indexes
@@ -243,12 +245,12 @@ mod tests {
         // Confirm that the piece selected is the same as in the first rollout.
         assert_eq!(move_profile_0.piece_index, move_profile_1.piece_index);
 
-        mock_client.requests.borrow_mut().clear();
+        mock_client.requests.lock().unwrap().clear();
         state.apply_move(move_index_1);
         let move_index_2 = agent.choose_move(&state).await;
         let move_profile_2 = game_config.move_profiles().get(move_index_2);
 
-        let request_2 = mock_client.requests.borrow()[0].clone();
+        let request_2 = mock_client.requests.lock().unwrap()[0].clone();
         assert_eq!(
             request_0
                 .valid_move_indexes
@@ -275,13 +277,13 @@ mod tests {
         assert_eq!(move_profile_0.piece_index, move_profile_2.piece_index);
 
         // Now apply the move to get to player 3.
-        mock_client.requests.borrow_mut().clear();
+        mock_client.requests.lock().unwrap().clear();
         state.apply_move(move_index_2);
 
         let move_index_3 = agent.choose_move(&state).await;
         let move_profile_3 = game_config.move_profiles().get(move_index_3);
 
-        let request_3 = mock_client.requests.borrow()[0].clone();
+        let request_3 = mock_client.requests.lock().unwrap()[0].clone();
         assert_eq!(
             request_0
                 .valid_move_indexes
@@ -328,7 +330,7 @@ mod tests {
         let game_config = testing::create_half_game_config();
 
         let mock_client = Arc::new(MockInferenceClient {
-            requests: RefCell::new(Vec::new()),
+            requests: Mutex::new(Vec::new()),
         });
 
         for player in 0..NUM_PLAYERS {
@@ -406,7 +408,7 @@ mod tests {
         let mcts_config = create_mcts_config(50, 1.0); // Non-zero temperature
         let game_config = testing::create_half_game_config();
         let mock_client = Arc::new(MockInferenceClient {
-            requests: RefCell::new(Vec::new()),
+            requests: Mutex::new(Vec::new()),
         });
 
         let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));

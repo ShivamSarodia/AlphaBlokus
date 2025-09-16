@@ -1,10 +1,12 @@
 use crate::agents::Agent;
 use crate::game::State;
+use async_trait::async_trait;
 use rand::prelude::IteratorRandom;
 
 #[derive(Default)]
 pub struct RandomAgent {}
 
+#[async_trait]
 impl Agent for RandomAgent {
     async fn choose_move(&self, state: &State) -> usize {
         state.valid_moves().choose(&mut rand::rng()).unwrap()
