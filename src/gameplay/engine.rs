@@ -1,12 +1,17 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use tokio::task::JoinSet;
 
-use crate::agents::{Agent, RandomAgent};
+use crate::agents::{Agent, MCTSAgent, RandomAgent};
 use crate::config::{AgentConfig, AgentGroupConfig, GameConfig, NUM_PLAYERS};
 use crate::game::{GameStatus, State};
+use crate::inference::DefaultClient;
 
 pub struct Engine {
     num_concurrent_games: u32,
     num_total_games: u32,
+    inference_clients: HashMap<String, Arc<DefaultClient>>,
     game_config: &'static GameConfig,
     agent_group_config: &'static AgentGroupConfig,
     num_finished_games: u32,
@@ -16,12 +21,14 @@ impl Engine {
     pub fn new(
         num_concurrent_games: u32,
         num_total_games: u32,
+        inference_clients: HashMap<String, Arc<DefaultClient>>,
         game_config: &'static GameConfig,
         agent_group_config: &'static AgentGroupConfig,
     ) -> Self {
         Self {
             num_concurrent_games,
             num_total_games,
+            inference_clients,
             game_config,
             agent_group_config,
             num_finished_games: 0,
@@ -55,7 +62,11 @@ impl Engine {
 
     fn generate_single_agent(&self, agent_config: &'static AgentConfig) -> Box<dyn Agent> {
         match agent_config {
-            AgentConfig::MCTS(_mcts_config) => panic!("MCTS agent not supported yet"),
+            AgentConfig::MCTS(mcts_config) => Box::new(MCTSAgent::new(
+                mcts_config,
+                self.game_config,
+                Arc::clone(&self.inference_clients[&mcts_config.inference_config_name]),
+            )),
             AgentConfig::Random => Box::new(RandomAgent::default()),
         }
     }

@@ -1,18 +1,39 @@
 use crate::{
     config::{AgentConfig, AgentGroupConfig, SelfPlayConfig},
     gameplay::Engine,
+    inference::DefaultClient,
 };
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::inference::OrtExecutor;
 
 pub fn run_selfplay(config: &'static SelfPlayConfig) -> u32 {
-    let mut engine = Engine::new(
-        config.num_concurrent_games,
-        config.num_total_games,
-        &config.game,
-        &AgentGroupConfig::Single(AgentConfig::Random),
-    );
-
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(engine.play_games())
+    rt.block_on(async move {
+        let inference_clients = config
+            .inference
+            .iter()
+            .map(|inference_config| {
+                let client = DefaultClient::build_and_start(
+                    OrtExecutor::build(&inference_config.model_path, &config.game),
+                    (config.num_concurrent_games * 2) as usize,
+                    inference_config.batch_size,
+                );
+                (inference_config.name.clone(), Arc::new(client))
+            })
+            .collect::<HashMap<String, Arc<DefaultClient>>>();
+
+        let mut engine = Engine::new(
+            config.num_concurrent_games,
+            config.num_total_games,
+            inference_clients,
+            &config.game,
+            &AgentGroupConfig::Single(AgentConfig::Random),
+        );
+
+        engine.play_games().await
+    })
 }
 
 #[cfg(test)]
