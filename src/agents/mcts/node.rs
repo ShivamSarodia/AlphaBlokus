@@ -37,19 +37,23 @@ pub struct Node {
     /// Children of this node. This vector is populated as children get get created through
     /// backpropagation.
     children: Vec<Option<Node>>,
+    game_config: &'static GameConfig,
+    mcts_config: &'static MCTSConfig,
 }
 
 impl Node {
     pub async fn build_and_expand<T: inference::Client>(
         state: &State<'_>,
         inference_client: &T,
-        mcts_config: &MCTSConfig,
-        game_config: &GameConfig,
+        mcts_config: &'static MCTSConfig,
+        game_config: &'static GameConfig,
         add_noise: bool,
     ) -> Self {
         let mut result = Self {
             // Initialized here.
             player: state.player(),
+            game_config,
+            mcts_config,
             // Initialized by initialize_move_mappings
             num_valid_moves: 0,
             move_index_to_array_index: HashMap::new(),
@@ -64,23 +68,23 @@ impl Node {
             value: [0.0; 4],
             children_prior_probabilities: Vec::new(),
         };
-        result.initialize_move_mappings(state, game_config);
+        result.initialize_move_mappings(state);
         result.initialize_children();
         result
             .initialize_inference_results(state, inference_client)
             .await;
         if add_noise {
-            result.add_noise(mcts_config);
+            result.add_noise();
         }
         result
     }
 
-    fn add_noise(&mut self, mcts_config: &MCTSConfig) {
+    fn add_noise(&mut self) {
         // Adds Dirichlet noise to the prior probabilities. The noise is computing using a Gamma
         // distribution because the Dirichlet distribution provided by rand_distr requires a compile
         // time constant distribution size.
         let per_move_alpha =
-            mcts_config.total_dirichlet_noise_alpha / (self.num_valid_moves as f32);
+            self.mcts_config.total_dirichlet_noise_alpha / (self.num_valid_moves as f32);
         let gamma_dist = rand_distr::Gamma::<f32>::new(per_move_alpha, 1.0).unwrap();
 
         let unnormalized_dirichlet = (0..self.num_valid_moves)
@@ -93,12 +97,12 @@ impl Node {
             .enumerate()
             .for_each(|(i, x)| {
                 let noise = unnormalized_dirichlet[i] / normalization_factor;
-                *x = *x * (1.0 - mcts_config.root_dirichlet_noise_fraction)
-                    + noise * mcts_config.root_dirichlet_noise_fraction;
+                *x = *x * (1.0 - self.mcts_config.root_dirichlet_noise_fraction)
+                    + noise * self.mcts_config.root_dirichlet_noise_fraction;
             });
     }
 
-    fn initialize_move_mappings(&mut self, state: &State<'_>, game_config: &GameConfig) {
+    fn initialize_move_mappings(&mut self, state: &State<'_>) {
         self.move_index_to_array_index = HashMap::new();
         self.array_index_to_move_index = Vec::new();
         self.array_index_to_player_pov_move_index = Vec::new();
@@ -116,7 +120,7 @@ impl Node {
                     .push(move_index_to_player_pov(
                         move_index,
                         self.player,
-                        game_config.move_profiles(),
+                        self.game_config.move_profiles(),
                     ));
             });
         self.num_valid_moves = self.array_index_to_move_index.len();
@@ -193,11 +197,11 @@ impl Node {
 
     /// Returns the move index (in universal perspective) with the highest UCB score at
     /// this node.
-    pub fn select_move_by_ucb(&self, mcts_config: &MCTSConfig) -> usize {
+    pub fn select_move_by_ucb(&self) -> usize {
         let mut max_score = f32::NEG_INFINITY;
         let mut max_index = 0;
 
-        let exploration_scores = self.exploration_scores(mcts_config);
+        let exploration_scores = self.exploration_scores();
         let exploitation_scores = self.exploitation_scores();
 
         for index in 0..self.num_valid_moves {
@@ -211,13 +215,13 @@ impl Node {
         self.array_index_to_move_index[max_index]
     }
 
-    fn exploration_scores(&self, mcts_config: &MCTSConfig) -> Vec<f32> {
+    fn exploration_scores(&self) -> Vec<f32> {
         let norm_factor = ((self.children_visit_counts_sum + 1) as f32).sqrt();
         self.children_prior_probabilities
             .iter()
             .enumerate()
             .map(|(i, prior_probability)| {
-                (mcts_config.ucb_exploration_factor * prior_probability * norm_factor)
+                (self.mcts_config.ucb_exploration_factor * prior_probability * norm_factor)
                     / (self.children_visit_counts[i] + 1) as f32
             })
             .collect::<Vec<f32>>()
@@ -243,9 +247,9 @@ impl Node {
         result
     }
 
-    pub fn select_move_to_play(&self, state: &State<'_>, mcts_config: &MCTSConfig) -> usize {
-        let temperature = if state.turn() < mcts_config.temperature_turn_cutoff {
-            mcts_config.move_selection_temperature
+    pub fn select_move_to_play(&self, state: &State<'_>) -> usize {
+        let temperature = if state.turn() < self.mcts_config.temperature_turn_cutoff {
+            self.mcts_config.move_selection_temperature
         } else {
             0.0
         };

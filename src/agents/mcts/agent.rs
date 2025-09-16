@@ -45,7 +45,7 @@ impl<T: inference::Client> MCTSAgent<T> {
                 );
 
                 // Select the next child node to explore.
-                let move_index = current_node.select_move_by_ucb(self.mcts_config);
+                let move_index = current_node.select_move_by_ucb();
 
                 // Play and record the selected move.
                 let game_status = current_state.apply_move(move_index);
@@ -122,7 +122,7 @@ impl<T: inference::Client> Agent for MCTSAgent<T> {
             self.rollout_once(state, &mut search_root).await;
         }
 
-        search_root.select_move_to_play(state, self.mcts_config)
+        search_root.select_move_to_play(state)
     }
 }
 
