@@ -35,16 +35,20 @@ impl Engine {
 
         join_set.spawn({
             let game_config = self.game_config;
+            let agents = self.generate_agents();
             async move {
-                let agents: [Box<dyn Agent>; NUM_PLAYERS] = [
-                    Box::new(RandomAgent::default()),
-                    Box::new(RandomAgent::default()),
-                    Box::new(RandomAgent::default()),
-                    Box::new(RandomAgent::default()),
-                ];
                 play_one_game(game_config, agents).await;
             }
         });
+    }
+
+    fn generate_agents(&self) -> [Box<dyn Agent>; NUM_PLAYERS] {
+        [
+            Box::new(RandomAgent::default()),
+            Box::new(RandomAgent::default()),
+            Box::new(RandomAgent::default()),
+            Box::new(RandomAgent::default()),
+        ]
     }
 
     pub async fn play_games(&mut self) -> u32 {
