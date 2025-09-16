@@ -26,9 +26,8 @@ pub struct DefaultClient {
     request_sender: mpsc::Sender<RequestChannelMessage>,
 }
 
-#[allow(async_fn_in_trait)]
 pub trait Client {
-    async fn evaluate(&self, request: Request) -> Response;
+    fn evaluate(&self, request: Request) -> impl std::future::Future<Output = Response> + Send;
 }
 
 /// DefaultClient is the only production implementation of the Client trait. We separate the
