@@ -33,6 +33,7 @@ fn main() -> Result<()> {
         ucb_exploration_factor: 1.05,
         temperature_turn_cutoff: 24,
         move_selection_temperature: 1.0,
+        inference_config_name: "".to_string(),
     }));
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {

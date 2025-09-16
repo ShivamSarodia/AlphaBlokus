@@ -1,6 +1,14 @@
 num_concurrent_games = 10
 num_total_games = 100
 
+[[inference]]
+name = "default"
+model_path = "static/networks/trivial_net.onnx"
+batch_size = 2
+
+[agents]
+Single = { Random = { } }
+
 [game]
 board_size = 5
 num_moves = 958
