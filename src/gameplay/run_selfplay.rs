@@ -1,10 +1,14 @@
-use crate::{config::SelfPlayConfig, gameplay::Engine};
+use crate::{
+    config::{AgentConfig, AgentGroupConfig, SelfPlayConfig},
+    gameplay::Engine,
+};
 
 pub fn run_selfplay(config: &'static SelfPlayConfig) -> u32 {
     let mut engine = Engine::new(
         config.num_concurrent_games,
         config.num_total_games,
         &config.game,
+        &AgentGroupConfig::Single(AgentConfig::Random),
     );
 
     let rt = tokio::runtime::Runtime::new().unwrap();
