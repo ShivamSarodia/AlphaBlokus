@@ -170,6 +170,7 @@ mod tests {
             ucb_exploration_factor: 1.0,
             temperature_turn_cutoff: 10,
             move_selection_temperature: temperature,
+            inference_config_name: "".to_string(),
         }))
     }
 

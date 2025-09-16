@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::config::game::GameConfig;
+use crate::config::{AgentGroupConfig, GameConfig, InferenceConfig};
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
     /// Given a string, parse it into a config and produce a static
@@ -26,6 +26,8 @@ pub trait LoadableConfig: Sized + DeserializeOwned {
 #[derive(Deserialize, Debug)]
 pub struct SelfPlayConfig {
     pub game: GameConfig,
+    pub agents: AgentGroupConfig,
+    pub inference: Vec<InferenceConfig>,
     pub num_concurrent_games: u32,
     pub num_total_games: u32,
 }
