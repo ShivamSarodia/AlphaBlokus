@@ -27,7 +27,7 @@ impl<T: inference::Client> MCTSAgent<T> {
         }
     }
 
-    async fn rollout_once(&self, state: &State<'_>, search_root: &mut Node) {
+    async fn rollout_once(&self, state: &State, search_root: &mut Node) {
         trace!("Rolling out once from state: {}", state);
 
         let mut moves_played = Vec::new();
@@ -105,7 +105,7 @@ impl<T: inference::Client> MCTSAgent<T> {
 }
 
 impl<T: inference::Client> Agent for MCTSAgent<T> {
-    async fn choose_move(&self, state: &State<'_>) -> usize {
+    async fn choose_move(&self, state: &State) -> usize {
         // Create a new node to represent the root of the search tree. Start by expanding the
         // node immediately.
         let mut search_root = Node::build_and_expand(

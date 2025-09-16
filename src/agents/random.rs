@@ -6,7 +6,7 @@ use rand::prelude::IteratorRandom;
 pub struct RandomAgent {}
 
 impl Agent for RandomAgent {
-    async fn choose_move(&self, state: &State<'_>) -> usize {
+    async fn choose_move(&self, state: &State) -> usize {
         state.valid_moves().choose(&mut rand::rng()).unwrap()
     }
 }

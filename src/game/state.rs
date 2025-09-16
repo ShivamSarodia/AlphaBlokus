@@ -11,7 +11,7 @@ pub enum GameStatus {
 }
 
 #[derive(Clone)]
-pub struct State<'c> {
+pub struct State {
     board: Board,
     player: usize,
     turn: u16,
@@ -19,11 +19,11 @@ pub struct State<'c> {
     last_move_played: Option<(usize, usize)>,
     moves_enabled: [MovesBitSet; NUM_PLAYERS],
     moves_ruled_out: [MovesBitSet; NUM_PLAYERS],
-    game_config: &'c GameConfig,
+    game_config: &'static GameConfig,
 }
 
-impl<'c> State<'c> {
-    pub fn new(game_config: &'c GameConfig) -> Self {
+impl State {
+    pub fn new(game_config: &'static GameConfig) -> Self {
         State {
             board: Board::new(game_config),
             player: 0,
@@ -138,7 +138,7 @@ impl<'c> State<'c> {
     }
 }
 
-impl<'c> fmt::Display for State<'c> {
+impl fmt::Display for State {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut layers = Vec::new();
         let mut latest_move_slice = BoardSlice::new(self.game_config.board_size);
