@@ -7,7 +7,7 @@ use std::fmt;
 
 /// Structure representing a board state, with each player
 /// on a different slice of the provided values.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Board {
     slices: [BoardSlice; NUM_PLAYERS],
     #[allow(dead_code)]
@@ -36,6 +36,19 @@ impl Board {
 
     pub fn slice_mut(&mut self, player: usize) -> &mut BoardSlice {
         &mut self.slices[player]
+    }
+
+    /// Return a clone of the board from the perspective of the provided player. That is,
+    /// the provided player's start corner will be at (0,0) and their pieces will be marked
+    /// on slices[0]. To invert, pass a negative player index.
+    pub fn clone_with_player_pov(&self, player: i32) -> Self {
+        Board {
+            slices: std::array::from_fn(|i| {
+                let slice_index = (i as i32 + player).rem_euclid(NUM_PLAYERS as i32) as usize;
+                self.slices[slice_index].rotate(-player)
+            }),
+            size: self.size,
+        }
     }
 }
 

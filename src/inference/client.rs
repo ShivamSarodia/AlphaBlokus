@@ -1,18 +1,20 @@
 use crate::{
     config::NUM_PLAYERS,
-    game::{Board, MovesArray},
+    game::Board,
+    inference::{Executor, batcher::Batcher},
 };
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug, Clone)]
 pub struct Request {
     pub board: Board,
+    pub valid_move_indexes: Vec<usize>,
 }
 
 #[derive(Debug)]
 pub struct Response {
     pub value: [f32; NUM_PLAYERS],
-    pub policy: MovesArray<f32>,
+    pub policy: Vec<f32>,
 }
 
 pub struct RequestChannelMessage {
@@ -20,18 +22,41 @@ pub struct RequestChannelMessage {
     pub response_sender: oneshot::Sender<Response>,
 }
 
-pub struct Client {
+pub struct DefaultClient {
     request_sender: mpsc::Sender<RequestChannelMessage>,
 }
 
-impl Client {
-    pub fn new(sender: mpsc::Sender<RequestChannelMessage>) -> Self {
-        Self {
-            request_sender: sender,
-        }
-    }
+#[allow(async_fn_in_trait)]
+pub trait Client {
+    async fn evaluate(&self, request: Request) -> Response;
+}
 
-    pub async fn evaluate(&self, request: Request) -> Response {
+/// DefaultClient is the only production implementation of the Client trait. We separate the
+/// two to simplify testing.
+impl DefaultClient {
+    /// Builds a client and starts the batcher.
+    ///
+    /// # Arguments
+    ///
+    /// * `executor` - The executor to use for inference.
+    /// * `channel_size` - The size of the channel to use for communication from the client
+    ///   to the batcher. To be safe, this should be large enough to hold the maximum possible
+    ///   number of concurrent requests, which is usually the number of concurrent games.
+    /// * `batch_size` - The size of batch at which the batcher execute requests.
+    pub fn build_and_start<T: Executor>(
+        executor: T,
+        channel_size: usize,
+        batch_size: usize,
+    ) -> Self {
+        let (request_sender, request_receiver) = mpsc::channel(channel_size);
+        let mut batcher = Batcher::new(batch_size, executor, request_receiver);
+        tokio::spawn(async move { batcher.run().await });
+        Self { request_sender }
+    }
+}
+
+impl Client for DefaultClient {
+    async fn evaluate(&self, request: Request) -> Response {
         // Generate a sender/receiver pair for the oneshot channel
         // used to pass back a response.
         let (response_sender, response_receiver) = oneshot::channel();
@@ -54,11 +79,7 @@ impl Client {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{
-        config::GameConfig,
-        inference::{batcher::Batcher, batcher::Executor},
-        testing,
-    };
+    use crate::{config::GameConfig, inference::batcher::Executor, testing};
 
     use super::*;
 
@@ -82,7 +103,7 @@ mod tests {
                         request.board.slice(2).count() as f32,
                         request.board.slice(3).count() as f32,
                     ],
-                    policy: MovesArray::new_with(0.0, &self.game_config),
+                    policy: vec![1.0; self.game_config.num_moves],
                 })
                 .collect()
         }
@@ -93,27 +114,23 @@ mod tests {
         // Create a game config.
         let game_config = testing::create_game_config();
 
-        // Create the executor.
-        let executor = MockExecutor {
-            game_config: Arc::clone(&game_config),
-        };
-
-        // Create a channel for communication.
-        let (request_sender, request_receiver) = mpsc::channel(100);
-
-        // Create the batcher and start it.
-        let mut batcher = Batcher::new(3, executor, request_receiver);
-        tokio::spawn(async move { batcher.run().await });
-
-        // Create a client that publishes to the request sender.
-        let client = Arc::new(Client::new(request_sender));
+        let client = Arc::new(DefaultClient::build_and_start(
+            MockExecutor {
+                game_config: Arc::clone(&game_config),
+            },
+            100,
+            3,
+        ));
 
         // Generate four requests.
         let requests = (0..4)
             .map(|i| {
                 let mut board = Board::new(&game_config);
                 board.slice_mut(i).set((0, 0), true);
-                Request { board }
+                Request {
+                    board,
+                    valid_move_indexes: vec![i],
+                }
             })
             .collect::<Vec<_>>();
 

@@ -15,6 +15,17 @@ fn create_base_game_config() -> GameConfig {
     }
 }
 
+fn create_base_half_game_config() -> GameConfig {
+    GameConfig {
+        board_size: 10,
+        num_moves: 6233,
+        num_pieces: 21,
+        num_piece_orientations: 91,
+        move_data_file: "static/move_data_size_10.bin".to_string(),
+        move_data: None,
+    }
+}
+
 /// Static GameConfig without move data, cached using once_cell
 static GAME_CONFIG_WITHOUT_DATA: Lazy<Arc<GameConfig>> =
     Lazy::new(|| Arc::new(create_base_game_config()));
@@ -22,6 +33,15 @@ static GAME_CONFIG_WITHOUT_DATA: Lazy<Arc<GameConfig>> =
 /// Static GameConfig with move data loaded, cached using once_cell
 static GAME_CONFIG_WITH_DATA: Lazy<Arc<GameConfig>> = Lazy::new(|| {
     let mut config = create_base_game_config();
+    config.load_move_profiles().unwrap();
+    Arc::new(config)
+});
+
+static HALF_GAME_CONFIG_WITHOUT_DATA: Lazy<Arc<GameConfig>> =
+    Lazy::new(|| Arc::new(create_base_half_game_config()));
+
+static HALF_GAME_CONFIG_WITH_DATA: Lazy<Arc<GameConfig>> = Lazy::new(|| {
+    let mut config = create_base_half_game_config();
     config.load_move_profiles().unwrap();
     Arc::new(config)
 });
@@ -37,4 +57,12 @@ pub fn create_game_config_without_data() -> Arc<GameConfig> {
 /// Returns the same cached instance on every call to avoid reloading.
 pub fn create_game_config() -> Arc<GameConfig> {
     Arc::clone(&GAME_CONFIG_WITH_DATA)
+}
+
+pub fn create_half_game_config_without_data() -> Arc<GameConfig> {
+    Arc::clone(&HALF_GAME_CONFIG_WITHOUT_DATA)
+}
+
+pub fn create_half_game_config() -> Arc<GameConfig> {
+    Arc::clone(&HALF_GAME_CONFIG_WITH_DATA)
 }

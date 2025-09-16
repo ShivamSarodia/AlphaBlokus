@@ -213,9 +213,9 @@ mod tests {
         for player in 0..NUM_PLAYERS {
             let player_start_corner = match player {
                 0 => (0, 0),
-                1 => (0, game_config.board_size - 1),
+                1 => (game_config.board_size - 1, 0),
                 2 => (game_config.board_size - 1, game_config.board_size - 1),
-                3 => (game_config.board_size - 1, 0),
+                3 => (0, game_config.board_size - 1),
                 _ => unreachable!(),
             };
 

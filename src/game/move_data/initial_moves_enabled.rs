@@ -16,7 +16,7 @@ pub fn compute_initial_moves_enabled(
         if move_profile.occupied_cells.get((0, 0)) {
             moves_enabled[0].insert(i);
         }
-        if move_profile.occupied_cells.get((0, board_size - 1)) {
+        if move_profile.occupied_cells.get((board_size - 1, 0)) {
             moves_enabled[1].insert(i);
         }
         if move_profile
@@ -25,7 +25,7 @@ pub fn compute_initial_moves_enabled(
         {
             moves_enabled[2].insert(i);
         }
-        if move_profile.occupied_cells.get((board_size - 1, 0)) {
+        if move_profile.occupied_cells.get((0, board_size - 1)) {
             moves_enabled[3].insert(i);
         }
     }
