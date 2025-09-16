@@ -17,7 +17,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     println!("Starting self-play with config:\n\n{:#?}", cli.config);
 
-    let mut config = SelfPlayConfig::from_file(&cli.config)?;
+    let config = SelfPlayConfig::from_file(&cli.config)?;
     config.game.load_move_profiles()?;
 
     run_selfplay(config);

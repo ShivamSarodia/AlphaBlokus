@@ -16,11 +16,11 @@ use crate::{
 /// implementation for local development.
 pub struct OrtExecutor {
     session: Arc<Mutex<Session>>,
-    game_config: Arc<GameConfig>,
+    game_config: &'static GameConfig,
 }
 
 impl OrtExecutor {
-    pub fn build(model_path: &str, game_config: Arc<GameConfig>) -> Self {
+    pub fn build(model_path: &str, game_config: &'static GameConfig) -> Self {
         let session = Session::builder()
             .unwrap()
             .with_optimization_level(GraphOptimizationLevel::Level3)

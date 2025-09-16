@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use tokio::task::JoinSet;
 
 use crate::agents::{Agent, RandomAgent};
@@ -9,7 +7,7 @@ use crate::game::{GameStatus, State};
 pub struct Engine {
     num_concurrent_games: u32,
     num_total_games: u32,
-    game_config: Arc<GameConfig>,
+    game_config: &'static GameConfig,
     num_finished_games: u32,
 }
 
@@ -17,12 +15,12 @@ impl Engine {
     pub fn new(
         num_concurrent_games: u32,
         num_total_games: u32,
-        game_config: Arc<GameConfig>,
+        game_config: &'static GameConfig,
     ) -> Self {
         Self {
             num_concurrent_games,
             num_total_games,
-            game_config: Arc::clone(&game_config),
+            game_config,
             num_finished_games: 0,
         }
     }
@@ -35,9 +33,11 @@ impl Engine {
         }
         self.num_finished_games += 1;
 
-        let config = Arc::clone(&self.game_config);
-        join_set.spawn(async move {
-            play_one_game(&config).await;
+        join_set.spawn({
+            let game_config = self.game_config;
+            async move {
+                play_one_game(game_config).await;
+            }
         });
     }
 

@@ -1,13 +1,10 @@
-use std::sync::Arc;
-
 use crate::{config::SelfPlayConfig, gameplay::Engine};
 
-pub fn run_selfplay(config: SelfPlayConfig) -> u32 {
-    let game_config = Arc::new(config.game);
+pub fn run_selfplay(config: &'static SelfPlayConfig) -> u32 {
     let mut engine = Engine::new(
         config.num_concurrent_games,
         config.num_total_games,
-        game_config,
+        &config.game,
     );
 
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -24,7 +21,7 @@ mod tests {
     #[test]
     fn test_run_selfplay() {
         let path = Path::new("tests/fixtures/configs/self_play.toml");
-        let mut config = SelfPlayConfig::from_file(path).unwrap();
+        let config: &'static mut SelfPlayConfig = SelfPlayConfig::from_file(path).unwrap();
         config.game.load_move_profiles().unwrap();
 
         let expected_num_finished_games = config.num_total_games;

@@ -16,37 +16,33 @@ fn main() -> Result<()> {
 
     debug!("Debug logging enabled.");
 
-    let mut game_config = GameConfig {
+    let game_config: &'static mut GameConfig = Box::leak(Box::new(GameConfig {
         board_size: 10,
         num_moves: 6233,
         num_pieces: 21,
         num_piece_orientations: 91,
         move_data: None,
         move_data_file: "static/move_data_size_10.bin".to_string(),
-    };
+    }));
     game_config.load_move_profiles()?;
-    let game_config = Arc::new(game_config);
 
-    let mcts_config = Arc::new(MCTSConfig {
+    let mcts_config: &'static mut MCTSConfig = Box::leak(Box::new(MCTSConfig {
         num_rollouts: 10,
         total_dirichlet_noise_alpha: 10.83,
         root_dirichlet_noise_fraction: 0.25,
         ucb_exploration_factor: 1.05,
         temperature_turn_cutoff: 24,
         move_selection_temperature: 1.0,
-    });
+    }));
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let executor = OrtExecutor::build(
-            "static/networks/trivial_net_half.onnx",
-            Arc::clone(&game_config),
-        );
+        let executor = OrtExecutor::build("static/networks/trivial_net_half.onnx", game_config);
 
         let inference_client =
             Arc::new(inference::DefaultClient::build_and_start(executor, 100, 1));
 
-        let agent = MCTSAgent::new(mcts_config, Arc::clone(&game_config), inference_client);
-        let mut state = State::new(&game_config);
+        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&inference_client));
+        let mut state = State::new(game_config);
         loop {
             let move_index = agent.choose_move(&state).await;
             let status = state.apply_move(move_index);
