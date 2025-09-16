@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::config::components::GameConfig;
+use crate::config::game::GameConfig;
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
     fn from_string(string: &str) -> Result<Self> {
