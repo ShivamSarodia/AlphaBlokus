@@ -104,3 +104,44 @@ pub async fn play_one_game(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing;
+
+    #[tokio::test]
+    async fn test_play_games() {
+        let expected_num_finished_games = 50;
+        let game_config = testing::create_game_config();
+        let mut engine = Engine::new(
+            5,
+            expected_num_finished_games,
+            HashMap::new(),
+            game_config,
+            &AgentGroupConfig::Single(AgentConfig::Random),
+        );
+
+        let num_finished_games = engine.play_games().await;
+        assert_eq!(num_finished_games, expected_num_finished_games);
+    }
+
+    mod generate_agents {
+        use super::*;
+
+        #[test]
+        fn test_single_agent_group_config() {
+            let game_config = testing::create_game_config();
+            let engine = Engine::new(
+                5,
+                50,
+                HashMap::new(),
+                game_config,
+                &AgentGroupConfig::Single(AgentConfig::Random),
+            );
+
+            let agents = engine.generate_agents();
+            assert_eq!(agents.len(), 4);
+        }
+    }
+}
