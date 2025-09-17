@@ -22,7 +22,7 @@ fn main() -> Result<()> {
         num_pieces: 21,
         num_piece_orientations: 91,
         move_data: None,
-        move_data_file: "static/move_data_size_10.bin".to_string(),
+        move_data_file: "static/move_data/half.bin".to_string(),
     }));
     game_config.load_move_profiles()?;
 

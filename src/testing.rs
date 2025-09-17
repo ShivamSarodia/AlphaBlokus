@@ -10,7 +10,7 @@ fn create_base_game_config() -> GameConfig {
         num_moves: 958,
         num_pieces: 21,
         num_piece_orientations: 91,
-        move_data_file: "static/move_data_size_10.bin".to_string(),
+        move_data_file: "static/move_data/tiny.bin".to_string(),
         move_data: None,
     }
 }
@@ -21,7 +21,7 @@ fn create_base_half_game_config() -> GameConfig {
         num_moves: 6233,
         num_pieces: 21,
         num_piece_orientations: 91,
-        move_data_file: "static/move_data_size_10.bin".to_string(),
+        move_data_file: "static/move_data/half.bin".to_string(),
         move_data: None,
     }
 }
