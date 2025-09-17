@@ -25,6 +25,6 @@ def save_as_onnx(net: nn.Module, game_config: GameConfig, path: str):
 
 
 if __name__ == "__main__":
-    game_config = GameConfig("configs/generate_move_data/half.toml")
+    game_config = GameConfig("configs/generate_move_data/tiny.toml")
     net = TrivialNet(game_config)
-    save_as_onnx(net, game_config, "static/networks/trivial_net_half.onnx")
+    save_as_onnx(net, game_config, "static/networks/trivial_net_tiny.onnx")

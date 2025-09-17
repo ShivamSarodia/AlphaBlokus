@@ -21,6 +21,7 @@ pub struct OrtExecutor {
 
 impl OrtExecutor {
     pub fn build(model_path: &str, game_config: &'static GameConfig) -> Self {
+        println!("Building ORT executor with model path: {}", model_path);
         let session = Session::builder()
             .unwrap()
             .with_optimization_level(GraphOptimizationLevel::Level3)
@@ -97,7 +98,7 @@ mod tests {
     #[test]
     fn test_execute() {
         let executor = OrtExecutor::build(
-            "static/networks/trivial_net.onnx",
+            "static/networks/trivial_net_tiny.onnx",
             testing::create_game_config(),
         );
 

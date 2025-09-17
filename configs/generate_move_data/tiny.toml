@@ -3,4 +3,4 @@ board_size = 5
 num_moves = 958
 num_pieces = 21
 num_piece_orientations = 91
-move_data_file = "static/move_data_size_5.bin"
+move_data_file = "static/move_data/tiny.bin"
