@@ -1,18 +1,25 @@
 use std::sync::Arc;
 
 use log::trace;
+use rand::Rng;
 
 use crate::agents::Agent;
 use crate::agents::mcts::node::Node;
 use crate::config::{GameConfig, MCTSConfig};
 use crate::game::{GameStatus, State};
 use crate::inference;
+use crate::recorder::MCTSData;
 use async_trait::async_trait;
 
 pub struct MCTSAgent<T: inference::Client + Send + Sync> {
     mcts_config: &'static MCTSConfig,
     game_config: &'static GameConfig,
     inference_client: Arc<T>,
+    game_id: u64,
+    /// The agent is responsible for accumulating MCTS data from rollouts.
+    /// The data in this vector will have 0 values for the game result, and that field
+    /// will be populated when the game is over.
+    mcts_data: Vec<MCTSData>,
 }
 
 impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
@@ -25,6 +32,8 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
             mcts_config,
             game_config,
             inference_client,
+            game_id: rand::rng().random::<u64>(),
+            mcts_data: Vec::new(),
         }
     }
 
@@ -107,7 +116,7 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
 
 #[async_trait]
 impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
-    async fn choose_move(&self, state: &State) -> usize {
+    async fn choose_move(&mut self, state: &State) -> usize {
         // Create a new node to represent the root of the search tree. Start by expanding the
         // node immediately.
         let mut search_root = Node::build_and_expand(
@@ -124,7 +133,18 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
             self.rollout_once(state, &mut search_root).await;
         }
 
-        search_root.select_move_to_play(state)
+        let move_index = search_root.select_move_to_play(state);
+
+        // Push the MCTS search results from the root node onto the MCTS data
+        // vector maintained by this agent.
+        self.mcts_data
+            .push(search_root.generate_mcts_data(self.game_id, state));
+
+        move_index
+    }
+
+    fn flush_mcts_data(&mut self) -> Vec<MCTSData> {
+        self.mcts_data.drain(..).collect()
     }
 }
 
@@ -162,21 +182,9 @@ mod tests {
         }
     }
 
-    fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSConfig {
-        Box::leak(Box::new(MCTSConfig {
-            num_rollouts: num_rollouts,
-            total_dirichlet_noise_alpha: 1.0,
-            root_dirichlet_noise_fraction: 0.0,
-            ucb_exploration_factor: 1.0,
-            temperature_turn_cutoff: 10,
-            move_selection_temperature: temperature,
-            inference_config_name: "".to_string(),
-        }))
-    }
-
     #[tokio::test]
     async fn test_board_and_policy_rotations() {
-        let mcts_config = create_mcts_config(1, 0.0);
+        let mcts_config = testing::create_mcts_config(1, 0.0);
 
         // Generate a larger game config so that there's no concern about
         // one move blocking the others.
@@ -186,7 +194,7 @@ mod tests {
             requests: Mutex::new(Vec::new()),
         });
 
-        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
+        let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
 
         let mut state = State::new(&game_config);
         let move_index_0 = agent.choose_move(&state).await;
@@ -324,7 +332,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_value_rotation() {
-        let mcts_config = create_mcts_config(1, 0.0);
+        let mcts_config = testing::create_mcts_config(1, 0.0);
 
         // Generate a larger game config so that there's no concern about
         // one move blocking the others.
@@ -384,11 +392,11 @@ mod tests {
     async fn test_values_used_in_search() {
         // Play a good number of rollouts to ensure we land on the conclusion move
         // that has the best value (i.e. the one-square).
-        let mcts_config = create_mcts_config(100, 0.0);
+        let mcts_config = testing::create_mcts_config(100, 0.0);
         let game_config = testing::create_half_game_config();
         let mock_client = Arc::new(ValuesInferenceClient {});
 
-        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
+        let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
         let mut state = State::new(&game_config);
 
         for player in 0..4 {
@@ -406,13 +414,13 @@ mod tests {
         // Test that select_move_to_play works when temperature is non-zero.
         // We don't verify the exact distribution, just that it doesn't crash
         // and returns a valid move.
-        let mcts_config = create_mcts_config(50, 1.0); // Non-zero temperature
+        let mcts_config = testing::create_mcts_config(50, 1.0); // Non-zero temperature
         let game_config = testing::create_half_game_config();
         let mock_client = Arc::new(MockInferenceClient {
             requests: Mutex::new(Vec::new()),
         });
 
-        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
+        let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
 
         let state = State::new(&game_config);
 

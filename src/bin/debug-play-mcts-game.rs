@@ -42,7 +42,7 @@ fn main() -> Result<()> {
         let inference_client =
             Arc::new(inference::DefaultClient::build_and_start(executor, 100, 1));
 
-        let agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&inference_client));
+        let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&inference_client));
         let mut state = State::new(game_config);
         loop {
             let move_index = agent.choose_move(&state).await;
