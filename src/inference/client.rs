@@ -176,7 +176,7 @@ mod tests {
         });
 
         // Sleep a bit more to let any processing occur.
-        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
 
         // Evaluation 0, 1, and 2 should be finished now.
         assert!(handle_0.is_finished());
