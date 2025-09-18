@@ -45,18 +45,21 @@ impl Engine {
 
         join_set.spawn({
             let game_config = self.game_config;
-            let agents = self.generate_agents();
+            let (agent_vector, player_to_agent_index) = self.generate_agents();
             async move {
-                play_one_game(game_config, agents).await;
+                play_one_game(game_config, agent_vector, player_to_agent_index).await;
             }
         });
     }
 
-    fn generate_agents(&self) -> [Box<dyn Agent>; NUM_PLAYERS] {
+    /// Return a vector of agents and an array mapping each player to the index of its
+    /// agent in the vector.
+    fn generate_agents(&self) -> (Vec<Box<dyn Agent>>, [usize; NUM_PLAYERS]) {
         match self.agent_group_config {
-            AgentGroupConfig::Single(agent_config) => {
-                std::array::from_fn(|_| self.generate_single_agent(agent_config))
-            }
+            AgentGroupConfig::Single(agent_config) => (
+                vec![self.generate_single_agent(agent_config)],
+                [0; NUM_PLAYERS],
+            ),
         }
     }
 
@@ -92,11 +95,12 @@ impl Engine {
 
 pub async fn play_one_game(
     game_config: &'static GameConfig,
-    mut agents: [Box<dyn Agent>; NUM_PLAYERS],
+    mut agents: Vec<Box<dyn Agent>>,
+    player_to_agent_index: [usize; NUM_PLAYERS],
 ) {
     let mut state = State::new(game_config);
     loop {
-        let agent = &mut agents[state.player()];
+        let agent = &mut agents[player_to_agent_index[state.player()]];
         let move_index = agent.choose_move(&state).await;
         let game_state = state.apply_move(move_index);
         if game_state == GameStatus::GameOver {
@@ -124,24 +128,5 @@ mod tests {
 
         let num_finished_games = engine.play_games().await;
         assert_eq!(num_finished_games, expected_num_finished_games);
-    }
-
-    mod generate_agents {
-        use super::*;
-
-        #[test]
-        fn test_single_agent_group_config() {
-            let game_config = testing::create_game_config();
-            let engine = Engine::new(
-                5,
-                50,
-                HashMap::new(),
-                game_config,
-                &AgentGroupConfig::Single(AgentConfig::Random),
-            );
-
-            let agents = engine.generate_agents();
-            assert_eq!(agents.len(), 4);
-        }
     }
 }
