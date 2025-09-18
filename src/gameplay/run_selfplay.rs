@@ -2,6 +2,7 @@ use crate::{
     config::{AgentConfig, AgentGroupConfig, SelfPlayConfig},
     gameplay::Engine,
     inference::DefaultClient,
+    recorder::Recorder,
 };
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,6 +31,10 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) -> u32 {
             inference_clients,
             &config.game,
             &AgentGroupConfig::Single(AgentConfig::Random),
+            Recorder::build_and_start(
+                config.mcts_recorder.flush_row_count,
+                config.mcts_recorder.data_directory.clone(),
+            ),
         );
 
         engine.play_games().await

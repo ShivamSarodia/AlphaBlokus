@@ -45,6 +45,10 @@ impl<T> MovesArray<T> {
     pub fn get(&self, index: usize) -> &T {
         &self.values[index]
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.values.iter()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

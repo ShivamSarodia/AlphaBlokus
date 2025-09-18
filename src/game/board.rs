@@ -3,14 +3,14 @@ use crate::config::NUM_PLAYERS;
 use crate::game::BoardSlice;
 use crate::game::display::BoardDisplayShape;
 use crate::game::display::{BoardDisplay, BoardDisplayLayer};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Structure representing a board state, with each player
 /// on a different slice of the provided values.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Board {
     slices: [BoardSlice; NUM_PLAYERS],
-    #[allow(dead_code)]
     size: usize,
 }
 

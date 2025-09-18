@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use crate::config::GameConfig;
 use crate::game::move_data::move_index_to_player_pov;
 use crate::inference;
+use crate::recorder::MCTSData;
 use crate::{config::MCTSConfig, config::NUM_PLAYERS, game::State};
 
 pub struct Node {
@@ -290,6 +291,19 @@ impl Node {
         };
 
         self.array_index_to_move_index[array_index]
+    }
+
+    pub fn generate_mcts_data(&self, game_id: u64, state: &State) -> MCTSData {
+        MCTSData {
+            player: self.player,
+            turn: state.turn(),
+            game_id,
+            board: state.board().clone_with_player_pov(self.player as i32),
+            valid_moves: self.array_index_to_player_pov_move_index.clone(),
+            visit_counts: self.children_visit_counts.clone(),
+            // This will be populated externally when the game is over.
+            game_result: [0.0; NUM_PLAYERS],
+        }
     }
 
     #[inline]

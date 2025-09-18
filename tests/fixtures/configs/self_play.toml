@@ -1,6 +1,10 @@
 num_concurrent_games = 10
 num_total_games = 100
 
+[mcts_recorder]
+data_directory = "/tmp/alphablokus_test_fixture"
+flush_row_count = 10
+
 [[inference]]
 name = "default"
 model_path = "static/networks/trivial_net_tiny.onnx"

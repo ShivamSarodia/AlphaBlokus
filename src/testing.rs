@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use crate::config::GameConfig;
+use crate::config::{GameConfig, MCTSConfig};
 use once_cell::sync::Lazy;
+use rand::Rng;
 
 /// Creates a base GameConfig for testing with board size 5
 fn create_base_game_config() -> GameConfig {
@@ -65,4 +66,25 @@ pub fn create_half_game_config_without_data() -> &'static GameConfig {
 
 pub fn create_half_game_config() -> &'static GameConfig {
     &HALF_GAME_CONFIG_WITH_DATA
+}
+
+pub fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSConfig {
+    Box::leak(Box::new(MCTSConfig {
+        num_rollouts: num_rollouts,
+        total_dirichlet_noise_alpha: 1.0,
+        root_dirichlet_noise_fraction: 0.0,
+        ucb_exploration_factor: 1.0,
+        temperature_turn_cutoff: 10,
+        move_selection_temperature: temperature,
+        inference_config_name: "".to_string(),
+    }))
+}
+
+pub fn create_tmp_directory() -> String {
+    let path = std::env::temp_dir().join(format!(
+        "alphablokus_test_{}",
+        rand::rng().random_range(0..10000000)
+    ));
+    std::fs::create_dir_all(&path).unwrap();
+    path.to_string_lossy().to_string()
 }
