@@ -1,10 +1,14 @@
 num_concurrent_games = 100
 num_total_games = 1000
 
+[mcts_recorder]
+data_directory = "/tmp/alphablokus_mcts_half/games"
+flush_row_count = 90
+
 [[inference]]
 name = "default"
 model_path = "static/networks/trivial_net_half.onnx"
-batch_size = 2
+batch_size = 25
 
 [agents.Single.MCTS]
 num_rollouts = 100

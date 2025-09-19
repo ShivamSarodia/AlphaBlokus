@@ -22,8 +22,11 @@ pub struct MCTSData {
     pub game_id: u64,
     /// The board, from the perspective of the player to move.
     pub board: Board,
-    /// The valid moves, from the perspective of the player to move.
+    /// The valid move indices, from the perspective of the player to move.
     pub valid_moves: Vec<usize>,
+    /// The same valid moves as above, but represented as
+    /// (piece_orientation_index, center_x, center_y) for training purposes.
+    pub valid_move_tuples: Vec<(usize, usize, usize)>,
     /// The visit counts of each child, in the same order as above.
     pub visit_counts: Vec<u32>,
     /// The result of this game, from the perspective of the player to move.
@@ -60,6 +63,11 @@ impl Recorder {
                     unflushed_mcts_data = Vec::new();
                 }
             }
+
+            // When the channel is closed, flush the remaining data one last time.
+            tokio::task::spawn_blocking(move || {
+                write_mcts_data_to_disk(unflushed_mcts_data, &output_directory).unwrap();
+            });
         });
 
         // Return the recorder which contains the sender for pushing new data.
@@ -128,6 +136,7 @@ mod tests {
             game_id: game_id,
             board: Board::new(&testing::create_game_config()),
             valid_moves: vec![0, 1, 2, 3, 4],
+            valid_move_tuples: vec![(0, 0, 0), (1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 0, 0)],
             visit_counts: vec![0, 0, 0, 0, 0],
             game_result: [0.0, 0.0, 0.0, 0.0],
         }
