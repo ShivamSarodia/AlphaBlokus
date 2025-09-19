@@ -300,6 +300,18 @@ impl Node {
             game_id,
             board: state.board().clone_with_player_pov(self.player as i32),
             valid_moves: self.array_index_to_player_pov_move_index.clone(),
+            valid_move_tuples: self
+                .array_index_to_player_pov_move_index
+                .iter()
+                .map(|&index| {
+                    let move_profile = self.game_config.move_profiles().get(index);
+                    (
+                        move_profile.piece_orientation_index,
+                        move_profile.center.0,
+                        move_profile.center.1,
+                    )
+                })
+                .collect::<Vec<(usize, usize, usize)>>(),
             visit_counts: self.children_visit_counts.clone(),
             // This will be populated externally when the game is over.
             game_result: [0.0; NUM_PLAYERS],
