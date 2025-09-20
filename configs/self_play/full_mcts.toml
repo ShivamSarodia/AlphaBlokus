@@ -1,0 +1,27 @@
+num_concurrent_games = 100
+num_total_games = 1000
+
+[mcts_recorder]
+data_directory = "/tmp/alphablokus_mcts_full/games"
+flush_row_count = 90
+
+[[inference]]
+name = "default"
+model_path = "static/networks/trivial_net_full.onnx"
+batch_size = 25
+
+[agents.Single.MCTS]
+num_rollouts = 100
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.25
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 10
+move_selection_temperature = 1.0
+inference_config_name = "default"
+
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"
