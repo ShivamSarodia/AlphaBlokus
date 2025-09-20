@@ -15,6 +15,7 @@ pub struct Engine {
     inference_clients: HashMap<String, Arc<DefaultClient>>,
     game_config: &'static GameConfig,
     agent_group_config: &'static AgentGroupConfig,
+    num_started_games: u32,
     num_finished_games: u32,
     recorder: Recorder,
 }
@@ -34,6 +35,7 @@ impl Engine {
             inference_clients,
             game_config,
             agent_group_config,
+            num_started_games: 0,
             num_finished_games: 0,
             recorder,
         }
@@ -42,10 +44,10 @@ impl Engine {
     fn maybe_spawn_game_on_join_set(&mut self, join_set: &mut JoinSet<()>) {
         // Only spawn a game if we haven't already spawned the requested
         // number of games.
-        if self.num_finished_games >= self.num_total_games {
+        if self.num_started_games >= self.num_total_games {
             return;
         }
-        self.num_finished_games += 1;
+        self.num_started_games += 1;
 
         join_set.spawn({
             let game_config = self.game_config;
@@ -90,10 +92,15 @@ impl Engine {
         }
 
         while let Some(result) = join_set.join_next().await {
+            self.num_finished_games += 1;
+
             // Raise any error from the join_next.
             result.unwrap();
 
-            println!("Finished game");
+            println!(
+                "Finished game. (total started: {:?}, total finished: {:?})",
+                self.num_started_games, self.num_finished_games
+            );
             self.maybe_spawn_game_on_join_set(&mut join_set);
         }
 
