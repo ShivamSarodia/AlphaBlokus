@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+ahash = "0.8.12"
 anyhow = "1.0.99"
 async-trait = "0.1.89"
 bit-set = { version = "0.8.0", features = ["serde"] }

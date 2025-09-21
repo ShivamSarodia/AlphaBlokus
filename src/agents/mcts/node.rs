@@ -1,8 +1,7 @@
-use itertools::Itertools;
+use ahash::AHashMap as HashMap;
 use log::debug;
 use rand_distr::Distribution;
 use rand_distr::weighted::WeightedIndex;
-use std::collections::HashMap;
 
 use crate::config::GameConfig;
 use crate::game::move_data::move_index_to_player_pov;
@@ -104,26 +103,20 @@ impl Node {
     }
 
     fn initialize_move_mappings(&mut self, state: &State) {
-        self.move_index_to_array_index = HashMap::new();
-        self.array_index_to_move_index = Vec::new();
-        self.array_index_to_player_pov_move_index = Vec::new();
-        state
-            .valid_moves()
-            // I don't think sorting is technically necessary here, but it may reduce risk
-            // of non-determinism.
-            .sorted()
-            .enumerate()
-            .for_each(|(array_index, move_index)| {
-                self.move_index_to_array_index
-                    .insert(move_index, array_index);
-                self.array_index_to_move_index.push(move_index);
-                self.array_index_to_player_pov_move_index
-                    .push(move_index_to_player_pov(
-                        move_index,
-                        self.player,
-                        self.game_config.move_profiles(),
-                    ));
-            });
+        self.array_index_to_move_index = state.valid_moves().collect::<Vec<usize>>();
+        self.array_index_to_player_pov_move_index = self
+            .array_index_to_move_index
+            .iter()
+            .map(|&move_index| {
+                move_index_to_player_pov(move_index, self.player, self.game_config.move_profiles())
+            })
+            .collect::<Vec<usize>>();
+        self.move_index_to_array_index = HashMap::from_iter(
+            self.array_index_to_move_index
+                .iter()
+                .enumerate()
+                .map(|(array_index, &move_index)| (move_index, array_index)),
+        );
         self.num_valid_moves = self.array_index_to_move_index.len();
     }
 
