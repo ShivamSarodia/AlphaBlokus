@@ -1,7 +1,7 @@
 use crate::{
     config::SelfPlayConfig, gameplay::Engine, inference::DefaultClient, recorder::Recorder,
 };
-use std::collections::HashMap;
+use ahash::AHashMap as HashMap;
 use std::sync::Arc;
 
 use crate::inference::OrtExecutor;
