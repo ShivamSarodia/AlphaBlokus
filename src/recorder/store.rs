@@ -1,16 +1,17 @@
 use anyhow::Result;
-use std::{
-    fs::File,
-    io::{BufReader, BufWriter, Write},
-};
+use std::fs::File as StdFile;
+use std::io::BufReader as StdBufReader;
 
 use crate::{config::NUM_PLAYERS, game::Board};
 use chrono::prelude::*;
 use chrono_tz::US::Pacific;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
+use tokio::io::BufWriter;
 use tokio::sync::mpsc;
-use zstd::{Decoder, Encoder};
+use zstd::Decoder;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MCTSData {
@@ -57,17 +58,17 @@ impl Recorder {
                 if unflushed_mcts_data.len() >= flush_row_count {
                     // Flush the data.
                     let output_directory = output_directory.clone();
-                    tokio::task::spawn_blocking(move || {
-                        write_mcts_data_to_disk(unflushed_mcts_data, &output_directory).unwrap();
-                    });
+                    write_mcts_data(unflushed_mcts_data, &output_directory)
+                        .await
+                        .unwrap();
                     unflushed_mcts_data = Vec::new();
                 }
             }
 
             // When the channel is closed, flush the remaining data one last time.
-            tokio::task::spawn_blocking(move || {
-                write_mcts_data_to_disk(unflushed_mcts_data, &output_directory).unwrap();
-            });
+            write_mcts_data(unflushed_mcts_data, &output_directory)
+                .await
+                .unwrap();
         });
 
         // Return the recorder which contains the sender for pushing new data.
@@ -100,24 +101,45 @@ fn generate_filename(num_rows: usize) -> String {
     )
 }
 
-fn write_mcts_data_to_disk(mcts_data: Vec<MCTSData>, output_directory: &str) -> Result<()> {
-    let filename = output_directory.to_string() + "/" + &generate_filename(mcts_data.len());
+async fn write_mcts_data(mcts_data: Vec<MCTSData>, output_directory: &str) -> Result<()> {
+    // Serialize and compress the data in a blocking thread.
+    let num_rows = mcts_data.len();
+    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let uncompressed_bytes = rmp_serde::encode::to_vec(&mcts_data)?;
+        let compressed = zstd::encode_all(&uncompressed_bytes[..], 6)?;
+        Ok(compressed)
+    })
+    .await??;
 
-    let file = File::create(filename)?;
-    let buf = BufWriter::new(file);
-    let mut enc = Encoder::new(buf, 6)?;
+    if output_directory.starts_with("s3://") {
+        write_mcts_data_to_s3(body, output_directory).await
+    } else {
+        write_mcts_data_to_disk(num_rows, body, output_directory).await
+    }
+}
 
-    rmp_serde::encode::write(&mut enc, &mcts_data)?;
+async fn write_mcts_data_to_disk(
+    num_rows: usize,
+    mcts_data: Vec<u8>,
+    output_directory: &str,
+) -> Result<()> {
+    let filename = output_directory.to_string() + "/" + &generate_filename(num_rows);
 
-    let mut buf = enc.finish()?;
-    buf.flush()?;
+    let file = File::create(filename).await?;
+    let mut buf = BufWriter::new(file);
+    buf.write_all(&mcts_data).await?;
+    buf.flush().await?;
 
     Ok(())
 }
 
+async fn write_mcts_data_to_s3(_mcts_data: Vec<u8>, _output_directory: &str) -> Result<()> {
+    todo!()
+}
+
 pub fn read_mcts_data_from_disk(filename: &str) -> Result<Vec<MCTSData>> {
-    let file = File::open(filename)?;
-    let buf = BufReader::new(file);
+    let file = StdFile::open(filename)?;
+    let buf = StdBufReader::new(file);
     let mut dec = Decoder::new(buf)?;
     let mcts_data: Vec<MCTSData> = rmp_serde::decode::from_read(&mut dec)?;
     Ok(mcts_data)
@@ -142,12 +164,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_write_mcts_data_to_disk() {
+    #[tokio::test]
+    async fn test_write_mcts_data_to_disk() {
         // Write some MCTS data to disk and confirm it ~works.
         let mcts_data = vec![create_mcts_data(0)];
         let directory = testing::create_tmp_directory();
-        write_mcts_data_to_disk(mcts_data, &directory).unwrap();
+        write_mcts_data(mcts_data, &directory).await.unwrap();
 
         // Ensure there's a file written.
         let mut files = std::fs::read_dir(&directory).unwrap();

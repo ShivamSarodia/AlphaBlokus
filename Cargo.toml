@@ -7,10 +7,13 @@ edition = "2024"
 ahash = "0.8.12"
 anyhow = "1.0.99"
 async-trait = "0.1.89"
+aws-config = { version = "1.8.6", features = ["behavior-version-latest"] }
+aws-sdk-s3 = { version = "1.106.0", features = ["behavior-version-latest"] }
 bit-set = { version = "0.8.0", features = ["serde"] }
 chrono = "0.4.42"
 chrono-tz = "0.10.4"
 clap = { version = "4.5.46", features = ["derive"] }
+dotenvy = "0.15.7"
 env_logger = "0.11.8"
 indicatif = { version = "0.18.0", features = ["rayon"] }
 itertools = "0.14.0"
