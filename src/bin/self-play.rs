@@ -14,6 +14,8 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
+    dotenvy::dotenv()?;
+
     let cli = Cli::parse();
     println!("Starting self-play with config:\n\n{:#?}", cli.config);
 
