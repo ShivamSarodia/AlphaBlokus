@@ -159,7 +159,6 @@ async fn write_mcts_data_to_s3(
         .key(key)
         .send()
         .await?;
-    println!("Sent data to S3");
 
     Ok(())
 }
