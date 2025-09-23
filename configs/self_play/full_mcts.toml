@@ -3,6 +3,7 @@ num_total_games = 1000
 
 [mcts_recorder]
 data_directory = "/tmp/alphablokus_mcts_full/games"
+# data_directory = "s3://alpha-blokus-data/scrap/games"
 flush_row_count = 90
 
 [[inference]]
