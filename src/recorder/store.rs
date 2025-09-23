@@ -112,7 +112,7 @@ async fn write_mcts_data(mcts_data: Vec<MCTSData>, output_directory: &str) -> Re
     .await??;
 
     if output_directory.starts_with("s3://") {
-        write_mcts_data_to_s3(body, output_directory).await
+        write_mcts_data_to_s3(num_rows, body, output_directory).await
     } else {
         write_mcts_data_to_disk(num_rows, body, output_directory).await
     }
@@ -133,8 +133,35 @@ async fn write_mcts_data_to_disk(
     Ok(())
 }
 
-async fn write_mcts_data_to_s3(_mcts_data: Vec<u8>, _output_directory: &str) -> Result<()> {
-    todo!()
+async fn write_mcts_data_to_s3(
+    num_rows: usize,
+    mcts_data: Vec<u8>,
+    output_directory: &str,
+) -> Result<()> {
+    let remove_protocol = output_directory.split("s3://").nth(1).unwrap();
+    let mut split = remove_protocol.split("/");
+    let bucket = split.next().unwrap();
+    let mut remainder = split.collect::<Vec<&str>>();
+    let filename = generate_filename(num_rows);
+    remainder.push(&filename[..]);
+    let key = remainder.join("/");
+
+    let client = aws_sdk_s3::Client::new(
+        &aws_config::from_env()
+            .endpoint_url(std::env::var("S3_ENDPOINT_URL").unwrap())
+            .load()
+            .await,
+    );
+    client
+        .put_object()
+        .body(aws_sdk_s3::primitives::ByteStream::from(mcts_data))
+        .bucket(bucket)
+        .key(key)
+        .send()
+        .await?;
+    println!("Sent data to S3");
+
+    Ok(())
 }
 
 pub fn read_mcts_data_from_disk(filename: &str) -> Result<Vec<MCTSData>> {
