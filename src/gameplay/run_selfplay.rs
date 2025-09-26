@@ -14,7 +14,7 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) -> u32 {
             .iter()
             .map(|inference_config| {
                 let client = DefaultClient::build_and_start(
-                    OrtExecutor::build(&inference_config.model_path, &config.game),
+                    OrtExecutor::build(&inference_config.model_path, &config.game).unwrap(),
                     (config.num_concurrent_games * 2) as usize,
                     inference_config.batch_size,
                 );

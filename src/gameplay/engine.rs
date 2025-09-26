@@ -153,6 +153,7 @@ mod tests {
     use crate::{
         config::MCTSConfig, inference::OrtExecutor, recorder::read_mcts_data_from_disk, testing,
     };
+    use std::path::Path;
 
     #[tokio::test]
     async fn test_play_games() {
@@ -177,7 +178,11 @@ mod tests {
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
         let inference_client = Arc::new(DefaultClient::build_and_start(
-            OrtExecutor::build(&"static/networks/trivial_net_tiny.onnx", game_config),
+            OrtExecutor::build(
+                Path::new("static/networks/trivial_net_tiny.onnx"),
+                game_config,
+            )
+            .unwrap(),
             100,
             1,
         ));
