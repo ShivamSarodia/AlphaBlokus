@@ -4,6 +4,7 @@ use alpha_blokus::agents::Agent;
 use alpha_blokus::inference::OrtExecutor;
 use anyhow::Result;
 use log::debug;
+use std::path::Path;
 
 use alpha_blokus::agents::MCTSAgent;
 use alpha_blokus::config::GameConfig;
@@ -37,7 +38,10 @@ fn main() -> Result<()> {
     }));
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let executor = OrtExecutor::build("static/networks/trivial_net_half.onnx", game_config);
+        let executor = OrtExecutor::build(
+            Path::new("static/networks/trivial_net_half.onnx"),
+            game_config,
+        )?;
 
         let inference_client =
             Arc::new(inference::DefaultClient::build_and_start(executor, 100, 1));
@@ -52,7 +56,8 @@ fn main() -> Result<()> {
                 break;
             }
         }
-    });
+        Ok::<(), anyhow::Error>(())
+    })?;
 
     Ok(())
 }

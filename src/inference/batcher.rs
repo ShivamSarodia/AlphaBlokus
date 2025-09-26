@@ -8,6 +8,9 @@ pub trait Executor: Send + Sync + 'static {
     ///
     /// Each Request includes a vector of valid move indexes. The Response's policy should
     /// be returned in the same order as the specified move indexes.
+    ///
+    /// The method may be called concurrently from multiple threads, so if locking is needed
+    /// it should be done internally. The method is not async and the call can block.
     fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response>;
 }
 

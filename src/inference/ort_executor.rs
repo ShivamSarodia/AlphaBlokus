@@ -1,8 +1,11 @@
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ndarray::Axis;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Tensor;
+
+use anyhow::{Context, Result};
 
 use crate::{
     config::{GameConfig, NUM_PLAYERS},
@@ -20,19 +23,24 @@ pub struct OrtExecutor {
 }
 
 impl OrtExecutor {
-    pub fn build(model_path: &str, game_config: &'static GameConfig) -> Self {
-        println!("Building ORT executor with model path: {}", model_path);
+    pub fn build(model_path: &Path, game_config: &'static GameConfig) -> Result<Self> {
+        println!(
+            "Building ORT executor with model path: {}",
+            model_path.display()
+        );
         let session = Session::builder()
-            .unwrap()
+            .context("Failed to create ORT session builder")?
             .with_optimization_level(GraphOptimizationLevel::Level3)
-            .unwrap()
+            .context("Failed to set ORT optimization level")?
             .commit_from_file(model_path)
-            .unwrap();
+            .with_context(|| {
+                format!("Failed to commit ORT session from {}", model_path.display())
+            })?;
 
-        Self {
+        Ok(Self {
             session: Arc::new(Mutex::new(session)),
             game_config,
-        }
+        })
     }
 }
 
@@ -99,13 +107,15 @@ mod tests {
     use super::*;
     use crate::game::Board;
     use crate::testing;
+    use std::path::Path;
 
     #[test]
     fn test_execute() {
         let executor = OrtExecutor::build(
-            "static/networks/trivial_net_tiny.onnx",
+            Path::new("static/networks/trivial_net_tiny.onnx"),
             testing::create_game_config(),
-        );
+        )
+        .unwrap();
 
         let mut board_1 = Board::new(&testing::create_game_config());
         board_1.slice_mut(0).set((0, 0), true);
