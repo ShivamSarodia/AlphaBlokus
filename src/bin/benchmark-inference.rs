@@ -1,0 +1,114 @@
+use alpha_blokus::{
+    config::{self, GameConfig, NUM_PLAYERS},
+    game::Board,
+    inference::{Client, DefaultClient, Request},
+};
+use anyhow::Result;
+use clap::Parser;
+use rand::Rng;
+use std::{path::PathBuf, sync::Arc};
+use tokio_util::sync::CancellationToken;
+
+use config::{BenchmarkInferenceConfig, LoadableConfig};
+
+#[derive(Parser)]
+#[command()]
+struct Cli {
+    /// Path to config file to load.
+    #[arg(short, long, value_name = "FILE")]
+    config: PathBuf,
+}
+
+fn main() -> Result<()> {
+    dotenvy::dotenv()?;
+
+    let cli = Cli::parse();
+    println!(
+        "Starting inference benchmark with config:\n\n{:#?}",
+        cli.config
+    );
+
+    let config = BenchmarkInferenceConfig::from_file(&cli.config)?;
+    config.game.load_move_profiles()?;
+
+    run_benchmark_inference(config);
+
+    Ok(())
+}
+
+fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async move {
+        let client = Arc::new(
+            DefaultClient::from_inference_config(
+                &config.inference,
+                &config.game,
+                (config.num_concurrent_threads * 2) as usize,
+            )
+            .await,
+        );
+
+        println!("Starting benchmark...");
+
+        let cancel_token = CancellationToken::new();
+        tokio::spawn({
+            let cancel_token = cancel_token.clone();
+            async move {
+                tokio::time::sleep(std::time::Duration::from_secs(config.duration_seconds)).await;
+                cancel_token.cancel();
+            }
+        });
+
+        let mut set = tokio::task::JoinSet::new();
+        for _ in 0..config.num_concurrent_threads {
+            set.spawn({
+                let client = Arc::clone(&client);
+                let cancel_token = cancel_token.clone();
+
+                async move {
+                    let mut num_evaluations = 0;
+
+                    loop {
+                        let request = Request {
+                            board: random_board(&config.game),
+                            valid_move_indexes: random_valid_move_indexes(&config.game),
+                        };
+                        tokio::select! {
+                            _ = cancel_token.cancelled() => {
+                                break;
+                            }
+                            _ = client.evaluate(request) => {
+                                num_evaluations += 1;
+                            }
+                        }
+                    }
+                    num_evaluations
+                }
+            });
+        }
+
+        let mut total_num_evaluations = 0;
+        while let Some(num_evaluations) = set.join_next().await {
+            total_num_evaluations += num_evaluations.unwrap();
+        }
+        println!(
+            "Number of evaluations per second: {}",
+            total_num_evaluations as f64 / config.duration_seconds as f64
+        );
+    });
+}
+
+fn random_board(config: &'static GameConfig) -> Board {
+    let mut board = Board::new(config);
+    for player in 0..NUM_PLAYERS {
+        if rand::rng().random_bool(0.5) {
+            board.slice_mut(player).set((0, 0), true);
+        }
+    }
+    board
+}
+
+fn random_valid_move_indexes(config: &'static GameConfig) -> Vec<usize> {
+    let num_valid_moves = rand::rng().random_range(0..config.num_moves / 30);
+    rand::seq::index::sample(&mut rand::rng(), config.num_moves, num_valid_moves).into_vec()
+}

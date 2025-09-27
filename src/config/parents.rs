@@ -42,6 +42,18 @@ pub struct PreprocessMovesConfig {
 
 impl LoadableConfig for PreprocessMovesConfig {}
 
+#[derive(Deserialize, Debug)]
+pub struct BenchmarkInferenceConfig {
+    /// Number of concurrent threads to use for generating inference requests.
+    pub num_concurrent_threads: u32,
+    /// Duration of the benchmark in seconds.
+    pub duration_seconds: u64,
+    pub inference: InferenceConfig,
+    pub game: GameConfig,
+}
+
+impl LoadableConfig for BenchmarkInferenceConfig {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
