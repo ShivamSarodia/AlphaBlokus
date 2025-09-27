@@ -63,7 +63,9 @@ impl<T: Executor> Batcher<T> {
 
                     execution_result.into_iter().zip(response_senders).for_each(
                         |(response, response_sender)| {
-                            response_sender.send(response).unwrap();
+                            response_sender.send(response).unwrap_or_else(|_| {
+                                println!("Unable to send inference response");
+                            });
                         },
                     );
                 });
