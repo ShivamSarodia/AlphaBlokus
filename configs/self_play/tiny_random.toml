@@ -5,6 +5,7 @@ num_total_games = 100
 name = "default"
 model_path = "static/networks/trivial_net_tiny.onnx"
 batch_size = 2
+executor = { type = "ort" }
 
 [agents]
 Single = { Random = { } }

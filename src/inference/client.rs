@@ -1,7 +1,9 @@
+use std::{path::Path, time::Duration};
+
 use crate::{
-    config::NUM_PLAYERS,
+    config::{ExecutorConfig, GameConfig, InferenceConfig, NUM_PLAYERS},
     game::Board,
-    inference::{Executor, batcher::Batcher},
+    inference::{Executor, OrtExecutor, ReloadExecutor, batcher::Batcher},
 };
 use tokio::sync::{mpsc, oneshot};
 
@@ -51,6 +53,44 @@ impl DefaultClient {
         let mut batcher = Batcher::new(batch_size, executor, request_receiver);
         tokio::spawn(async move { batcher.run().await });
         Self { request_sender }
+    }
+
+    pub async fn from_inference_config(
+        inference_config: &InferenceConfig,
+        game_config: &'static GameConfig,
+        channel_size: usize,
+    ) -> Self {
+        match &inference_config.reload {
+            Some(reload_config) => {
+                let base_executor_config = inference_config.executor.clone();
+                let executor = ReloadExecutor::build(
+                    &inference_config.model_path,
+                    Duration::from_secs(reload_config.poll_interval_seconds),
+                    move |path| build_executor(&base_executor_config, game_config, path),
+                )
+                .await;
+
+                Self::build_and_start(executor, channel_size, inference_config.batch_size)
+            }
+            None => {
+                let executor = build_executor(
+                    &inference_config.executor,
+                    game_config,
+                    &inference_config.model_path,
+                );
+                Self::build_and_start(executor, channel_size, inference_config.batch_size)
+            }
+        }
+    }
+}
+
+fn build_executor(
+    executor_config: &ExecutorConfig,
+    game_config: &'static GameConfig,
+    model_path: &Path,
+) -> Box<dyn Executor> {
+    match executor_config {
+        ExecutorConfig::Ort => Box::new(OrtExecutor::build(model_path, game_config).unwrap()),
     }
 }
 

@@ -4,23 +4,20 @@ use crate::{
 use ahash::AHashMap as HashMap;
 use std::sync::Arc;
 
-use crate::inference::OrtExecutor;
-
 pub fn run_selfplay(config: &'static SelfPlayConfig) -> u32 {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async move {
-        let inference_clients = config
-            .inference
-            .iter()
-            .map(|inference_config| {
-                let client = DefaultClient::build_and_start(
-                    OrtExecutor::build(&inference_config.model_path, &config.game).unwrap(),
-                    (config.num_concurrent_games * 2) as usize,
-                    inference_config.batch_size,
-                );
-                (inference_config.name.clone(), Arc::new(client))
-            })
-            .collect::<HashMap<String, Arc<DefaultClient>>>();
+        let mut inference_clients = HashMap::<String, Arc<DefaultClient>>::new();
+
+        for inference_config in &config.inference {
+            let channel_size = (config.num_concurrent_games * 2) as usize;
+
+            let client =
+                DefaultClient::from_inference_config(inference_config, &config.game, channel_size)
+                    .await;
+
+            inference_clients.insert(inference_config.name.clone(), Arc::new(client));
+        }
 
         let mut engine = Engine::new(
             config.num_concurrent_games,
