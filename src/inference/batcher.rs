@@ -24,7 +24,7 @@ impl<T: Executor + ?Sized> Executor for Box<T> {
 pub struct Batcher<T: Executor> {
     batch_size: usize,
     executor: Arc<T>,
-    request_receiver: mpsc::Receiver<RequestChannelMessage>,
+    request_receiver: mpsc::UnboundedReceiver<RequestChannelMessage>,
     cancel_token: CancellationToken,
 }
 
@@ -32,7 +32,7 @@ impl<T: Executor> Batcher<T> {
     pub fn new(
         batch_size: usize,
         executor: T,
-        receiver: mpsc::Receiver<RequestChannelMessage>,
+        receiver: mpsc::UnboundedReceiver<RequestChannelMessage>,
         cancel_token: CancellationToken,
     ) -> Self {
         Self {

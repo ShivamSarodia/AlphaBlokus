@@ -44,7 +44,6 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
             DefaultClient::from_inference_config(
                 &config.inference,
                 &config.game,
-                (config.num_concurrent_threads * 2) as usize,
                 cancel_token.clone(),
             )
             .await,

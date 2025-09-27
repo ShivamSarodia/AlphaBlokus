@@ -176,6 +176,8 @@ pub fn read_mcts_data_from_disk(filename: &str) -> Result<Vec<MCTSData>> {
 
 #[cfg(test)]
 mod tests {
+    use itertools::Itertools;
+
     use crate::testing;
 
     use super::*;
@@ -258,9 +260,12 @@ mod tests {
         assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 2);
         let file = std::fs::read_dir(&directory)
             .unwrap()
+            .map(|e| e.unwrap().path())
+            .sorted_by_key(|p| p.file_name().unwrap().to_owned())
             .nth(1)
             .unwrap()
-            .unwrap();
-        assert!(file.path().to_string_lossy().ends_with("_1.bin"));
+            .to_string_lossy()
+            .into_owned();
+        assert!(file.ends_with("_1.bin"));
     }
 }

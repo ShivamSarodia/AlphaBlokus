@@ -48,7 +48,6 @@ fn main() -> Result<()> {
 
         let inference_client = Arc::new(inference::DefaultClient::build_and_start(
             executor,
-            100,
             1,
             cancel_token,
         ));

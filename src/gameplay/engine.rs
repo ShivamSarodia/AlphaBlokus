@@ -186,7 +186,6 @@ mod tests {
                 game_config,
             )
             .unwrap(),
-            100,
             1,
             CancellationToken::new(),
         ));

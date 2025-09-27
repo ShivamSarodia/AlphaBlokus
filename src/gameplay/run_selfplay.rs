@@ -13,16 +13,11 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) {
         let cancel_token = utils::setup_cancel_token();
 
         for inference_config in &config.inference {
-            let channel_size = (config.num_concurrent_games * 2) as usize;
             let cancel_token = cancel_token.clone();
 
-            let client = DefaultClient::from_inference_config(
-                inference_config,
-                &config.game,
-                channel_size,
-                cancel_token,
-            )
-            .await;
+            let client =
+                DefaultClient::from_inference_config(inference_config, &config.game, cancel_token)
+                    .await;
 
             inference_clients.insert(inference_config.name.clone(), Arc::new(client));
         }
