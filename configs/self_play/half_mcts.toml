@@ -9,6 +9,7 @@ flush_row_count = 90
 name = "default"
 model_path = "static/networks/trivial_net_half.onnx"
 batch_size = 25
+executor = { type = "ort" }
 
 [agents.Single.MCTS]
 num_rollouts = 100

@@ -14,6 +14,12 @@ pub trait Executor: Send + Sync + 'static {
     fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response>;
 }
 
+impl<T: Executor + ?Sized> Executor for Box<T> {
+    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
+        self.as_ref().execute(requests)
+    }
+}
+
 pub struct Batcher<T: Executor> {
     batch_size: usize,
     executor: Arc<T>,
