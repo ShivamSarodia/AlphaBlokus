@@ -11,6 +11,7 @@ use alpha_blokus::config::GameConfig;
 use alpha_blokus::config::MCTSConfig;
 use alpha_blokus::game::{GameStatus, State};
 use alpha_blokus::inference;
+use alpha_blokus::utils;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -38,13 +39,19 @@ fn main() -> Result<()> {
     }));
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let cancel_token = utils::setup_cancel_token();
+
         let executor = OrtExecutor::build(
             Path::new("static/networks/trivial_net_half.onnx"),
             game_config,
         )?;
 
-        let inference_client =
-            Arc::new(inference::DefaultClient::build_and_start(executor, 100, 1));
+        let inference_client = Arc::new(inference::DefaultClient::build_and_start(
+            executor,
+            100,
+            1,
+            cancel_token,
+        ));
 
         let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&inference_client));
         let mut state = State::new(game_config);

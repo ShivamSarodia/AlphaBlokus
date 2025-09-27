@@ -42,14 +42,17 @@ pub struct Recorder {
 }
 
 impl Recorder {
-    pub fn build_and_start(flush_row_count: usize, output_directory: String) -> Self {
+    pub fn build_and_start(
+        flush_row_count: usize,
+        output_directory: String,
+    ) -> (Self, tokio::task::JoinHandle<()>) {
         // To start, create the output directory if it doesn't exist.
         std::fs::create_dir_all(&output_directory).unwrap();
 
         // Start a consumer thread that flushes data to disk when there's enough data.
         let channel = mpsc::unbounded_channel();
         let mut receiver = channel.1;
-        tokio::spawn(async move {
+        let background_task = tokio::spawn(async move {
             let mut unflushed_mcts_data = Vec::new();
             while let Some(mcts_data_vec) = receiver.recv().await {
                 unflushed_mcts_data.extend(mcts_data_vec);
@@ -72,7 +75,7 @@ impl Recorder {
         });
 
         // Return the recorder which contains the sender for pushing new data.
-        Recorder { sender: channel.0 }
+        (Recorder { sender: channel.0 }, background_task)
     }
 
     pub fn push_mcts_data(&self, mcts_data: Vec<MCTSData>) {
@@ -96,7 +99,7 @@ fn generate_filename(num_rows: usize) -> String {
     // Build filename-safe string
     format!(
         "{}-{}_{num_rows}.bin",
-        now_pacific.format("%Y-%m-%d_%H-%M-%S"),
+        now_pacific.format("%Y-%m-%d_%H-%M-%S-%f"),
         rand_str
     )
 }
@@ -208,12 +211,13 @@ mod tests {
     #[tokio::test]
     async fn test_full_recorder() {
         let directory = testing::create_tmp_directory();
-        let recorder = Recorder::build_and_start(3, directory.clone());
+        let (recorder, background_task) = Recorder::build_and_start(3, directory.clone());
 
         let data_1 = create_mcts_data(1);
         let data_2 = create_mcts_data(2);
         let data_3 = create_mcts_data(3);
         let data_4 = create_mcts_data(4);
+        let data_5 = create_mcts_data(5);
 
         // Push 1 and 2. At this point, no data should be written to disk.
         recorder.push_mcts_data(vec![data_1, data_2]);
@@ -236,5 +240,27 @@ mod tests {
             .unwrap();
         assert!(file.path().to_string_lossy().ends_with("_4.bin"));
         assert!(file.metadata().unwrap().len() > 0);
+
+        // Push 5.
+        recorder.push_mcts_data(vec![data_5]);
+
+        // Confirm it's not written right away.
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
+
+        // Drop the recorder.
+        drop(recorder);
+
+        // Wait for the background task to finish.
+        background_task.await.unwrap();
+
+        // Confirm the last data got written.
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 2);
+        let file = std::fs::read_dir(&directory)
+            .unwrap()
+            .nth(1)
+            .unwrap()
+            .unwrap();
+        assert!(file.path().to_string_lossy().ends_with("_1.bin"));
     }
 }

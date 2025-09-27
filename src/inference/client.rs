@@ -6,6 +6,7 @@ use crate::{
     inference::{Executor, OrtExecutor, ReloadExecutor, batcher::Batcher},
 };
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 
 #[derive(Debug, Clone)]
 pub struct Request {
@@ -48,9 +49,10 @@ impl DefaultClient {
         executor: T,
         channel_size: usize,
         batch_size: usize,
+        cancel_token: CancellationToken,
     ) -> Self {
         let (request_sender, request_receiver) = mpsc::channel(channel_size);
-        let mut batcher = Batcher::new(batch_size, executor, request_receiver);
+        let mut batcher = Batcher::new(batch_size, executor, request_receiver, cancel_token);
         tokio::spawn(async move { batcher.run().await });
         Self { request_sender }
     }
@@ -59,6 +61,7 @@ impl DefaultClient {
         inference_config: &InferenceConfig,
         game_config: &'static GameConfig,
         channel_size: usize,
+        cancel_token: CancellationToken,
     ) -> Self {
         match &inference_config.reload {
             Some(reload_config) => {
@@ -70,7 +73,12 @@ impl DefaultClient {
                 )
                 .await;
 
-                Self::build_and_start(executor, channel_size, inference_config.batch_size)
+                Self::build_and_start(
+                    executor,
+                    channel_size,
+                    inference_config.batch_size,
+                    cancel_token,
+                )
             }
             None => {
                 let executor = build_executor(
@@ -78,7 +86,12 @@ impl DefaultClient {
                     game_config,
                     &inference_config.model_path,
                 );
-                Self::build_and_start(executor, channel_size, inference_config.batch_size)
+                Self::build_and_start(
+                    executor,
+                    channel_size,
+                    inference_config.batch_size,
+                    cancel_token,
+                )
             }
         }
     }
@@ -159,6 +172,7 @@ mod tests {
             },
             100,
             3,
+            CancellationToken::new(),
         ));
 
         // Generate four requests.

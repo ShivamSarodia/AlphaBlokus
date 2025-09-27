@@ -2,14 +2,13 @@ use alpha_blokus::{
     config::{self, GameConfig, NUM_PLAYERS},
     game::Board,
     inference::{Client, DefaultClient, Request},
+    utils,
 };
 use anyhow::Result;
 use clap::Parser;
+use config::{BenchmarkInferenceConfig, LoadableConfig};
 use rand::Rng;
 use std::{path::PathBuf, sync::Arc};
-use tokio_util::sync::CancellationToken;
-
-use config::{BenchmarkInferenceConfig, LoadableConfig};
 
 #[derive(Parser)]
 #[command()]
@@ -39,18 +38,20 @@ fn main() -> Result<()> {
 fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async move {
+        let cancel_token = utils::setup_cancel_token();
+
         let client = Arc::new(
             DefaultClient::from_inference_config(
                 &config.inference,
                 &config.game,
                 (config.num_concurrent_threads * 2) as usize,
+                cancel_token.clone(),
             )
             .await,
         );
 
         println!("Starting benchmark...");
 
-        let cancel_token = CancellationToken::new();
         tokio::spawn({
             let cancel_token = cancel_token.clone();
             async move {
@@ -87,13 +88,14 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
             });
         }
 
+        let start_time = std::time::Instant::now();
         let mut total_num_evaluations = 0;
         while let Some(num_evaluations) = set.join_next().await {
             total_num_evaluations += num_evaluations.unwrap();
         }
         println!(
             "Number of evaluations per second: {}",
-            total_num_evaluations as f64 / config.duration_seconds as f64
+            total_num_evaluations as f64 / start_time.elapsed().as_secs_f64()
         );
     });
 }

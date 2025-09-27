@@ -2,6 +2,7 @@ use crate::inference;
 use crate::inference::client::RequestChannelMessage;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 pub trait Executor: Send + Sync + 'static {
     /// Accept a vector of requests and return a vector of response in the same order.
@@ -24,6 +25,7 @@ pub struct Batcher<T: Executor> {
     batch_size: usize,
     executor: Arc<T>,
     request_receiver: mpsc::Receiver<RequestChannelMessage>,
+    cancel_token: CancellationToken,
 }
 
 impl<T: Executor> Batcher<T> {
@@ -31,11 +33,13 @@ impl<T: Executor> Batcher<T> {
         batch_size: usize,
         executor: T,
         receiver: mpsc::Receiver<RequestChannelMessage>,
+        cancel_token: CancellationToken,
     ) -> Self {
         Self {
             batch_size,
             executor: Arc::new(executor),
             request_receiver: receiver,
+            cancel_token,
         }
     }
 
@@ -54,6 +58,7 @@ impl<T: Executor> Batcher<T> {
                 // This needs to be in a separate task so that the batcher itself can continue
                 // collecting requests.
                 let executor = Arc::clone(&self.executor);
+                let cancel_token = self.cancel_token.clone();
                 tokio::spawn(async move {
                     // move requests and response senders into here
                     let execution_result =
@@ -64,7 +69,9 @@ impl<T: Executor> Batcher<T> {
                     execution_result.into_iter().zip(response_senders).for_each(
                         |(response, response_sender)| {
                             response_sender.send(response).unwrap_or_else(|_| {
-                                println!("Unable to send inference response");
+                                if !cancel_token.is_cancelled() {
+                                    println!("Error sending inference response");
+                                }
                             });
                         },
                     );
