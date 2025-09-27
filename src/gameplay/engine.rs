@@ -149,6 +149,8 @@ pub async fn play_one_game(
 
 #[cfg(test)]
 mod tests {
+    use tokio_util::sync::CancellationToken;
+
     use super::*;
     use crate::{
         config::MCTSConfig, inference::OrtExecutor, recorder::read_mcts_data_from_disk, testing,
@@ -160,13 +162,14 @@ mod tests {
         let expected_num_finished_games = 50;
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
+        let (recorder, _) = Recorder::build_and_start(1, directory);
         let mut engine = Engine::new(
             5,
             expected_num_finished_games,
             HashMap::new(),
             game_config,
             &AgentGroupConfig::Single(AgentConfig::Random),
-            Recorder::build_and_start(1, directory),
+            recorder,
         );
 
         let num_finished_games = engine.play_games().await;
@@ -185,8 +188,9 @@ mod tests {
             .unwrap(),
             100,
             1,
+            CancellationToken::new(),
         ));
-        let recorder = Recorder::build_and_start(1, directory.clone());
+        let (recorder, _) = Recorder::build_and_start(1, directory.clone());
         let agent_group_config = AgentGroupConfig::Single(AgentConfig::MCTS(MCTSConfig {
             num_rollouts: 10,
             total_dirichlet_noise_alpha: 1.0,
