@@ -26,7 +26,7 @@ pub struct RequestChannelMessage {
 }
 
 pub struct DefaultClient {
-    request_sender: mpsc::Sender<RequestChannelMessage>,
+    request_sender: mpsc::UnboundedSender<RequestChannelMessage>,
 }
 
 pub trait Client {
@@ -41,17 +41,14 @@ impl DefaultClient {
     /// # Arguments
     ///
     /// * `executor` - The executor to use for inference.
-    /// * `channel_size` - The size of the channel to use for communication from the client
-    ///   to the batcher. To be safe, this should be large enough to hold the maximum possible
-    ///   number of concurrent requests, which is usually the number of concurrent games.
-    /// * `batch_size` - The size of batch at which the batcher execute requests.
+    /// * `batch_size` - The size of batch at which the batcher executes requests.
+    /// * `cancel_token` - Signals shutdown to background tasks.
     pub fn build_and_start<T: Executor>(
         executor: T,
-        channel_size: usize,
         batch_size: usize,
         cancel_token: CancellationToken,
     ) -> Self {
-        let (request_sender, request_receiver) = mpsc::channel(channel_size);
+        let (request_sender, request_receiver) = mpsc::unbounded_channel();
         let mut batcher = Batcher::new(batch_size, executor, request_receiver, cancel_token);
         tokio::spawn(async move { batcher.run().await });
         Self { request_sender }
@@ -60,7 +57,6 @@ impl DefaultClient {
     pub async fn from_inference_config(
         inference_config: &InferenceConfig,
         game_config: &'static GameConfig,
-        channel_size: usize,
         cancel_token: CancellationToken,
     ) -> Self {
         match &inference_config.reload {
@@ -73,12 +69,7 @@ impl DefaultClient {
                 )
                 .await;
 
-                Self::build_and_start(
-                    executor,
-                    channel_size,
-                    inference_config.batch_size,
-                    cancel_token,
-                )
+                Self::build_and_start(executor, inference_config.batch_size, cancel_token)
             }
             None => {
                 let executor = build_executor(
@@ -86,12 +77,7 @@ impl DefaultClient {
                     game_config,
                     &inference_config.model_path,
                 );
-                Self::build_and_start(
-                    executor,
-                    channel_size,
-                    inference_config.batch_size,
-                    cancel_token,
-                )
+                Self::build_and_start(executor, inference_config.batch_size, cancel_token)
             }
         }
     }
@@ -119,7 +105,6 @@ impl Client for DefaultClient {
                 request,
                 response_sender,
             })
-            .await
             .unwrap();
 
         // Wait for a response on the generated channel.
@@ -170,7 +155,6 @@ mod tests {
             MockExecutor {
                 game_config: game_config,
             },
-            100,
             3,
             CancellationToken::new(),
         ));
