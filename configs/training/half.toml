@@ -13,5 +13,11 @@ value_head_flat_layer_width = 64
 policy_head_channels = 64
 policy_convolution_kernel = 3
 
+[training]
+num_epochs = 5
+learning_rate = 1e-3
+batch_size = 128
+policy_loss_weight = 0.158
+
 game_data_dir = "s3://alpha-blokus-data/scrap/games"
 model_dir = "s3://alpha-blokus-data/scrap/models"

@@ -41,3 +41,20 @@ class NetworkConfig:
         ]
         self.policy_head_channels = data["network"]["policy_head_channels"]
         self.policy_convolution_kernel = data["network"]["policy_convolution_kernel"]
+
+
+@dataclass
+class TrainingConfig:
+    num_epochs: int
+    learning_rate: float
+    batch_size: int
+    policy_loss_weight: float
+
+    def __init__(self, config_file: str):
+        with open(config_file, "rb") as f:
+            data = tomllib.load(f)
+
+        self.num_epochs = data["training"]["num_epochs"]
+        self.learning_rate = data["training"]["learning_rate"]
+        self.batch_size = data["training"]["batch_size"]
+        self.policy_loss_weight = data["training"]["policy_loss_weight"]

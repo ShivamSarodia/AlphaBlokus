@@ -132,7 +132,7 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
             self.game_config.board_size,
             self.game_config.board_size,
             device=board.device,
-            dtype=torch.float16,
+            dtype=board.dtype,
         )
         x = torch.cat([board, ones], dim=1)  # Shape: (batch, 5, board_size, board_size)
 
