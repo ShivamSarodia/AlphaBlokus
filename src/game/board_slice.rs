@@ -1,13 +1,23 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 
 use crate::game::display::{BoardDisplay, BoardDisplayColor, BoardDisplayLayer, BoardDisplayShape};
 
 // Structure representing an board_size x board_size slice of a board, like
 // a single player's pieces on a board.
-#[derive(Debug, PartialEq, Eq, Clone, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BoardSlice {
     cells: Vec<bool>,
+    size: usize,
+}
+
+/// This structure is like BoardSlice, but stores the board slice as a 2D array
+/// rather than as a flat array. This isn't efficient for self-play because the
+/// 2D vectors are not store contiguously in memory, but it's more convenient for
+/// serialization, particularly when the data will be read in Python.
+#[derive(Deserialize, Serialize)]
+pub struct BoardSlice2D {
+    cells: Vec<Vec<bool>>,
     size: usize,
 }
 
@@ -35,6 +45,25 @@ impl BoardSlice {
 
     pub fn get(&self, at: (usize, usize)) -> bool {
         self.cells[self.index(at)]
+    }
+
+    pub fn to_2d(&self) -> BoardSlice2D {
+        BoardSlice2D {
+            cells: (0..self.size)
+                .map(|x| (0..self.size).map(|y| self.get((x, y))).collect())
+                .collect(),
+            size: self.size,
+        }
+    }
+
+    pub fn from_2d(slice_2d: &BoardSlice2D) -> Self {
+        let mut board_slice = BoardSlice::new(slice_2d.size);
+        for x in 0..slice_2d.size {
+            for y in 0..slice_2d.size {
+                board_slice.set((x, y), slice_2d.cells[x][y]);
+            }
+        }
+        board_slice
     }
 
     pub fn get_padded(&self, at: (i32, i32)) -> bool {
@@ -115,14 +144,54 @@ impl fmt::Display for BoardSlice {
     }
 }
 
+impl Serialize for BoardSlice {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.to_2d().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for BoardSlice {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let slice_2d = BoardSlice2D::deserialize(deserializer)?;
+        Ok(BoardSlice::from_2d(&slice_2d))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
 
     #[test]
     fn test_display() {
         let mut board_slice = BoardSlice::new(5);
         board_slice.set((0, 0), true);
         println!("{}", board_slice);
+    }
+
+    #[test]
+    fn test_to_2d_and_back() {
+        let mut board_slice = BoardSlice::new(5);
+
+        // Populate the board slice with random values.
+        for x in 0..5 {
+            for y in 0..5 {
+                if rand::rng().random_bool(0.5) {
+                    board_slice.set((x, y), true);
+                }
+            }
+        }
+
+        let board_slice_2d = board_slice.to_2d();
+        assert_eq!(board_slice_2d.size, 5);
+
+        for x in 0..5 {
+            for y in 0..5 {
+                assert_eq!(board_slice_2d.cells[x][y], board_slice.get((x, y)));
+            }
+        }
+
+        let board_slice_2d_back = BoardSlice::from_2d(&board_slice_2d);
+        assert_eq!(board_slice_2d_back, board_slice);
     }
 }

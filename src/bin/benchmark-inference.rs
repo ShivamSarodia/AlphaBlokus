@@ -102,8 +102,12 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
 fn random_board(config: &'static GameConfig) -> Board {
     let mut board = Board::new(config);
     for player in 0..NUM_PLAYERS {
-        if rand::rng().random_bool(0.5) {
-            board.slice_mut(player).set((0, 0), true);
+        for x in 0..config.board_size {
+            for y in 0..config.board_size {
+                if rand::rng().random_bool(0.5) {
+                    board.slice_mut(player).set((x, y), true);
+                }
+            }
         }
     }
     board

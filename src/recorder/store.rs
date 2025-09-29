@@ -108,7 +108,7 @@ async fn write_mcts_data(mcts_data: Vec<MCTSData>, output_directory: &str) -> Re
     // Serialize and compress the data in a blocking thread.
     let num_rows = mcts_data.len();
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let uncompressed_bytes = rmp_serde::encode::to_vec(&mcts_data)?;
+        let uncompressed_bytes = rmp_serde::encode::to_vec_named(&mcts_data)?;
         let compressed = zstd::encode_all(&uncompressed_bytes[..], 6)?;
         Ok(compressed)
     })
