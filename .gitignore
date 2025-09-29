@@ -17,3 +17,6 @@ target
 
 # Exclude secrets
 .env
+
+# Exclude data files
+data/

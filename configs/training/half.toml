@@ -1,0 +1,17 @@
+[game]
+board_size = 10
+num_moves = 6233
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/half.bin"
+
+[network]
+main_body_channels = 64
+residual_blocks = 10
+value_head_channels = 16
+value_head_flat_layer_width = 64
+policy_head_channels = 64
+policy_convolution_kernel = 3
+
+game_data_dir = "s3://alpha-blokus-data/scrap/games"
+model_dir = "s3://alpha-blokus-data/scrap/models"

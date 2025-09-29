@@ -2,12 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from game_config import GameConfig
+from configs import GameConfig
+from save_onnx import SaveOnnxMixin
 
 
-class TrivialNet(nn.Module):
+class TrivialNet(nn.Module, SaveOnnxMixin):
     """
     A trivial neural network that pretty much just flattens and then returns some values/policy.
+
+    The trivial network currently returns the policy as a flattened array, rather than 91 x N x N,
+    but we should probably instead return the policy as 91 x N x N.
     """
 
     def __init__(self, game_config: GameConfig):
