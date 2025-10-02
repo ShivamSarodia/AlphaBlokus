@@ -49,6 +49,7 @@ class TrainingConfig:
     learning_rate: float
     batch_size: int
     policy_loss_weight: float
+    device: str
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
@@ -58,3 +59,23 @@ class TrainingConfig:
         self.learning_rate = data["training"]["learning_rate"]
         self.batch_size = data["training"]["batch_size"]
         self.policy_loss_weight = data["training"]["policy_loss_weight"]
+        self.device = data["training"]["device"]
+
+
+@dataclass
+class DirectoriesConfig:
+    game_data_directory: str
+    model_directory: str
+    training_directory: str
+
+    def __init__(self, config_file: str):
+        with open(config_file, "rb") as f:
+            data = tomllib.load(f)
+
+        self.game_data_directory = data["directories"]["game_data_directory"]
+        self.model_directory = data["directories"]["model_directory"]
+        self.training_directory = data["directories"]["training_directory"]
+
+        assert self.game_data_directory.endswith("/")
+        assert self.model_directory.endswith("/")
+        assert self.training_directory.endswith("/")

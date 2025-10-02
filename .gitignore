@@ -20,3 +20,5 @@ target
 
 # Exclude data files
 data/
+
+.DS_Store

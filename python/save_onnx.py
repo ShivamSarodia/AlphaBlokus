@@ -3,7 +3,8 @@ from torch.export import Dim
 
 
 class SaveOnnxMixin:
-    def save(self, path: str):
+    def save_onnx(self, path: str):
+        self.to("cpu")
         dummy_batch_size = 128
         dummy_input = (
             torch.randn(

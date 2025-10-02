@@ -2,3 +2,5 @@ torch
 onnxscript
 zstandard
 msgpack
+boto3
+python-dotenv
