@@ -190,3 +190,25 @@ def get_loss(
     )
 
     return value_loss + policy_loss, value_loss, policy_loss
+
+
+def train_loop(
+    dataloader: torch.utils.data.DataLoader,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    training_config: TrainingConfig,
+):
+    # Train the model for the given number of epochs.
+    for epoch in range(training_config.num_epochs):
+        print(f"Epoch {epoch + 1} of {training_config.num_epochs}")
+
+        for batch in dataloader:
+            loss, value_loss, policy_loss = get_loss(batch, training_config, model)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            print(
+                f"Train loss: {loss.item()}. (Value loss: {value_loss.item()}, Policy loss: {policy_loss.item()})"
+            )

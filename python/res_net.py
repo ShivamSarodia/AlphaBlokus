@@ -144,3 +144,9 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
             self.value_head(x),
             self.policy_head(x),
         )
+
+
+if __name__ == "__main__":
+    config_path = "configs/training/full.toml"
+    model = NeuralNet(NetworkConfig(config_path), GameConfig(config_path))
+    model.save_onnx("")

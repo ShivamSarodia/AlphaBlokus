@@ -4,9 +4,9 @@ from configs import GameConfig, NetworkConfig, TrainingConfig, DirectoriesConfig
 from train_utils import (
     maybe_download_files,
     load_game_data,
-    get_loss,
     load_initial_state,
     list_game_data_files,
+    train_loop,
 )
 from files import from_localized
 
@@ -30,52 +30,59 @@ model, optimizer, samples_last_trained = load_initial_state(
 new_samples = samples_total - samples_last_trained
 print(f"Number of new samples available since last trained: {new_samples}")
 
+# Compute the number of samples to train on.
 num_samples = int(new_samples * training_config.sampling_ratio)
+print(f"Number of samples to train on: {num_samples}")
 
-# Download game files and build dataloader.
-local_game_data_files = maybe_download_files(
-    game_data_files,
-    num_samples,
-    training_config.window_size,
-)
-if local_game_data_files:
+
+def run():
+    if num_samples == 0:
+        print("Number of samples to train on is 0, skipping training.")
+        return
+
+    # Fetch game files.
+    local_game_data_files = maybe_download_files(
+        game_data_files,
+        num_samples,
+        training_config.window_size,
+    )
+    if not local_game_data_files:
+        print("No game data files found, skipping training.")
+        return
+
+    # Build a dataloader.
     dataloader = load_game_data(
         game_config, training_config, local_game_data_files, num_samples
     )
+    train_loop(dataloader, model, optimizer, training_config)
 
-    # Train the model for the given number of epochs.
-    for epoch in range(training_config.num_epochs):
-        print(f"Epoch {epoch + 1} of {training_config.num_epochs}")
+    # Save the model locally.
+    if directories_config.model_directory.strip():
+        onnx_path = directories_config.model_directory + f"{samples_total:08d}.onnx"
+        print("Saving model to:", onnx_path)
+        with from_localized(onnx_path) as onnx_path:
+            model.save_onnx(onnx_path)
+    else:
+        print("No model directory set, skipping model save.")
 
-        for batch in dataloader:
-            loss, value_loss, policy_loss = get_loss(batch, training_config, model)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            print(
-                f"Train loss: {loss.item()}. (Value loss: {value_loss.item()}, Policy loss: {policy_loss.item()})"
+    # Save training state so we can resume training later.
+    if directories_config.training_directory.strip():
+        training_state_path = (
+            directories_config.training_directory + f"{samples_total:08d}.pth"
+        )
+        print("Saving training state to:", training_state_path)
+        with from_localized(training_state_path) as training_state_path:
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                },
+                training_state_path,
             )
-else:
-    print("No game data files found.")
+    else:
+        print("No training directory set, skipping training state save.")
 
-# Save the model locally.
-onnx_path = directories_config.model_directory + f"{samples_total:08d}.onnx"
-print("Saving model to:", onnx_path)
-with from_localized(onnx_path) as onnx_path:
-    model.save_onnx(onnx_path)
+    print("Done!")
 
-# Save training state so we can resume training later.
-training_state_path = directories_config.training_directory + f"{samples_total:08d}.pth"
-print("Saving training state to:", training_state_path)
-with from_localized(training_state_path) as training_state_path:
-    torch.save(
-        {
-            "model": model.state_dict(),
-            "optimizer": optimizer.state_dict(),
-        },
-        training_state_path,
-    )
 
-print("Done!")
+run()

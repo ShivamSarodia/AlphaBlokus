@@ -81,5 +81,5 @@ class DirectoriesConfig:
         self.training_directory = data["directories"]["training_directory"]
 
         assert self.game_data_directory.endswith("/")
-        assert self.model_directory.endswith("/")
-        assert self.training_directory.endswith("/")
+        assert self.model_directory.endswith("/") or self.model_directory == ""
+        assert self.training_directory.endswith("/") or self.training_directory == ""

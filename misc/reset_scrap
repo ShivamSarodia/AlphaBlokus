@@ -1,0 +1,6 @@
+#!/bin/bash
+
+rm -rf data/scrap
+mkdir -p data/scrap/games
+mkdir -p data/scrap/models
+mkdir -p data/scrap/training

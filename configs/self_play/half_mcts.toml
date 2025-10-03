@@ -7,10 +7,11 @@ flush_row_count = 100
 
 [[inference]]
 name = "default"
-model_path = "data/scrap/models/"
+# model_path = "data/scrap/models/"
+model_path = "static/networks/trivial_net_half.onnx"
 batch_size = 25
 executor = { type = "ort" }
-reload = { poll_interval_seconds = 60 }
+# reload = { poll_interval_seconds = 60 }
 
 [agents.Single.MCTS]
 num_rollouts = 100
