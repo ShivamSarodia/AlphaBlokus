@@ -72,6 +72,12 @@ def from_localized(path: str):
 
         bucket, key, filename = parse_s3(path)
         s3.upload_file(file_path, bucket, key)
+        # Hack: when onnx files are being written, a .data file might also be created that needs to
+        # be uploaded.
+        data_path = file_path + ".data"
+        if os.path.exists(data_path):
+            s3.upload_file(data_path, bucket, key + ".data")
+            os.remove(data_path)
         os.remove(file_path)
     else:
         yield path
@@ -155,7 +161,11 @@ def _list_local_files(directory: str, extension: str) -> List[str]:
     """
     if not extension.startswith("."):
         raise ValueError("`extension` must start with '.' (e.g., '.pth').")
-    return [f for f in os.listdir(directory) if f.endswith(extension)]
+    return [
+        os.path.join(directory, f)
+        for f in os.listdir(directory)
+        if f.endswith(extension)
+    ]
 
 
 def _fetch_s3_file(

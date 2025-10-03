@@ -87,12 +87,16 @@ impl Executor for OrtExecutor {
 
                 let mut policy = valid_move_indexes
                     .iter()
-                    // If the network returns each policy as a 91 x N x N array rather than
-                    // a flattened array, we can just use the move profiles to look up the
-                    // (piece_orientation_index, center_x, center_y) for each valid move index
-                    // and use that tuple to identify which value from the policy array to
-                    // pull in here.
-                    .map(|&index| *policy.get(index).unwrap())
+                    .map(|&index| {
+                        let move_profile = self.game_config.move_profiles().get(index);
+                        *policy
+                            .get([
+                                move_profile.piece_orientation_index,
+                                move_profile.center.0,
+                                move_profile.center.1,
+                            ])
+                            .unwrap()
+                    })
                     .collect::<Vec<f32>>();
                 softmax_inplace(&mut policy);
 

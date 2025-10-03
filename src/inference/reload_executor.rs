@@ -102,7 +102,7 @@ where
         while let Some(entry) = entries.next_entry().await.unwrap() {
             let path = entry.path();
 
-            if path.is_file() {
+            if path.is_file() && path.extension().unwrap() == "onnx" {
                 candidates.push(path);
             }
         }

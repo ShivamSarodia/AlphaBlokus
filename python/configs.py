@@ -49,6 +49,8 @@ class TrainingConfig:
     learning_rate: float
     batch_size: int
     policy_loss_weight: float
+    sampling_ratio: float
+    window_size: int
     device: str
 
     def __init__(self, config_file: str):
@@ -59,6 +61,8 @@ class TrainingConfig:
         self.learning_rate = data["training"]["learning_rate"]
         self.batch_size = data["training"]["batch_size"]
         self.policy_loss_weight = data["training"]["policy_loss_weight"]
+        self.sampling_ratio = data["training"]["sampling_ratio"]
+        self.window_size = data["training"]["window_size"]
         self.device = data["training"]["device"]
 
 

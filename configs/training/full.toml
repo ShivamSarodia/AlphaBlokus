@@ -1,9 +1,9 @@
 [game]
-board_size = 10
-num_moves = 6233
+board_size = 20
+num_moves = 30433
 num_pieces = 21
 num_piece_orientations = 91
-move_data_file = "static/move_data/half.bin"
+move_data_file = "static/move_data/full.bin"
 
 [network]
 main_body_channels = 64
@@ -24,5 +24,5 @@ window_size = 100000
 
 [directories]
 game_data_directory = "data/scrap/games/"
-model_directory = "data/scrap/models/"
-training_directory = "data/scrap/training/"
+model_directory = "data/scrap/models"
+training_directory = "data/scrap/training"

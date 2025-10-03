@@ -9,9 +9,6 @@ from save_onnx import SaveOnnxMixin
 class TrivialNet(nn.Module, SaveOnnxMixin):
     """
     A trivial neural network that pretty much just flattens and then returns some values/policy.
-
-    The trivial network currently returns the policy as a flattened array, rather than 91 x N x N,
-    but we should probably instead return the policy as 91 x N x N.
     """
 
     def __init__(self, game_config: GameConfig):
@@ -23,7 +20,12 @@ class TrivialNet(nn.Module, SaveOnnxMixin):
             64,
         )
         self.values = nn.Linear(64, 4)
-        self.policy = nn.Linear(64, self.game_config.num_moves)
+        self.policy = nn.Linear(
+            64,
+            self.game_config.num_piece_orientations
+            * self.game_config.board_size
+            * self.game_config.board_size,
+        )
 
     def forward(self, board: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         assert board.shape[1:] == (
@@ -37,4 +39,20 @@ class TrivialNet(nn.Module, SaveOnnxMixin):
         x = F.relu(x)
         values = self.values(x)
         policy = self.policy(x)
-        return (values, policy)
+        return (
+            values,
+            torch.reshape(
+                policy,
+                (
+                    policy.shape[0],
+                    self.game_config.num_piece_orientations,
+                    self.game_config.board_size,
+                    self.game_config.board_size,
+                ),
+            ),
+        )
+
+
+if __name__ == "__main__":
+    model = TrivialNet(GameConfig("configs/training/full.toml"))
+    model.save_onnx("static/networks/trivial_net_full.onnx")

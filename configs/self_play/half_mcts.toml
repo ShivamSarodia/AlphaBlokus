@@ -2,14 +2,15 @@ num_concurrent_games = 100
 num_total_games = 100000
 
 [mcts_recorder]
-data_directory = "data/scrap/games"
+data_directory = "data/scrap/games/"
 flush_row_count = 100
 
 [[inference]]
 name = "default"
-model_path = "static/networks/trivial_net_half.onnx"
+model_path = "data/scrap/models/"
 batch_size = 25
 executor = { type = "ort" }
+reload = { poll_interval_seconds = 60 }
 
 [agents.Single.MCTS]
 num_rollouts = 100
