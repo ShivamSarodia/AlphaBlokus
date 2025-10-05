@@ -57,12 +57,40 @@ impl LoadableConfig for BenchmarkInferenceConfig {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context;
+    use std::fs;
+
+    fn assert_configs_load<T: LoadableConfig + 'static>(directory: &str) -> Result<()> {
+        let mut loaded = 0;
+        for entry in fs::read_dir(directory)
+            .with_context(|| format!("Failed to read directory {directory}"))?
+        {
+            let path = entry?.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
+                continue;
+            }
+
+            T::from_file(&path)
+                .with_context(|| format!("Failed to load config from {}", path.display()))?;
+            loaded += 1;
+        }
+
+        assert!(loaded > 0, "No TOML configs found in {}", directory);
+        Ok(())
+    }
 
     #[test]
-    fn loads_from_file() -> Result<()> {
-        let path = Path::new("tests/fixtures/configs/self_play.toml");
-        let self_play_config = SelfPlayConfig::from_file(path)?;
-        assert_eq!(self_play_config.game.board_size, 5);
-        Ok(())
+    fn benchmark_inference_configs_load() -> Result<()> {
+        assert_configs_load::<BenchmarkInferenceConfig>("configs/benchmark_inference")
+    }
+
+    #[test]
+    fn generate_move_data_configs_load() -> Result<()> {
+        assert_configs_load::<PreprocessMovesConfig>("configs/generate_move_data")
+    }
+
+    #[test]
+    fn self_play_configs_load() -> Result<()> {
+        assert_configs_load::<SelfPlayConfig>("configs/self_play")
     }
 }

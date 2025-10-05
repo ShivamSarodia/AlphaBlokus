@@ -53,16 +53,43 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) {
 
 #[cfg(test)]
 mod tests {
-    use crate::config::LoadableConfig;
-    use std::path::Path;
-
     use super::*;
+    use crate::config::{
+        AgentConfig, AgentGroupConfig, ExecutorConfig, GameConfig, InferenceConfig,
+        MCTSRecorderConfig, SelfPlayConfig,
+    };
+    use std::path::PathBuf;
 
     #[test]
     fn test_run_selfplay() {
-        let path = Path::new("tests/fixtures/configs/self_play.toml");
-        let config: &'static mut SelfPlayConfig = SelfPlayConfig::from_file(path).unwrap();
+        let config = SelfPlayConfig {
+            game: GameConfig {
+                board_size: 5,
+                move_data_file: "static/move_data/tiny.bin".to_string(),
+                num_moves: 958,
+                num_pieces: 21,
+                num_piece_orientations: 91,
+                move_data: None,
+            },
+            agents: AgentGroupConfig::Single(AgentConfig::Random),
+            inference: vec![InferenceConfig {
+                name: "default".to_string(),
+                batch_size: 2,
+                model_path: PathBuf::from("static/networks/trivial_net_tiny.onnx"),
+                executor: ExecutorConfig::Ort,
+                reload: None,
+            }],
+            num_concurrent_games: 10,
+            num_total_games: 100,
+            mcts_recorder: MCTSRecorderConfig {
+                data_directory: "/tmp/alphablokus_test_fixture".to_string(),
+                flush_row_count: 10,
+            },
+        };
+
+        let config: &'static mut SelfPlayConfig = Box::leak(Box::new(config));
         config.game.load_move_profiles().unwrap();
+
         run_selfplay(config);
     }
 }
