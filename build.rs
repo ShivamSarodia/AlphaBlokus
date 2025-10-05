@@ -3,6 +3,7 @@ fn main() {
         .file("src/tensorrt/cpp/tensorrt.cpp")
         .compile("tensorrt");
 
+    println!("cargo:rustc-link-lib=cudart");
     println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.cpp");
     println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.h");
 }

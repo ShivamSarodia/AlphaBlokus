@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use alpha_blokus::agents::Agent;
 use alpha_blokus::inference::OrtExecutor;
+use alpha_blokus::tensorrt::print_hello;
 use anyhow::Result;
 use log::debug;
 use std::path::{Path, PathBuf};
@@ -15,6 +16,8 @@ use alpha_blokus::utils;
 
 fn main() -> Result<()> {
     env_logger::init();
+
+    print_hello();
 
     debug!("Debug logging enabled.");
 
