@@ -65,7 +65,7 @@ mod tests {
         let config = SelfPlayConfig {
             game: GameConfig {
                 board_size: 5,
-                move_data_file: "static/move_data/tiny.bin".to_string(),
+                move_data_file: PathBuf::from("static/move_data/tiny.bin"),
                 num_moves: 958,
                 num_pieces: 21,
                 num_piece_orientations: 91,

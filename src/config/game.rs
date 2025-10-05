@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
+use std::path::PathBuf;
 
 use crate::config::NUM_PLAYERS;
 use crate::game::move_data;
@@ -11,7 +12,7 @@ pub struct GameConfig {
     // Size of one side of the Blokus board.
     pub board_size: usize,
     // Path to the file containing the static move profiles.
-    pub move_data_file: String,
+    pub move_data_file: PathBuf,
     // Number of valid moves.
     pub num_moves: usize,
     // Number of pieces that can be played. (For standard Blokus, this is 21)
@@ -41,12 +42,14 @@ impl GameConfig {
     }
 
     pub fn load_move_profiles(&mut self) -> Result<()> {
-        self.move_data = Some(move_data::load(&self.move_data_file).with_context(|| {
-            format!(
-                "Failed to load move profiles from file: {}",
-                self.move_data_file
-            )
-        })?);
+        self.move_data = Some(move_data::load(self.move_data_file.as_path()).with_context(
+            || {
+                format!(
+                    "Failed to load move profiles from file: {}",
+                    self.move_data_file.display()
+                )
+            },
+        )?);
         Ok(())
     }
 }

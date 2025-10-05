@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::config::{GameConfig, MCTSConfig};
@@ -11,7 +12,7 @@ fn create_base_game_config() -> GameConfig {
         num_moves: 958,
         num_pieces: 21,
         num_piece_orientations: 91,
-        move_data_file: "static/move_data/tiny.bin".to_string(),
+        move_data_file: PathBuf::from("static/move_data/tiny.bin"),
         move_data: None,
     }
 }
@@ -22,7 +23,7 @@ fn create_base_half_game_config() -> GameConfig {
         num_moves: 6233,
         num_pieces: 21,
         num_piece_orientations: 91,
-        move_data_file: "static/move_data/half.bin".to_string(),
+        move_data_file: PathBuf::from("static/move_data/half.bin"),
         move_data: None,
     }
 }

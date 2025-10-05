@@ -1,5 +1,6 @@
 use anyhow::Result;
 use rand::prelude::IteratorRandom;
+use std::path::PathBuf;
 
 use alpha_blokus::config::GameConfig;
 use alpha_blokus::game::{GameStatus, State};
@@ -11,7 +12,7 @@ fn main() -> Result<()> {
         num_pieces: 21,
         num_piece_orientations: 91,
         move_data: None,
-        move_data_file: "static/move_data/half.bin".to_string(),
+        move_data_file: PathBuf::from("static/move_data/half.bin"),
     }));
     println!("Running with config:\n\n{game_config:#?}");
 

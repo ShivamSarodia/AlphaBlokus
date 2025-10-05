@@ -4,7 +4,7 @@ use alpha_blokus::agents::Agent;
 use alpha_blokus::inference::OrtExecutor;
 use anyhow::Result;
 use log::debug;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use alpha_blokus::agents::MCTSAgent;
 use alpha_blokus::config::GameConfig;
@@ -24,7 +24,7 @@ fn main() -> Result<()> {
         num_pieces: 21,
         num_piece_orientations: 91,
         move_data: None,
-        move_data_file: "static/move_data/half.bin".to_string(),
+        move_data_file: PathBuf::from("static/move_data/half.bin"),
     }));
     game_config.load_move_profiles()?;
 
