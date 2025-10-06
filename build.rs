@@ -1,4 +1,16 @@
 fn main() {
+    println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.cpp");
+    println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.h");
+
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "linux" {
+        println!(
+            "Skipping TensorRT build script for unsupported target OS: {}",
+            target_os
+        );
+        return;
+    }
+
     cxx_build::bridge("src/tensorrt/bridge.rs")
         .file("src/tensorrt/cpp/tensorrt.cpp")
         .include("/usr/local/cuda/include")
@@ -10,6 +22,4 @@ fn main() {
     println!("cargo:rustc-link-lib=nvinfer_plugin");
     println!("cargo:rustc-link-lib=nvonnxparser");
     println!("cargo:rustc-link-lib=cudart");
-    println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.cpp");
-    println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.h");
 }
