@@ -1,5 +1,13 @@
 #include <cuda_runtime.h>
+#include <NvInfer.h>
 #include <iostream>
+
+
+class Logger : public nvinfer1::ILogger {
+    void log(Severity s, const char* msg) noexcept override {
+        if (s <= Severity::kWARNING) std::cout << "[TRT] " << msg << "\n";
+    }
+};
 
 int print_hello() {
     cudaError_t err = cudaSetDevice(0);
@@ -39,5 +47,15 @@ int print_hello() {
               << back << "\n";
 
     cudaFree(d_data);
+
+    Logger logger;
+    auto* builder = nvinfer1::createInferBuilder(logger);
+    if (!builder) {
+        std::cerr << "Failed to create IBuilder\n";
+        return 1;
+    } else {
+        std::cout << "TensorRT IBuilder created successfully.\n";
+    }
+
     return 0;
 }
