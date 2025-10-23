@@ -1,5 +1,5 @@
 #[cfg(target_os = "linux")]
-mod bridge;
+pub mod bridge;
 
 #[cfg(target_os = "linux")]
 pub use bridge::print_hello;
