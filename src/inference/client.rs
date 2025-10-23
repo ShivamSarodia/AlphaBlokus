@@ -1,5 +1,7 @@
 use std::{path::Path, time::Duration};
 
+#[cfg(target_os = "linux")]
+use crate::inference::TensorRtExecutor;
 use crate::{
     config::{ExecutorConfig, GameConfig, InferenceConfig, NUM_PLAYERS},
     game::Board,
@@ -90,6 +92,17 @@ fn build_executor(
 ) -> Box<dyn Executor> {
     match executor_config {
         ExecutorConfig::Ort => Box::new(OrtExecutor::build(model_path, game_config).unwrap()),
+        #[cfg(target_os = "linux")]
+        ExecutorConfig::Tensorrt {
+            max_batch_size,
+            pool_size,
+        } => Box::new(
+            TensorRtExecutor::build(model_path, game_config, *max_batch_size, *pool_size).unwrap(),
+        ),
+        #[cfg(not(target_os = "linux"))]
+        ExecutorConfig::Tensorrt { .. } => {
+            panic!("TensorRT executor is only available on Linux targets.")
+        }
     }
 }
 
