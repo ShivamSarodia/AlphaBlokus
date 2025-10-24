@@ -1,6 +1,6 @@
 use std::pin::Pin;
 use std::slice;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use cxx::let_cxx_string;
@@ -13,17 +13,20 @@ use crate::{
     tensorrt::bridge::ffi,
 };
 
-const BOARD_INPUT_NAME: &str = "board";
-const VALUE_OUTPUT_NAME: &str = "value";
-const POLICY_OUTPUT_NAME: &str = "policy";
-const TENSORRT_FLOAT_DATATYPE: i32 = 0;
+use super::{
+    constants::{BOARD_INPUT_NAME, POLICY_OUTPUT_NAME, VALUE_OUTPUT_NAME},
+    memory::{MemoryBlockSizes, MemoryPool},
+    shapes::TensorShapes,
+    streams::{CudaEvent, Streams},
+};
 
 struct Engine {
     inner: cxx::UniquePtr<ffi::TrtEngine>,
 }
 
+// We don't need the Engine to be Sync because it's wrapped in a mutex by the executor,
+// and won't be concurrently referenced by multiple threads.
 unsafe impl Send for Engine {}
-unsafe impl Sync for Engine {}
 
 impl Engine {
     fn new(inner: cxx::UniquePtr<ffi::TrtEngine>) -> Self {
@@ -58,9 +61,7 @@ impl TensorRtExecutor {
             panic!("pool_size must be greater than zero");
         }
 
-        let model_path_str = model_path
-            .to_str()
-            .unwrap_or_else(|| panic!("Model path must be valid UTF-8: {}", model_path.display()));
+        let model_path_str = model_path.to_str().unwrap();
 
         let engine_unique = {
             let_cxx_string!(model_path_cxx = model_path_str);
@@ -273,330 +274,32 @@ impl Executor for TensorRtExecutor {
     }
 }
 
-struct TensorShapes {
-    input_elements_per_item: usize,
-    value_elements_per_item: usize,
-    policy_elements_per_item: usize,
-    policy_shape_without_batch: Vec<usize>,
-}
-
-impl TensorShapes {
-    fn from_engine(engine: &cxx::UniquePtr<ffi::TrtEngine>) -> Result<Self> {
-        let_cxx_string!(board_name = BOARD_INPUT_NAME);
-        let_cxx_string!(value_name = VALUE_OUTPUT_NAME);
-        let_cxx_string!(policy_name = POLICY_OUTPUT_NAME);
-
-        let board_shape = ffi::get_tensor_shape(engine, &board_name);
-        let value_shape = ffi::get_tensor_shape(engine, &value_name);
-        let policy_shape = ffi::get_tensor_shape(engine, &policy_name);
-
-        ensure_float_tensor(engine, &board_name);
-        ensure_float_tensor(engine, &value_name);
-        ensure_float_tensor(engine, &policy_name);
-
-        let policy_shape_without_batch = shape_without_batch(&policy_shape);
-        if policy_shape_without_batch.len() != 3 {
-            panic!(
-                "Expected policy tensor to have 3 dimensions (excluding batch), got {}",
-                policy_shape_without_batch.len()
-            );
-        }
-
-        Ok(Self {
-            input_elements_per_item: product_without_batch(&board_shape),
-            value_elements_per_item: product_without_batch(&value_shape),
-            policy_elements_per_item: product_without_batch(&policy_shape),
-            policy_shape_without_batch,
-        })
-    }
-}
-
-fn ensure_float_tensor(engine: &cxx::UniquePtr<ffi::TrtEngine>, tensor_name: &cxx::CxxString) {
-    let dtype = ffi::get_tensor_dtype(engine, tensor_name);
-    if dtype != TENSORRT_FLOAT_DATATYPE {
-        panic!(
-            "Expected tensor {} to have float dtype, got {}",
-            tensor_name.to_string_lossy(),
-            dtype
-        );
-    }
-}
-
-fn product_without_batch(shape: &[i32]) -> usize {
-    if shape.is_empty() {
-        panic!("Tensor shape must include batch dimension");
-    }
-    if shape[0] != -1 && shape[0] != 1 {
-        panic!("Tensor batch dimension must be dynamic (-1) or 1");
-    }
-    shape[1..]
-        .iter()
-        .map(|&d| {
-            if d <= 0 {
-                panic!("Tensor dimensions must be positive");
-            }
-            d as usize
-        })
-        .product()
-}
-
-fn shape_without_batch(shape: &[i32]) -> Vec<usize> {
-    if shape.is_empty() {
-        panic!("Tensor shape must include batch dimension");
-    }
-    shape
-        .iter()
-        .skip(1)
-        .map(|&d| {
-            if d <= 0 {
-                panic!("Tensor dimensions must be positive");
-            }
-            d as usize
-        })
-        .collect()
-}
-
-struct MemoryBlockSizes {
-    input_device_bytes: usize,
-    value_device_bytes: usize,
-    policy_device_bytes: usize,
-    input_host_bytes: usize,
-    value_host_bytes: usize,
-    policy_host_bytes: usize,
-}
-
-struct DeviceBuffer {
-    ptr: usize,
-}
-
-impl DeviceBuffer {
-    fn new(size: usize) -> Result<Self> {
-        let ptr = ffi::cuda_malloc(size).context("cudaMalloc failed")?;
-        Ok(Self { ptr })
-    }
-
-    fn ptr(&self) -> usize {
-        self.ptr
-    }
-}
-
-impl Drop for DeviceBuffer {
-    fn drop(&mut self) {
-        if self.ptr != 0 {
-            ffi::cuda_free(self.ptr);
-        }
-    }
-}
-
-struct HostBuffer {
-    ptr: usize,
-}
-
-impl HostBuffer {
-    fn new(size: usize) -> Result<Self> {
-        let ptr = ffi::cuda_malloc_host(size).context("cudaMallocHost failed")?;
-        Ok(Self { ptr })
-    }
-
-    fn as_ptr(&self) -> *const u8 {
-        self.ptr as *const u8
-    }
-
-    fn as_mut_ptr(&self) -> *mut u8 {
-        self.ptr as *mut u8
-    }
-}
-
-impl Drop for HostBuffer {
-    fn drop(&mut self) {
-        if self.ptr != 0 {
-            ffi::cuda_free_host(self.ptr);
-        }
-    }
-}
-
-struct MemoryBlock {
-    input_device: DeviceBuffer,
-    value_device: DeviceBuffer,
-    policy_device: DeviceBuffer,
-    input_host: HostBuffer,
-    value_host: HostBuffer,
-    policy_host: HostBuffer,
-}
-
-struct MemoryPool {
-    inner: Arc<MemoryPoolInner>,
-}
-
-struct MemoryPoolInner {
-    blocks: Vec<Arc<MemoryBlock>>,
-    available: Mutex<Vec<usize>>,
-    condvar: Condvar,
-}
-
-impl MemoryPool {
-    fn new(pool_size: usize, sizes: MemoryBlockSizes) -> Result<Self> {
-        let mut blocks = Vec::with_capacity(pool_size);
-        for _ in 0..pool_size {
-            blocks.push(Arc::new(MemoryBlock {
-                input_device: DeviceBuffer::new(sizes.input_device_bytes)?,
-                value_device: DeviceBuffer::new(sizes.value_device_bytes)?,
-                policy_device: DeviceBuffer::new(sizes.policy_device_bytes)?,
-                input_host: HostBuffer::new(sizes.input_host_bytes)?,
-                value_host: HostBuffer::new(sizes.value_host_bytes)?,
-                policy_host: HostBuffer::new(sizes.policy_host_bytes)?,
-            }));
-        }
-
-        let available = (0..pool_size).rev().collect::<Vec<_>>();
-
-        Ok(Self {
-            inner: Arc::new(MemoryPoolInner {
-                blocks,
-                available: Mutex::new(available),
-                condvar: Condvar::new(),
-            }),
-        })
-    }
-
-    fn acquire(&self) -> MemoryBlockGuard {
-        let mut available = self.inner.available.lock().unwrap();
-        loop {
-            if let Some(index) = available.pop() {
-                let block = Arc::clone(&self.inner.blocks[index]);
-                return MemoryBlockGuard {
-                    pool: Arc::clone(&self.inner),
-                    index,
-                    block,
-                };
-            }
-            available = self.inner.condvar.wait(available).unwrap();
-        }
-    }
-}
-
-struct MemoryBlockGuard {
-    pool: Arc<MemoryPoolInner>,
-    index: usize,
-    block: Arc<MemoryBlock>,
-}
-
-impl MemoryBlockGuard {
-    fn block(&self) -> &MemoryBlock {
-        &self.block
-    }
-}
-
-impl Drop for MemoryBlockGuard {
-    fn drop(&mut self) {
-        let mut available = self.pool.available.lock().unwrap();
-        available.push(self.index);
-        self.pool.condvar.notify_one();
-    }
-}
-
-struct Streams {
-    h2d: usize,
-    compute: usize,
-    d2h: usize,
-}
-
-impl Streams {
-    fn new() -> Result<Self> {
-        let h2d = ffi::create_stream().context("Failed to create H2D CUDA stream")?;
-        let compute = match ffi::create_stream().context("Failed to create compute CUDA stream") {
-            Ok(stream) => stream,
-            Err(err) => {
-                ffi::destroy_stream(h2d);
-                return Err(err);
-            }
-        };
-        let d2h = match ffi::create_stream().context("Failed to create D2H CUDA stream") {
-            Ok(stream) => stream,
-            Err(err) => {
-                ffi::destroy_stream(compute);
-                ffi::destroy_stream(h2d);
-                return Err(err);
-            }
-        };
-        Ok(Self { h2d, compute, d2h })
-    }
-
-    fn h2d_handle(&self) -> usize {
-        self.h2d
-    }
-
-    fn compute_handle(&self) -> usize {
-        self.compute
-    }
-
-    fn d2h_handle(&self) -> usize {
-        self.d2h
-    }
-}
-
-impl Drop for Streams {
-    fn drop(&mut self) {
-        ffi::destroy_stream(self.h2d);
-        ffi::destroy_stream(self.compute);
-        ffi::destroy_stream(self.d2h);
-    }
-}
-
-struct CudaEvent {
-    handle: usize,
-}
-
-impl CudaEvent {
-    fn new(blocking: bool) -> Result<Self> {
-        Ok(Self {
-            handle: ffi::create_event(blocking).context("Failed to create CUDA event")?,
-        })
-    }
-
-    fn handle(&self) -> usize {
-        self.handle
-    }
-}
-
-impl Drop for CudaEvent {
-    fn drop(&mut self) {
-        ffi::destroy_event(self.handle);
-    }
-}
-
-#[cfg(test)]
+#[cfg(all(test, cuda))]
 mod tests {
     use super::*;
     use crate::game::Board;
     use crate::inference::OrtExecutor;
     use crate::testing;
     use rand::Rng;
-    use rand::SeedableRng;
-    use rand::rngs::StdRng;
     use rand::seq::SliceRandom;
     use std::path::Path;
 
-    fn clone_request(request: &inference::Request) -> inference::Request {
-        inference::Request {
-            board: request.board.clone(),
-            valid_move_indexes: request.valid_move_indexes.clone(),
-        }
-    }
-
-    fn random_request(game_config: &'static GameConfig, rng: &mut StdRng) -> inference::Request {
+    fn random_request(game_config: &'static GameConfig) -> inference::Request {
         let mut board = Board::new(game_config);
         for player in 0..NUM_PLAYERS {
             for _ in 0..4 {
-                let x = rng.random_range(0..game_config.board_size);
-                let y = rng.random_range(0..game_config.board_size);
-                board.slice_mut(player).set((x, y), true);
+                // Set 1/4th of the board to true for each player.
+                for _ in 0..game_config.board_area() / 4 {
+                    let x = rand::rng().random_range(0..game_config.board_size);
+                    let y = rand::rng().random_range(0..game_config.board_size);
+                    board.slice_mut(player).set((x, y), true);
+                }
             }
         }
 
         let mut indexes: Vec<usize> = (0..game_config.num_moves).collect();
-        indexes.shuffle(rng);
-        let valid_move_indexes = indexes.into_iter().take(8).collect();
+        indexes.shuffle(&mut rand::rng());
+        let valid_move_indexes = indexes.into_iter().take(16).collect();
 
         inference::Request {
             board,
@@ -606,37 +309,22 @@ mod tests {
 
     #[test]
     fn tensorrt_matches_ort_executor_outputs() {
-        let game_config = testing::create_half_game_config();
-        let model_path = Path::new("static/networks/trivial_net_half.onnx");
-
-        match ffi::cuda_malloc(0) {
-            Ok(ptr) => ffi::cuda_free(ptr),
-            Err(err) => {
-                eprintln!("Skipping TensorRT comparison test, CUDA unavailable: {err}");
-                return;
-            }
-        }
+        let game_config = testing::create_game_config();
+        let model_path = Path::new("static/networks/trivial_net_tiny.onnx");
 
         let ort =
-            OrtExecutor::build(model_path, game_config).expect("failed to build ORT executor");
-        let tensorrt = match TensorRtExecutor::build(model_path, game_config, 16, 4) {
-            Ok(executor) => executor,
-            Err(err) => {
-                eprintln!("Skipping TensorRT comparison test: {err}");
-                return;
-            }
-        };
+            OrtExecutor::build(model_path, &game_config).expect("failed to build ORT executor");
+        let tensorrt = TensorRtExecutor::build(model_path, &game_config, 4, 4)
+            .expect("failed to build TensorRT executor");
 
-        let mut rng = StdRng::seed_from_u64(0xDEC0BEEF);
-        let requests: Vec<inference::Request> = (0..4)
-            .map(|_| random_request(game_config, &mut rng))
-            .collect();
+        let requests: Vec<inference::Request> =
+            (0..4).map(|_| random_request(&game_config)).collect();
 
-        let ort_responses = ort.execute(requests.iter().map(clone_request).collect());
-        let trt_responses = tensorrt.execute(requests);
+        let ort_responses = ort.execute(requests.clone());
+        let trt_responses = tensorrt.execute(requests.clone());
 
-        let value_tolerance = 1e-3;
-        let policy_tolerance = 1e-3;
+        let value_tolerance = 1e-4;
+        let policy_tolerance = 1e-4;
 
         for (ort_response, trt_response) in ort_responses.iter().zip(trt_responses.iter()) {
             for (ort_value, trt_value) in ort_response.value.iter().zip(trt_response.value.iter()) {
@@ -646,6 +334,7 @@ mod tests {
                     ort_value,
                     trt_value
                 );
+                println!("{}, {}", ort_value, trt_value);
             }
 
             assert_eq!(ort_response.policy.len(), trt_response.policy.len());
@@ -658,6 +347,7 @@ mod tests {
                     ort_policy,
                     trt_policy
                 );
+                println!("{}, {}", ort_policy, trt_policy);
             }
         }
     }

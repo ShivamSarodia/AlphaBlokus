@@ -79,6 +79,4 @@ void event_record(std::uintptr_t event, std::uintptr_t stream);
 void stream_wait_event(std::uintptr_t stream, std::uintptr_t event);
 void event_synchronize(std::uintptr_t event);
 
-void print_hello();
-
 }  // namespace alpha_blokus

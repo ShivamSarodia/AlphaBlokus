@@ -1,5 +1,3 @@
-#![allow(clippy::missing_safety_doc)]
-
 #[cxx::bridge]
 pub mod ffi {
     #[namespace = "alpha_blokus"]
@@ -13,9 +11,9 @@ pub mod ffi {
             max_batch_size: usize,
         ) -> Result<UniquePtr<TrtEngine>>;
 
-        fn get_tensor_shape(engine: &TrtEngine, tensor_name: &CxxString) -> Vec<i32>;
+        fn get_tensor_shape(engine: &TrtEngine, tensor_name: &CxxString) -> Result<Vec<i32>>;
 
-        fn get_tensor_dtype(engine: &TrtEngine, tensor_name: &CxxString) -> i32;
+        fn get_tensor_dtype(engine: &TrtEngine, tensor_name: &CxxString) -> Result<i32>;
 
         fn set_input_shape(engine: Pin<&mut TrtEngine>, batch_size: usize) -> Result<()>;
 
@@ -26,27 +24,25 @@ pub mod ffi {
         ) -> Result<()>;
 
         fn enqueue(engine: Pin<&mut TrtEngine>, stream: usize) -> Result<()>;
-
-        fn print_hello();
     }
 
     #[namespace = "alpha_blokus"]
     unsafe extern "C++" {
         fn cuda_malloc(size: usize) -> Result<usize>;
 
-        fn cuda_free(ptr: usize);
+        fn cuda_free(ptr: usize) -> Result<()>;
 
         fn cuda_malloc_host(size: usize) -> Result<usize>;
 
-        fn cuda_free_host(ptr: usize);
+        fn cuda_free_host(ptr: usize) -> Result<()>;
 
         fn create_stream() -> Result<usize>;
 
-        fn destroy_stream(stream: usize);
+        fn destroy_stream(stream: usize) -> Result<()>;
 
         fn create_event(blocking: bool) -> Result<usize>;
 
-        fn destroy_event(event: usize);
+        fn destroy_event(event: usize) -> Result<()>;
 
         unsafe fn memcpy_h2d_async(
             dst_device: usize,
@@ -69,5 +65,3 @@ pub mod ffi {
         fn event_synchronize(event: usize) -> Result<()>;
     }
 }
-
-pub use ffi::print_hello;

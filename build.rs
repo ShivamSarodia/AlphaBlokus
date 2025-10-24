@@ -1,6 +1,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.cpp");
     println!("cargo:rerun-if-changed=src/tensorrt/cpp/tensorrt.h");
+    println!("cargo:rustc-check-cfg=cfg(cuda)");
 
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
     if target_os != "linux" {
@@ -10,6 +11,8 @@ fn main() {
         );
         return;
     }
+
+    println!("cargo:rustc-cfg=cuda");
 
     cxx_build::bridge("src/tensorrt/bridge.rs")
         .file("src/tensorrt/cpp/tensorrt.cpp")

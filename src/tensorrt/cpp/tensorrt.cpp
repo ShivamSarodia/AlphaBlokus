@@ -368,8 +368,4 @@ void event_synchronize(std::uintptr_t event) {
   check_cuda(cudaEventSynchronize(to_event(event)), "cudaEventSynchronize");
 }
 
-void print_hello() {
-  std::cout << "TensorRT bridge initialized.\n";
-}
-
 }  // namespace alpha_blokus
