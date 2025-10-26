@@ -3,6 +3,8 @@ mod client;
 mod ort_executor;
 mod reload_executor;
 mod softmax;
+#[cfg(cuda)]
+mod tensorrt;
 
 pub use batcher::Executor;
 pub use client::Client;
@@ -12,3 +14,5 @@ pub use client::Response;
 pub use ort_executor::OrtExecutor;
 pub use reload_executor::ReloadExecutor;
 pub use softmax::softmax_inplace;
+#[cfg(cuda)]
+pub use tensorrt::TensorRtExecutor;
