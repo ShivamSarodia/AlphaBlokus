@@ -4,7 +4,7 @@ use alpha_blokus::{
     inference::{Client, DefaultClient, Request},
     utils,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use config::{BenchmarkInferenceConfig, LoadableConfig};
 use rand::Rng;
@@ -19,7 +19,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    dotenvy::dotenv()?;
+    dotenvy::dotenv().context("Failed to load .env file")?;
 
     let cli = Cli::parse();
     println!(
@@ -27,8 +27,12 @@ fn main() -> Result<()> {
         cli.config
     );
 
-    let config = BenchmarkInferenceConfig::from_file(&cli.config)?;
-    config.game.load_move_profiles()?;
+    let config =
+        BenchmarkInferenceConfig::from_file(&cli.config).context("Failed to load config")?;
+    config
+        .game
+        .load_move_profiles()
+        .context("Failed to load move profiles")?;
 
     run_benchmark_inference(config);
 
