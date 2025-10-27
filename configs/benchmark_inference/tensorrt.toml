@@ -10,10 +10,6 @@ move_data_file = "static/move_data/half.bin"
 
 [inference]
 name = "default"
-model_path = "static/networks/trivial_net_half.onnx"
+model_path = "static/networks/res_net_half.onnx"
 batch_size = 128
-executor = {
-    type = "tensorrt",
-    max_batch_size = 128,
-    pool_size = 32
-}
+executor = { type = "tensorrt", max_batch_size = 128,  pool_size = 32 }
