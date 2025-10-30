@@ -17,7 +17,9 @@ pub enum AgentConfig {
 
 #[derive(Deserialize, Debug)]
 pub struct MCTSConfig {
-    pub num_rollouts: u32,
+    pub fast_move_probability: f32,
+    pub fast_move_num_rollouts: u32,
+    pub full_move_num_rollouts: u32,
     pub total_dirichlet_noise_alpha: f32,
     pub root_dirichlet_noise_fraction: f32,
     pub ucb_exploration_factor: f32,

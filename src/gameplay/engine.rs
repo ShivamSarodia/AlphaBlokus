@@ -191,7 +191,9 @@ mod tests {
         ));
         let (recorder, _) = Recorder::build_and_start(1, directory.clone());
         let agent_group_config = AgentGroupConfig::Single(AgentConfig::MCTS(MCTSConfig {
-            num_rollouts: 10,
+            fast_move_probability: 0.0,
+            fast_move_num_rollouts: 10,
+            full_move_num_rollouts: 10,
             total_dirichlet_noise_alpha: 1.0,
             root_dirichlet_noise_fraction: 0.0,
             ucb_exploration_factor: 1.0,

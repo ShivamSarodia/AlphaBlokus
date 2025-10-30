@@ -128,17 +128,24 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
         )
         .await;
 
+        let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
+        let num_rollouts = if is_fast_move {
+            self.mcts_config.fast_move_num_rollouts
+        } else {
+            self.mcts_config.full_move_num_rollouts
+        };
+
         // Run the rollouts, which formulates the search tree.
-        for _ in 0..self.mcts_config.num_rollouts {
+        for _ in 0..num_rollouts {
             self.rollout_once(state, &mut search_root).await;
         }
 
         let move_index = search_root.select_move_to_play(state);
 
-        // Push the MCTS search results from the root node onto the MCTS data
-        // vector maintained by this agent.
-        self.mcts_data
-            .push(search_root.generate_mcts_data(self.game_id, state));
+        if !is_fast_move {
+            self.mcts_data
+                .push(search_root.generate_mcts_data(self.game_id, state));
+        }
 
         move_index
     }
@@ -180,6 +187,36 @@ mod tests {
 
             inference::Response { value, policy }
         }
+    }
+
+    #[tokio::test]
+    async fn test_fast_move_behavior() {
+        let game_config = testing::create_half_game_config();
+
+        let fast_mcts_config: &'static MCTSConfig = Box::leak(Box::new(MCTSConfig {
+            fast_move_probability: 1.0,
+            fast_move_num_rollouts: 1,
+            full_move_num_rollouts: 4,
+            total_dirichlet_noise_alpha: 1.0,
+            root_dirichlet_noise_fraction: 0.0,
+            ucb_exploration_factor: 1.0,
+            temperature_turn_cutoff: 10,
+            move_selection_temperature: 0.0,
+            inference_config_name: "".to_string(),
+        }));
+        let fast_client = Arc::new(MockInferenceClient {
+            requests: Mutex::new(Vec::new()),
+        });
+        let mut fast_agent =
+            MCTSAgent::new(fast_mcts_config, game_config, Arc::clone(&fast_client));
+        let fast_state = State::new(game_config);
+        fast_agent.choose_move(&fast_state).await;
+        let fast_requests = fast_client.requests.lock().unwrap().len();
+        assert!(fast_agent.flush_mcts_data().is_empty());
+
+        // Two requests are made -- one for the initial node expansion, and
+        // another for the single rollout.
+        assert_eq!(fast_requests, 2);
     }
 
     #[tokio::test]

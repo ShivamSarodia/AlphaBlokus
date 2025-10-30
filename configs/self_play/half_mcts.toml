@@ -14,7 +14,9 @@ executor = { type = "ort" }
 # reload = { poll_interval_seconds = 60 }
 
 [agents.Single.MCTS]
-num_rollouts = 100
+fast_move_probability = 0.2
+fast_move_num_rollouts = 100
+full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
 root_dirichlet_noise_fraction = 0.25
 ucb_exploration_factor = 1.05

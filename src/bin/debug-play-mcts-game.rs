@@ -29,7 +29,9 @@ fn main() -> Result<()> {
     game_config.load_move_profiles()?;
 
     let mcts_config: &'static mut MCTSConfig = Box::leak(Box::new(MCTSConfig {
-        num_rollouts: 10,
+        fast_move_probability: 0.0,
+        fast_move_num_rollouts: 10,
+        full_move_num_rollouts: 10,
         total_dirichlet_noise_alpha: 10.83,
         root_dirichlet_noise_fraction: 0.25,
         ucb_exploration_factor: 1.05,

@@ -71,7 +71,9 @@ pub fn create_half_game_config() -> &'static GameConfig {
 
 pub fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSConfig {
     Box::leak(Box::new(MCTSConfig {
-        num_rollouts: num_rollouts,
+        fast_move_probability: 0.0,
+        fast_move_num_rollouts: num_rollouts,
+        full_move_num_rollouts: num_rollouts,
         total_dirichlet_noise_alpha: 1.0,
         root_dirichlet_noise_fraction: 0.0,
         ucb_exploration_factor: 1.0,
