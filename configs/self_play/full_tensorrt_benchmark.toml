@@ -1,9 +1,9 @@
 num_concurrent_games = 1024
-duration_seconds = 2
+duration_seconds = 600
 
 [mcts_recorder]
 data_directory = "/tmp/alphablokus_mcts_full/games"
-flush_row_count = 100
+flush_row_count = 100000
 
 [[inference]]
 name = "default"
