@@ -14,8 +14,6 @@ use alpha_blokus::inference;
 use alpha_blokus::utils;
 
 fn main() -> Result<()> {
-    env_logger::init();
-
     debug!("Debug logging enabled.");
 
     let game_config: &'static mut GameConfig = Box::leak(Box::new(GameConfig {

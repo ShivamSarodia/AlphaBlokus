@@ -1,5 +1,6 @@
 use ahash::AHashMap as HashMap;
 use std::sync::Arc;
+use tracing::info;
 
 use tokio::task::JoinSet;
 
@@ -50,9 +51,10 @@ impl Engine {
         self.num_started_games += 1;
 
         join_set.spawn({
-            println!(
-                "Starting game. (total started: {:?}, total finished: {:?})",
-                self.num_started_games, self.num_finished_games
+            info!(
+                total_started = self.num_started_games,
+                total_finished = self.num_finished_games,
+                "started_game",
             );
             let game_config = self.game_config;
             let (agent_vector, player_to_agent_index) = self.generate_agents();
@@ -101,9 +103,10 @@ impl Engine {
             // Raise any error from the join_next.
             result.unwrap();
 
-            println!(
-                "Finished game. (total started: {:?}, total finished: {:?})",
-                self.num_started_games, self.num_finished_games
+            info!(
+                total_started = self.num_started_games,
+                total_finished = self.num_finished_games,
+                "finished_game",
             );
             self.maybe_spawn_game_on_join_set(&mut join_set);
         }
@@ -122,6 +125,7 @@ pub async fn play_one_game(
     loop {
         let agent = &mut agents[player_to_agent_index[state.player()]];
         let move_index = agent.choose_move(&state).await;
+        info!("made_move");
         let game_state = state.apply_move(move_index);
         if game_state == GameStatus::GameOver {
             break;

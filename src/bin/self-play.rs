@@ -3,6 +3,7 @@ use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
 
+use alpha_blokus::utils;
 use config::{LoadableConfig, SelfPlayConfig};
 
 #[derive(Parser)]
@@ -17,7 +18,10 @@ fn main() -> Result<()> {
     dotenvy::dotenv()?;
 
     let cli = Cli::parse();
-    println!("Starting self-play with config:\n\n{:#?}", cli.config);
+    println!("Starting self-play with config: {:#?}", cli.config);
+
+    // Don't drop the guard to flush logs on shutdown.
+    let _guard = utils::init_logger();
 
     let config = SelfPlayConfig::from_file(&cli.config)?;
     config.game.load_move_profiles()?;
