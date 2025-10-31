@@ -1,3 +1,4 @@
+#[allow(clippy::missing_safety_doc)]
 #[cxx::bridge]
 pub mod ffi {
     #[namespace = "alpha_blokus"]

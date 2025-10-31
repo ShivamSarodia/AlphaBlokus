@@ -73,9 +73,11 @@ impl Recorder {
             }
 
             // When the channel is closed, flush the remaining data one last time.
+            println!("Flushing final data to disk...");
             write_mcts_data(unflushed_mcts_data, &output_directory)
                 .await
                 .unwrap();
+            println!("Done flushing final data to disk.");
         });
 
         // Return the recorder which contains the sender for pushing new data.
