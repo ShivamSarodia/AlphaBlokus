@@ -31,6 +31,8 @@ pub struct SelfPlayConfig {
     pub num_concurrent_games: u32,
     #[serde(default)]
     pub num_total_games: u32,
+    #[serde(default)]
+    pub duration_seconds: u64,
     pub mcts_recorder: MCTSRecorderConfig,
 }
 
