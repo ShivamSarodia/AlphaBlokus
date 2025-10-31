@@ -76,10 +76,9 @@ TrtEngine::Impl::Impl(const std::string& model_path, std::size_t max_batch_size)
   std::unique_ptr<nvinfer1::IBuilder> builder(nvinfer1::createInferBuilder(logger_));
   check_trt(builder != nullptr, "Failed to create TensorRT builder");
 
-  const uint32_t explicit_batch =
-      1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-  std::unique_ptr<nvinfer1::INetworkDefinition> network(
-      builder->createNetworkV2(explicit_batch));
+  // TensorRT 10+ always operates in explicit batch mode so no flags are required.
+  constexpr uint32_t network_flags = 0;
+  std::unique_ptr<nvinfer1::INetworkDefinition> network(builder->createNetworkV2(network_flags));
   check_trt(network != nullptr, "Failed to create TensorRT network");
 
   std::unique_ptr<nvonnxparser::IParser> parser(nvonnxparser::createParser(*network, logger_));
