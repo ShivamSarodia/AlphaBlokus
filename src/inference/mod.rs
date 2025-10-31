@@ -2,6 +2,7 @@ mod batcher;
 mod client;
 mod ort_executor;
 mod reload_executor;
+mod s3_model_mirror;
 mod softmax;
 #[cfg(cuda)]
 mod tensorrt;

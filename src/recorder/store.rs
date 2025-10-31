@@ -144,24 +144,22 @@ async fn write_mcts_data_to_s3(
     mcts_data: Vec<u8>,
     output_directory: &str,
 ) -> Result<()> {
-    let remove_protocol = output_directory.split("s3://").nth(1).unwrap();
-    let mut split = remove_protocol.split("/");
-    let bucket = split.next().unwrap();
-    let mut remainder = split.collect::<Vec<&str>>();
-    let filename = generate_filename(num_rows);
-    remainder.push(&filename[..]);
-    let key = remainder.join("/");
+    let parsed = crate::s3::ParsedUri::parse(output_directory)?;
+    let target_uri = if parsed.filename.is_some() {
+        parsed.clone()
+    } else {
+        parsed.go_down(&generate_filename(num_rows))?
+    };
 
-    let client = aws_sdk_s3::Client::new(
-        &aws_config::from_env()
-            .endpoint_url(std::env::var("S3_ENDPOINT_URL").unwrap())
-            .load()
-            .await,
-    );
+    let key = target_uri
+        .object_key()
+        .expect("target URI must point to a file");
+
+    let client = crate::s3::build_client().await;
     client
         .put_object()
         .body(aws_sdk_s3::primitives::ByteStream::from(mcts_data))
-        .bucket(bucket)
+        .bucket(target_uri.bucket_name)
         .key(key)
         .send()
         .await?;

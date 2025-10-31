@@ -1,4 +1,4 @@
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 #[cfg(cuda)]
 use crate::inference::TensorRtExecutor;
@@ -66,7 +66,7 @@ impl DefaultClient {
                 let base_executor_config = inference_config.executor.clone();
                 let executor = ReloadExecutor::build(
                     &inference_config.model_path,
-                    Duration::from_secs(reload_config.poll_interval_seconds),
+                    reload_config,
                     move |path| build_executor(&base_executor_config, game_config, path),
                 )
                 .await;

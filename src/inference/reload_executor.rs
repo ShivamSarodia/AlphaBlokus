@@ -6,8 +6,10 @@ use tokio::fs;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
+use crate::config;
 use crate::inference;
 use crate::inference::batcher::Executor;
+use crate::inference::s3_model_mirror::{S3MirrorConfig, ensure_local_mirror};
 
 /// Generic wrapper that hot-reloads an executor whenever a newer model file
 /// appears in a watched directory.
@@ -19,16 +21,39 @@ where
     current_model_path: Arc<RwLock<PathBuf>>,
 }
 
+fn is_s3_path(path: &Path) -> bool {
+    path.to_str()
+        .map(|value| value.starts_with("s3://"))
+        .unwrap_or(false)
+}
+
 impl<E> ReloadExecutor<E>
 where
     E: Executor,
 {
-    pub async fn build<P, F>(model_dir: P, poll_interval: Duration, builder: F) -> Self
+    pub async fn build<P, F>(model_dir: P, reload_config: &config::ReloadConfig, builder: F) -> Self
     where
         P: AsRef<Path>,
         F: Fn(&Path) -> E + Send + Sync + 'static,
     {
-        let model_dir = model_dir.as_ref().to_path_buf();
+        let poll_interval = reload_config.poll_interval;
+        let keep_last_models = reload_config.s3_keep_last_models.max(1);
+
+        let mut model_dir = model_dir.as_ref().to_path_buf();
+
+        if is_s3_path(&model_dir) {
+            let s3_uri = model_dir.to_string_lossy().to_string();
+            model_dir = ensure_local_mirror(
+                &s3_uri,
+                S3MirrorConfig {
+                    poll_interval,
+                    keep_last_models,
+                },
+            )
+            .await
+            .expect("Failed to initialize S3 model mirror");
+        }
+
         let executor_builder = Arc::new(builder);
 
         let initial_model_path = Self::latest_model_file_async(&model_dir).await;
@@ -132,7 +157,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::NUM_PLAYERS;
+    use crate::config::{NUM_PLAYERS, ReloadConfig};
     use crate::game::Board;
     use crate::inference;
     use crate::testing;
@@ -171,8 +196,13 @@ mod tests {
         let first_model_path = directory_path.join("1.onnx");
         fs::write(&first_model_path, "first").unwrap();
 
+        let reload_config = ReloadConfig {
+            poll_interval: Duration::from_millis(25),
+            s3_keep_last_models: 1,
+        };
+
         let executor = Arc::new(
-            ReloadExecutor::build(&directory, Duration::from_millis(25), move |path| {
+            ReloadExecutor::build(&directory, &reload_config, move |path| {
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
                 let id = file_name.parse::<usize>().unwrap();
                 MockSubExecutor { id }
