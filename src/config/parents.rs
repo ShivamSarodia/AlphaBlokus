@@ -29,6 +29,7 @@ pub struct SelfPlayConfig {
     pub agents: AgentGroupConfig,
     pub inference: Vec<InferenceConfig>,
     pub num_concurrent_games: u32,
+    #[serde(default)]
     pub num_total_games: u32,
     pub mcts_recorder: MCTSRecorderConfig,
 }

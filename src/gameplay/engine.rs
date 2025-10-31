@@ -43,13 +43,17 @@ impl Engine {
 
     fn maybe_spawn_game_on_join_set(&mut self, join_set: &mut JoinSet<()>) {
         // Only spawn a game if we haven't already spawned the requested
-        // number of games.
-        if self.num_started_games >= self.num_total_games {
+        // number of games. If num_total_games is 0, allow infinite games.
+        if self.num_total_games > 0 && self.num_started_games >= self.num_total_games {
             return;
         }
         self.num_started_games += 1;
 
         join_set.spawn({
+            println!(
+                "Starting game. (total started: {:?}, total finished: {:?})",
+                self.num_started_games, self.num_finished_games
+            );
             let game_config = self.game_config;
             let (agent_vector, player_to_agent_index) = self.generate_agents();
 
@@ -272,6 +276,40 @@ mod tests {
             assert!(mcts_data.valid_moves.contains(&one_cell_move_index));
 
             players_seen[mcts_data.player] = true;
+        }
+    }
+
+    #[tokio::test]
+    async fn test_infinite_games_when_num_total_games_is_zero() {
+        let game_config = testing::create_game_config();
+        let directory = testing::create_tmp_directory();
+        let (recorder, _) = Recorder::build_and_start(1, directory);
+
+        // Set num_total_games to 0 to enable infinite games
+        let mut engine = Engine::new(
+            5,
+            0, // num_total_games = 0 means infinite games
+            HashMap::new(),
+            game_config,
+            &AgentGroupConfig::Single(AgentConfig::Random),
+            recorder,
+        );
+
+        // Run games with a timeout to prevent infinite execution
+        let play_games_future = engine.play_games();
+        let timeout_future = tokio::time::sleep(std::time::Duration::from_secs(1));
+
+        tokio::select! {
+            _ = play_games_future => {
+                panic!("play_games() should not complete when num_total_games is 0");
+            }
+            _ = timeout_future => {
+                // Expected: timeout occurs because games continue indefinitely
+                // Verify that many games were started (more than would fit in a single batch)
+                assert!(engine.num_started_games > 10,
+                    "Expected many games to start with infinite mode, but only {} started",
+                    engine.num_started_games);
+            }
         }
     }
 }
