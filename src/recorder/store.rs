@@ -2,7 +2,11 @@ use anyhow::Result;
 use std::fs::File as StdFile;
 use std::io::BufReader as StdBufReader;
 
-use crate::{config::NUM_PLAYERS, game::Board};
+use crate::{
+    config::NUM_PLAYERS,
+    game::Board,
+    s3::{S3Uri, create_s3_client},
+};
 use chrono::prelude::*;
 use chrono_tz::US::Pacific;
 use rand::Rng;
@@ -144,20 +148,13 @@ async fn write_mcts_data_to_s3(
     mcts_data: Vec<u8>,
     output_directory: &str,
 ) -> Result<()> {
-    let remove_protocol = output_directory.split("s3://").nth(1).unwrap();
-    let mut split = remove_protocol.split("/");
-    let bucket = split.next().unwrap();
-    let mut remainder = split.collect::<Vec<&str>>();
+    let uri = S3Uri::new(output_directory.to_string())?;
     let filename = generate_filename(num_rows);
-    remainder.push(&filename[..]);
-    let key = remainder.join("/");
+    let uri_with_file = uri.with_filename(filename)?;
+    let bucket = uri_with_file.bucket.clone();
+    let key = uri_with_file.key();
 
-    let client = aws_sdk_s3::Client::new(
-        &aws_config::from_env()
-            .endpoint_url(std::env::var("S3_ENDPOINT_URL").unwrap())
-            .load()
-            .await,
-    );
+    let client = create_s3_client().await;
     client
         .put_object()
         .body(aws_sdk_s3::primitives::ByteStream::from(mcts_data))
