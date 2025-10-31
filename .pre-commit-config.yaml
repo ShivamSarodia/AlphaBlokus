@@ -28,5 +28,5 @@ repos:
         description: Run Rust tests
         entry: cargo test
         language: system
-        types: [rust]
-        pass_filenames: false        
+        files: "\\.(rs|cpp|h)$"
+        pass_filenames: false
