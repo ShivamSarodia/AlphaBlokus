@@ -1,6 +1,12 @@
 num_concurrent_games = 1024
 duration_seconds = 600
 
+[observability.metrics]
+type = "prometheus"
+
+[observability.logging]
+type = "console"
+
 [mcts_recorder]
 data_directory = "/tmp/alphablokus_mcts_full/games"
 flush_row_count = 100000

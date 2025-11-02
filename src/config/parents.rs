@@ -4,7 +4,9 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
-use crate::config::{AgentGroupConfig, GameConfig, InferenceConfig, MCTSRecorderConfig};
+use crate::config::{
+    AgentGroupConfig, GameConfig, InferenceConfig, MCTSRecorderConfig, ObservabilityConfig,
+};
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
     /// Given a string, parse it into a config and produce a static
@@ -34,6 +36,8 @@ pub struct SelfPlayConfig {
     #[serde(default)]
     pub duration_seconds: u64,
     pub mcts_recorder: MCTSRecorderConfig,
+    #[serde(default)]
+    pub observability: ObservabilityConfig,
 }
 
 impl LoadableConfig for SelfPlayConfig {}

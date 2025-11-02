@@ -100,6 +100,7 @@ mod tests {
                 data_directory: "/tmp/alphablokus_test_fixture".to_string(),
                 flush_row_count: 10,
             },
+            observability: Default::default(),
         };
 
         let config: &'static mut SelfPlayConfig = Box::leak(Box::new(config));
@@ -134,6 +135,7 @@ mod tests {
                 data_directory: "/tmp/alphablokus_test_fixture_duration".to_string(),
                 flush_row_count: 10,
             },
+            observability: Default::default(),
         };
 
         let config: &'static mut SelfPlayConfig = Box::leak(Box::new(config));
