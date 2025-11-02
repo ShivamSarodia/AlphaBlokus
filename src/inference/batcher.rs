@@ -70,7 +70,7 @@ impl<T: Executor> Batcher<T> {
                         |(response, response_sender)| {
                             response_sender.send(response).unwrap_or_else(|_| {
                                 if !cancel_token.is_cancelled() {
-                                    println!("Error sending inference response");
+                                    tracing::error!("Error sending inference response");
                                 }
                             });
                         },

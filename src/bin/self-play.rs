@@ -18,10 +18,11 @@ fn main() -> Result<()> {
     dotenvy::dotenv()?;
 
     let cli = Cli::parse();
-    println!("Starting self-play with config: {:#?}", cli.config);
+    tracing::info!("Starting self-play with config: {:#?}", cli.config);
 
     // Don't drop the guard to flush logs on shutdown.
     let _guard = utils::init_logger();
+    utils::init_metrics();
 
     let config = SelfPlayConfig::from_file(&cli.config)?;
     config.game.load_move_profiles()?;

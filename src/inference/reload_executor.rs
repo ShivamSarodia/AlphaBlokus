@@ -81,7 +81,7 @@ where
                 continue;
             }
 
-            println!("Reloading executor with model {}", latest_model.display());
+            tracing::info!("Reloading executor with model {}", latest_model.display());
 
             {
                 let mut guard = executor.write().await;

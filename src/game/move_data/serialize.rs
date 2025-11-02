@@ -28,7 +28,7 @@ pub fn save<P: AsRef<Path>>(move_profiles: MoveData, output_file: P) -> Result<(
 
 pub fn load<P: AsRef<Path>>(input_file: P) -> Result<MoveData> {
     let path = input_file.as_ref();
-    println!("Loading move profiles...");
+    tracing::info!("Loading move profiles...");
 
     // Open file with buffered reader.
     let file = File::open(path)?;
@@ -37,6 +37,6 @@ pub fn load<P: AsRef<Path>>(input_file: P) -> Result<MoveData> {
 
     let move_profiles: MoveData = rmp_serde::decode::from_read(&mut dec)?;
 
-    println!("Loaded move profiles from disk at {}", path.display());
+    tracing::info!("Loaded move profiles from disk at {}", path.display());
     Ok(move_profiles)
 }

@@ -42,7 +42,7 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) {
             let duration_seconds = config.duration_seconds;
             tokio::spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_secs(duration_seconds)).await;
-                println!(
+                tracing::info!(
                     "Duration limit of {} seconds reached, stopping self-play.",
                     duration_seconds
                 );
@@ -61,7 +61,7 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) {
 
         recorder_background_task.await.unwrap();
 
-        println!("Self-play complete.");
+        tracing::info!("Self-play complete.");
     })
 }
 

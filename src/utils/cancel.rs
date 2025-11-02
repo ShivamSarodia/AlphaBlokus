@@ -6,7 +6,7 @@ pub fn setup_cancel_token() -> CancellationToken {
         let cancel_token = cancel_token.clone();
         async move {
             tokio::signal::ctrl_c().await.unwrap();
-            println!("Ctrl-C received, stopping...");
+            tracing::info!("Ctrl-C received, stopping...");
             cancel_token.cancel();
         }
     });

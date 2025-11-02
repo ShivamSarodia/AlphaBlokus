@@ -24,7 +24,7 @@ pub struct OrtExecutor {
 
 impl OrtExecutor {
     pub fn build(model_path: &Path, game_config: &'static GameConfig) -> Result<Self> {
-        println!(
+        tracing::info!(
             "Building ORT executor with model path: {}",
             model_path.display()
         );

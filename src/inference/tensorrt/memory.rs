@@ -84,6 +84,7 @@ impl MemoryPool {
                     block,
                 };
             }
+            tracing::warn!("Memory block from pool was not immediately available");
             available = self.inner.condvar.wait(available).unwrap();
         }
     }
