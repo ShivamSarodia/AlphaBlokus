@@ -2,15 +2,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::fs;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 
 use crate::inference;
 use crate::inference::batcher::Executor;
+use crate::inference::model_source::ModelSource;
 
 /// Generic wrapper that hot-reloads an executor whenever a newer model file
-/// appears in a watched directory.
+/// appears from a model source.
 pub struct ReloadExecutor<E>
 where
     E: Executor,
@@ -23,15 +23,18 @@ impl<E> ReloadExecutor<E>
 where
     E: Executor,
 {
-    pub async fn build<P, F>(model_dir: P, poll_interval: Duration, builder: F) -> Self
+    pub async fn build<F, M>(model_source: M, poll_interval: Duration, builder: F) -> Self
     where
-        P: AsRef<Path>,
         F: Fn(&Path) -> E + Send + Sync + 'static,
+        M: ModelSource + 'static,
     {
-        let model_dir = model_dir.as_ref().to_path_buf();
         let executor_builder = Arc::new(builder);
+        let model_source = Arc::new(model_source);
 
-        let initial_model_path = Self::latest_model_file_async(&model_dir).await;
+        let initial_model_path = model_source
+            .get_latest_model()
+            .await
+            .expect("Failed to get initial model");
         let initial_executor = executor_builder(&initial_model_path);
 
         let executor = Arc::new(RwLock::new(initial_executor));
@@ -41,11 +44,11 @@ where
             let executor = Arc::clone(&executor);
             let current_model_path = Arc::clone(&current_model_path);
             let executor_builder = Arc::clone(&executor_builder);
-            let model_dir = model_dir.clone();
+            let model_source = Arc::clone(&model_source);
 
             async move {
                 Self::reload_loop(
-                    model_dir,
+                    model_source,
                     poll_interval,
                     executor_builder,
                     executor,
@@ -61,19 +64,26 @@ where
         }
     }
 
-    async fn reload_loop<F>(
-        model_dir: PathBuf,
+    async fn reload_loop<F, M>(
+        model_source: Arc<M>,
         poll_interval: Duration,
         builder: Arc<F>,
         executor: Arc<RwLock<E>>,
         current_model_path: Arc<RwLock<PathBuf>>,
     ) where
         F: Fn(&Path) -> E + Send + Sync + 'static,
+        M: ModelSource,
     {
         loop {
             sleep(poll_interval).await;
 
-            let latest_model = Self::latest_model_file_async(&model_dir).await;
+            let latest_model = match model_source.get_latest_model().await {
+                Ok(path) => path,
+                Err(e) => {
+                    tracing::error!("Failed to get latest model: {}", e);
+                    continue;
+                }
+            };
 
             let current_path = current_model_path.read().await.clone();
 
@@ -93,25 +103,6 @@ where
                 *guard = latest_model;
             }
         }
-    }
-
-    async fn latest_model_file_async(model_dir: &Path) -> PathBuf {
-        let mut entries = fs::read_dir(model_dir).await.unwrap();
-        let mut candidates = Vec::new();
-
-        while let Some(entry) = entries.next_entry().await.unwrap() {
-            let path = entry.path();
-
-            if path.is_file() && path.extension().unwrap() == "onnx" {
-                candidates.push(path);
-            }
-        }
-
-        candidates.sort_by(|a, b| a.file_name().unwrap().cmp(b.file_name().unwrap()));
-
-        let path = candidates.pop().unwrap();
-
-        path.canonicalize().unwrap_or(path)
     }
 
     #[allow(dead_code)]
@@ -135,6 +126,7 @@ mod tests {
     use crate::config::NUM_PLAYERS;
     use crate::game::Board;
     use crate::inference;
+    use crate::inference::LocalModelSource;
     use crate::testing;
     use std::fs;
     use std::path::Path;
@@ -171,8 +163,9 @@ mod tests {
         let first_model_path = directory_path.join("1.onnx");
         fs::write(&first_model_path, "first").unwrap();
 
+        let model_source = LocalModelSource::new(&directory);
         let executor = Arc::new(
-            ReloadExecutor::build(&directory, Duration::from_millis(25), move |path| {
+            ReloadExecutor::build(model_source, Duration::from_millis(25), move |path| {
                 let file_name = path.file_stem().unwrap().to_str().unwrap();
                 let id = file_name.parse::<usize>().unwrap();
                 MockSubExecutor { id }

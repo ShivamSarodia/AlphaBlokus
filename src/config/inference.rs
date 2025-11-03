@@ -1,11 +1,10 @@
 use serde::Deserialize;
-use std::path::PathBuf;
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct InferenceConfig {
     pub name: String,
     pub batch_size: usize,
-    pub model_path: PathBuf,
+    pub model_path: String,
     pub executor: ExecutorConfig,
     #[serde(default)]
     pub reload: Option<ReloadConfig>,
@@ -24,4 +23,10 @@ pub enum ExecutorConfig {
 #[derive(Deserialize, Debug, Clone)]
 pub struct ReloadConfig {
     pub poll_interval_seconds: u64,
+    #[serde(default = "default_s3_cache_size")]
+    pub s3_cache_size: usize,
+}
+
+fn default_s3_cache_size() -> usize {
+    3
 }

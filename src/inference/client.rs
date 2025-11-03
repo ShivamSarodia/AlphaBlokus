@@ -1,11 +1,17 @@
-use std::{path::Path, time::Duration};
+use std::{
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 #[cfg(cuda)]
 use crate::inference::TensorRtExecutor;
 use crate::{
     config::{ExecutorConfig, GameConfig, InferenceConfig, NUM_PLAYERS},
     game::Board,
-    inference::{Executor, OrtExecutor, ReloadExecutor, batcher::Batcher},
+    inference::{
+        Executor, LocalModelSource, OrtExecutor, ReloadExecutor, S3ModelSource, batcher::Batcher,
+    },
+    s3::S3ModelDownloader,
 };
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -63,25 +69,77 @@ impl DefaultClient {
     ) -> Self {
         match &inference_config.reload {
             Some(reload_config) => {
-                let base_executor_config = inference_config.executor.clone();
-                let executor = ReloadExecutor::build(
-                    &inference_config.model_path,
-                    Duration::from_secs(reload_config.poll_interval_seconds),
-                    move |path| build_executor(&base_executor_config, game_config, path),
-                )
-                .await;
-
-                Self::build_and_start(executor, inference_config.batch_size, cancel_token)
+                Self::build_with_reload(inference_config, reload_config, game_config, cancel_token)
+                    .await
             }
-            None => {
-                let executor = build_executor(
-                    &inference_config.executor,
-                    game_config,
-                    &inference_config.model_path,
-                );
-                Self::build_and_start(executor, inference_config.batch_size, cancel_token)
-            }
+            None => Self::build_without_reload(inference_config, game_config, cancel_token).await,
         }
+    }
+
+    async fn build_with_reload(
+        inference_config: &InferenceConfig,
+        reload_config: &crate::config::ReloadConfig,
+        game_config: &'static GameConfig,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        let base_executor_config = inference_config.executor.clone();
+        let poll_interval = Duration::from_secs(reload_config.poll_interval_seconds);
+
+        let executor = if Self::is_s3_path(&inference_config.model_path) {
+            let model_source = Self::create_s3_model_source(
+                &inference_config.model_path,
+                reload_config.s3_cache_size,
+            )
+            .await;
+            ReloadExecutor::build(model_source, poll_interval, move |path| {
+                build_executor(&base_executor_config, game_config, path)
+            })
+            .await
+        } else {
+            let model_source = LocalModelSource::new(Path::new(&inference_config.model_path));
+            ReloadExecutor::build(model_source, poll_interval, move |path| {
+                build_executor(&base_executor_config, game_config, path)
+            })
+            .await
+        };
+
+        Self::build_and_start(executor, inference_config.batch_size, cancel_token)
+    }
+
+    async fn build_without_reload(
+        inference_config: &InferenceConfig,
+        game_config: &'static GameConfig,
+        cancel_token: CancellationToken,
+    ) -> Self {
+        let model_path = if Self::is_s3_path(&inference_config.model_path) {
+            Self::download_model_from_s3(&inference_config.model_path).await
+        } else {
+            PathBuf::from(&inference_config.model_path)
+        };
+
+        let executor = build_executor(&inference_config.executor, game_config, &model_path);
+        Self::build_and_start(executor, inference_config.batch_size, cancel_token)
+    }
+
+    fn is_s3_path(path: &str) -> bool {
+        path.starts_with("s3://")
+    }
+
+    async fn create_s3_model_source(s3_uri: &str, cache_size: usize) -> S3ModelSource {
+        let downloader = S3ModelDownloader::new(s3_uri.to_string(), cache_size)
+            .await
+            .expect("Failed to create S3ModelDownloader");
+        S3ModelSource::new(downloader)
+    }
+
+    async fn download_model_from_s3(s3_uri: &str) -> std::path::PathBuf {
+        let downloader = S3ModelDownloader::new(s3_uri.to_string(), 1)
+            .await
+            .expect("Failed to create S3ModelDownloader");
+        downloader
+            .sync_latest_model()
+            .await
+            .expect("Failed to download model from S3")
     }
 }
 
