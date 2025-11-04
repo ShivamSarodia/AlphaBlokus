@@ -204,7 +204,7 @@ mod tests {
     async fn create_test_downloader(cache_dir: PathBuf, cache_size: usize) -> S3ModelDownloader {
         // Set env var required by create_s3_client (not actually used in cleanup tests)
         unsafe {
-            std::env::set_var("S3_ENDPOINT_URL", "http://localhost:9000");
+            std::env::set_var("AWS_ENDPOINT_URL", "http://localhost:9000");
         }
 
         S3ModelDownloader {

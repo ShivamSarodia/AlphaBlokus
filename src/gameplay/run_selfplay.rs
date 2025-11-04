@@ -89,7 +89,7 @@ mod tests {
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
                 batch_size: 2,
-                model_path: PathBuf::from("static/networks/trivial_net_tiny.onnx"),
+                model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
                 executor: ExecutorConfig::Ort,
                 reload: None,
             }],
@@ -124,7 +124,7 @@ mod tests {
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
                 batch_size: 2,
-                model_path: PathBuf::from("static/networks/trivial_net_tiny.onnx"),
+                model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
                 executor: ExecutorConfig::Ort,
                 reload: None,
             }],

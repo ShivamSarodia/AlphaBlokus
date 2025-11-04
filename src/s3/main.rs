@@ -68,7 +68,7 @@ impl S3Uri {
 /// Creates an AWS S3 client configured with the endpoint URL from the S3_ENDPOINT_URL environment variable.
 pub async fn create_s3_client() -> Client {
     let config = aws_config::from_env()
-        .endpoint_url(std::env::var("S3_ENDPOINT_URL").unwrap())
+        .endpoint_url(std::env::var("AWS_ENDPOINT_URL").unwrap())
         .load()
         .await;
     Client::new(&config)
