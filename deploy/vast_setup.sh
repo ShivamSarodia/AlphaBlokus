@@ -1,5 +1,17 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+trap 'echo "Error: \"$BASH_COMMAND\" failed at line $LINENO" >&2' ERR
+
+#################################
+#                               #
+#  Create workspace directory   #
+#                               #
+#################################
+
 mkdir -p /workspace
 cd /workspace
+
+echo "✅ Set up workspace"
 
 #################################
 #                               #
@@ -10,6 +22,8 @@ cd /workspace
 sudo apt-get update -y
 sudo apt-get install -y curl build-essential pkg-config libssl-dev python3 python3-pip git-lfs npm
 
+echo "✅ Installed basic dependencies"
+
 #################################
 #                               #
 #  Install TensorRT             #
@@ -17,14 +31,33 @@ sudo apt-get install -y curl build-essential pkg-config libssl-dev python3 pytho
 #################################
 
 # Detect CUDA version
-CUDA_VERSION=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+\.[0-9]+') || true
+CUDA_DETECTED="$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+')" || true
 
-if [ -z "${CUDA_VERSION:-}" ]; then
-  echo "❌ Could not detect CUDA version from nvidia-smi"
+if [ -z "${CUDA_DETECTED:-}" ]; then
+  echo "❌ Could not detect CUDA version from nvidia-smi" >&2
   exit 1
 fi
 
-echo "✅ Detected CUDA version: $CUDA_VERSION"
+echo "✅ Detected CUDA version: $CUDA_DETECTED"
+
+case "$CUDA_DETECTED" in
+  11.*)
+    echo "❌ CUDA 11.x is not supported." >&2
+    exit 1
+    ;;
+  12.*)
+    CUDA_VERSION="12.9"
+    ;;
+  13.*)
+    CUDA_VERSION="$CUDA_DETECTED"
+    ;;
+  *)
+    echo "❌ Unsupported CUDA version \"$CUDA_DETECTED\" (expected 12.x or 13.x)." >&2
+    exit 1
+    ;;
+esac
+
+echo "✅ Using CUDA_VERSION=${CUDA_VERSION}"
 
 export TRT_VERSION=$(
   apt-cache madison tensorrt \
@@ -39,7 +72,7 @@ if [ -z "${TRT_VERSION:-}" ]; then
   exit 1
 fi
 
-echo "✅ Detected TensorRT version: $TRT_VERSION"
+echo "✅ Using TensorRT version: $TRT_VERSION"
 
 # From here: https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/installing.html#net-repo-install-debian
 sudo apt-get install -y \
@@ -94,6 +127,8 @@ tensorrt-dev \
 tensorrt-libs \
 tensorrt
 
+echo "✅ Installed TensorRT"
+
 #################################
 #                               #
 #  Install Rust.                #
@@ -102,6 +137,8 @@ tensorrt
 
 curl -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
+
+echo "✅ Installed Rust"
 
 #################################
 #                               #
@@ -112,6 +149,8 @@ source "$HOME/.cargo/env"
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 \. "$HOME/.nvm/nvm.sh"
 nvm install 25
+
+echo "✅ Installed Node"
 
 #################################
 #                               #
@@ -125,6 +164,8 @@ sudo apt-get update
 sudo apt-get install -y alloy
 # /etc/alloy/config.alloy < todo, hide secrets (untested)
 # sudo systemctl reload alloy
+
+echo "✅ Installed Grafana Alloy"
 
 #################################
 #                               #
@@ -148,6 +189,8 @@ pre-commit install
 
 # Install Codex for development
 npm install -g @openai/codex
+
+echo "✅ Set up repo"
 
 #################################
 #                               #
