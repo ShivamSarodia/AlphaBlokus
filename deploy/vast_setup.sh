@@ -1,5 +1,5 @@
-# Change into the repo directory, if we're not already there.
-cd /workspace/AlphaBlokus
+mkdir -p /workspace
+cd /workspace
 
 #################################
 #                               #
@@ -128,17 +128,25 @@ sudo apt-get install -y alloy
 
 #################################
 #                               #
-#  Set up repo for development  #
+#  Set up repo                  #
 #                               #
 #################################
 
+# Clone the repo
 git config --global user.email "ssarodia@gmail.com"
 git config --global user.name "Shivam Sarodia"
+rm -rf AlphaBlokus
+git clone https://github.com/ShivamSarodia/AlphaBlokus.git
+
+cd AlphaBlokus
+
 git remote set-url origin "https://${GITHUB_PAT}@github.com/ShivamSarodia/AlphaBlokus.git"
 
+# Install pre-commit hooks
 pip install pre-commit
 pre-commit install
 
+# Install Codex for development
 npm install -g @openai/codex
 
 #################################
