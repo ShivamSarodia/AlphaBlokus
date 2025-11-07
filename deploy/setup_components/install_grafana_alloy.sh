@@ -9,7 +9,11 @@ wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
 sudo apt-get update
 sudo apt-get install -y alloy
-cp deploy/config.alloy /etc/alloy/config.alloy
-sudo systemctl reload alloy
+
+nohup alloy run --server.http.listen-addr=0.0.0.0:12345 deploy/config.alloy >> /tmp/alloy.log 2>&1 &
+
+mkdir -p /tmp/log/alphablokus/
+echo "Alloy running (1)" >> /tmp/log/alphablokus/initial.log
+echo "Alloy running (2)" >> /tmp/log/alphablokus/initial.log
 
 echo "✅ Installed Grafana Alloy"

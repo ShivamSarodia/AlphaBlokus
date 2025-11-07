@@ -41,3 +41,14 @@ prometheus.scrape "rust_app" {
   }]
   forward_to = [prometheus.remote_write.metrics_service.receiver]
 }
+
+// For system metrics (CPU, etc)
+
+// Starts an embedded node_exporter on a local port.
+prometheus.exporter.unix "host" { }
+
+// Scrape and ship system metrics.
+prometheus.scrape "system" {
+  targets    = prometheus.exporter.unix.host.targets
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+}
