@@ -1,0 +1,43 @@
+// For logs
+
+local.file_match "local_files" {
+  path_targets = [{"__path__" = "/tmp/log/alphablokus/*.log"}]
+}
+
+loki.source.file "log_scrape" {
+  targets    = local.file_match.local_files.targets
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+  tail_from_end = true
+}
+
+loki.write "grafana_cloud_loki" {
+  endpoint {
+    url = "https://logs-prod-021.grafana.net/loki/api/v1/push"
+
+    basic_auth {
+      username = "1382213"
+      password = sys.env("GRAFANA_PASSWORD")
+    }
+  }
+}
+
+// For metrics
+
+prometheus.remote_write "metrics_service" {
+  endpoint {
+    url = "https://prometheus-prod-36-prod-us-west-0.grafana.net/api/prom/push"
+
+    basic_auth {
+      username = "2773073"
+      password = sys.env("GRAFANA_PASSWORD")
+    }
+  }
+}
+
+prometheus.scrape "rust_app" {
+  targets = [{
+    // My app's /metrics
+    __address__ = "127.0.0.1:9000",
+  }]
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+}

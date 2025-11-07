@@ -180,21 +180,6 @@ echo "✅ Installed Node"
 
 #################################
 #                               #
-#  Install Grafana Alloy        #
-#                               #
-#################################
-sudo mkdir -p /etc/apt/keyrings/
-wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
-echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
-sudo apt-get update
-sudo apt-get install -y alloy
-# /etc/alloy/config.alloy < todo, hide secrets (untested)
-# sudo systemctl reload alloy
-
-echo "✅ Installed Grafana Alloy"
-
-#################################
-#                               #
 #  Set up repo                  #
 #                               #
 #################################
@@ -202,11 +187,6 @@ echo "✅ Installed Grafana Alloy"
 # Clone the repo
 git config --global user.email "ssarodia@gmail.com"
 git config --global user.name "Shivam Sarodia"
-rm -rf AlphaBlokus
-git clone https://github.com/ShivamSarodia/AlphaBlokus.git
-
-cd AlphaBlokus
-
 git remote set-url origin "https://${GITHUB_PAT}@github.com/ShivamSarodia/AlphaBlokus.git"
 
 # Install pre-commit hooks
@@ -217,6 +197,21 @@ pre-commit install
 npm install -g @openai/codex
 
 echo "✅ Set up repo"
+
+#################################
+#                               #
+#  Install Grafana Alloy        #
+#                               #
+#################################
+sudo mkdir -p /etc/apt/keyrings/
+wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+sudo apt-get update
+sudo apt-get install -y alloy
+cp deploy/config.alloy /etc/alloy/config.alloy
+sudo systemctl reload alloy
+
+echo "✅ Installed Grafana Alloy"
 
 #################################
 #                               #
