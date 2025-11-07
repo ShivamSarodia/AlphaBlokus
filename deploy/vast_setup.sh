@@ -2,22 +2,16 @@
 set -Eeuo pipefail
 trap 'echo "Error: \"$BASH_COMMAND\" failed at line $LINENO" >&2' ERR
 
-#################################
-#                               #
-#  Create workspace directory   #
-#                               #
-#################################
-
-mkdir -p /workspace
-cd /workspace
-
-echo "✅ Set up workspace"
+# Note: Call this script from the root of the repo, once it's already
+# been cloned.
 
 #################################
 #                               #
 #  Install basic dependencies   #
 #                               #
 #################################
+
+echo "⏳ Starting installation of basic dependencies..."
 
 sudo apt-get update -y
 sudo apt-get install -y curl build-essential pkg-config libssl-dev python3 python3-pip git-lfs npm
@@ -29,6 +23,8 @@ echo "✅ Installed basic dependencies"
 #  Install TensorRT             #
 #                               #
 #################################
+
+echo "⏳ Starting installation of TensorRT..."
 
 # Detect CUDA version
 CUDA_DETECTED="$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+')" || true
@@ -161,6 +157,8 @@ echo "✅ Installed TensorRT"
 #                               #
 #################################
 
+echo "⏳ Starting installation of Rust..."
+
 curl -sSf https://sh.rustup.rs | sh -s -- -y
 source "$HOME/.cargo/env"
 
@@ -171,6 +169,8 @@ echo "✅ Installed Rust"
 #  Install Node.                #
 #                               #
 #################################
+
+echo "⏳ Starting installation of Node..."
 
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 \. "$HOME/.nvm/nvm.sh"
@@ -184,7 +184,7 @@ echo "✅ Installed Node"
 #                               #
 #################################
 
-# Clone the repo
+echo "⏳ Starting repo setup..."
 git config --global user.email "ssarodia@gmail.com"
 git config --global user.name "Shivam Sarodia"
 git remote set-url origin "https://${GITHUB_PAT}@github.com/ShivamSarodia/AlphaBlokus.git"
@@ -203,6 +203,9 @@ echo "✅ Set up repo"
 #  Install Grafana Alloy        #
 #                               #
 #################################
+
+echo "⏳ Starting installation of Grafana Alloy..."
+
 sudo mkdir -p /etc/apt/keyrings/
 wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
 echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
@@ -219,7 +222,11 @@ echo "✅ Installed Grafana Alloy"
 #                               #
 #################################
 
+echo "⏳ Starting Rust tests..."
+
 # Run cargo test to confirm things work (and install dependencies)
 cargo test
 
-echo "✅ Environment setup complete!"
+echo "✅ Ran Rust tests"
+
+echo "✅ All setup complete!"
