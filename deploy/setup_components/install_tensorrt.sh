@@ -2,31 +2,8 @@
 set -Eeuo pipefail
 trap 'echo "Error: \"$BASH_COMMAND\" failed at line $LINENO" >&2' ERR
 
-# Note: Call this script from the root of the repo, once it's already
-# been cloned.
-
-#################################
-#                               #
-#  Install basic dependencies   #
-#                               #
-#################################
-
-echo "⏳ Starting installation of basic dependencies..."
-
-sudo apt-get update -y
-sudo apt-get install -y curl build-essential pkg-config libssl-dev python3 python3-pip git-lfs npm
-
-echo "✅ Installed basic dependencies"
-
-#################################
-#                               #
-#  Install TensorRT             #
-#                               #
-#################################
-
 echo "⏳ Starting installation of TensorRT..."
 
-# Detect CUDA version
 CUDA_DETECTED="$(nvidia-smi | grep -oP 'CUDA Version:\s*\K[0-9]+\.[0-9]+')" || true
 
 if [ -z "${CUDA_DETECTED:-}" ]; then
@@ -70,7 +47,6 @@ fi
 
 echo "✅ Using TensorRT version: $TRT_VERSION"
 
-# From here: https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/installing.html#net-repo-install-debian
 sudo apt-mark unhold \
 libnvinfer-bin \
 libnvinfer-dev \
@@ -150,83 +126,3 @@ tensorrt-libs \
 tensorrt
 
 echo "✅ Installed TensorRT"
-
-#################################
-#                               #
-#  Install Rust.                #
-#                               #
-#################################
-
-echo "⏳ Starting installation of Rust..."
-
-curl -sSf https://sh.rustup.rs | sh -s -- -y
-source "$HOME/.cargo/env"
-
-echo "✅ Installed Rust"
-
-#################################
-#                               #
-#  Install Node.                #
-#                               #
-#################################
-
-echo "⏳ Starting installation of Node..."
-
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
-\. "$HOME/.nvm/nvm.sh"
-nvm install 25
-
-echo "✅ Installed Node"
-
-#################################
-#                               #
-#  Set up repo                  #
-#                               #
-#################################
-
-echo "⏳ Starting repo setup..."
-git config --global user.email "ssarodia@gmail.com"
-git config --global user.name "Shivam Sarodia"
-git remote set-url origin "https://${GITHUB_PAT}@github.com/ShivamSarodia/AlphaBlokus.git"
-
-# Install pre-commit hooks
-pip install pre-commit
-pre-commit install
-
-# Install Codex for development
-npm install -g @openai/codex
-
-echo "✅ Set up repo"
-
-#################################
-#                               #
-#  Install Grafana Alloy        #
-#                               #
-#################################
-
-echo "⏳ Starting installation of Grafana Alloy..."
-
-sudo mkdir -p /etc/apt/keyrings/
-wget -q -O - https://apt.grafana.com/gpg.key | gpg --dearmor | sudo tee /etc/apt/keyrings/grafana.gpg > /dev/null
-echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
-sudo apt-get update
-sudo apt-get install -y alloy
-cp deploy/config.alloy /etc/alloy/config.alloy
-sudo systemctl reload alloy
-
-echo "✅ Installed Grafana Alloy"
-
-#################################
-#                               #
-#  Run Rust tests               #
-#                               #
-#################################
-
-echo "⏳ Starting Rust tests..."
-
-# Run cargo test to confirm things work (and install dependencies)
-cargo test
-
-echo "✅ Ran Rust tests"
-
-echo "✅ All setup complete!"
