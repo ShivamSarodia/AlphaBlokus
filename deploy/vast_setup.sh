@@ -75,7 +75,7 @@ fi
 echo "✅ Using TensorRT version: $TRT_VERSION"
 
 # From here: https://docs.nvidia.com/deeplearning/tensorrt/latest/installing-tensorrt/installing.html#net-repo-install-debian
-sudo apt-get install -y \
+sudo apt-get install -y --allow-change-held-packages \
 libnvinfer-bin=${TRT_VERSION} \
 libnvinfer-dev=${TRT_VERSION} \
 libnvinfer-dispatch-dev=${TRT_VERSION} \
