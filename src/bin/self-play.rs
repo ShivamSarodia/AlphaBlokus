@@ -1,5 +1,5 @@
 use alpha_blokus::{config, gameplay::run_selfplay};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 
@@ -15,7 +15,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    dotenvy::dotenv()?;
+    dotenvy::dotenv().context("Failed to load .env file")?;
 
     let cli = Cli::parse();
 
