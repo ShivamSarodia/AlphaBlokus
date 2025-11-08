@@ -6,6 +6,7 @@ num_piece_orientations = 91
 move_data_file = "static/move_data/half.bin"
 
 [network]
+model_class = "trivial"
 main_body_channels = 64
 residual_blocks = 10
 value_head_channels = 16
@@ -20,9 +21,9 @@ learning_rate = 1e-3
 batch_size = 128
 policy_loss_weight = 0.158
 sampling_ratio = 2.0
-window_size = 100000
-min_samples_for_save = 10000
-poll_interval_seconds = 60
+window_size = 10000
+min_samples_for_save = 5000
+poll_interval_seconds = 5
 
 [directories]
 game_data_directory = "data/scrap/games/"

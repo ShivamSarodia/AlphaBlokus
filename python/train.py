@@ -81,7 +81,7 @@ def save_model_and_state(model, optimizer, samples_total: int):
         onnx_path = directories_config.model_directory + f"{samples_total:08d}.onnx"
         print("Saving model to:", onnx_path)
         with from_localized(onnx_path) as onnx_path:
-            model.save_onnx(onnx_path)
+            model.save_onnx(onnx_path, training_config.device)
     else:
         print("No model directory set, skipping model save.")
 
@@ -142,6 +142,10 @@ def run():
             save_model_and_state(model, optimizer, samples_total)
             state.samples_since_last_save = 0
             print("Save complete!\n")
+        else:
+            print(
+                f"Accumulated {state.samples_since_last_save} new samples since last save. Waiting for {training_config.min_samples_for_save - state.samples_since_last_save} more samples before saving."
+            )
 
         # Wait before polling again
         print(

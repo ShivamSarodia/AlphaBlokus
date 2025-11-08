@@ -1,19 +1,18 @@
-num_concurrent_games = 100
+num_concurrent_games = 128
 
 [mcts_recorder]
 data_directory = "data/scrap/games/"
-flush_row_count = 100
+flush_row_count = 50
 
 [[inference]]
 name = "default"
-# model_path = "data/scrap/models/"
-model_path = "static/networks/trivial_net_half.onnx"
-batch_size = 25
+model_path = "data/scrap/models/"
+batch_size = 32
 executor = { type = "ort" }
-# reload = { poll_interval_seconds = 60 }
+reload = { poll_interval_seconds = 5 }
 
 [agents.Single.MCTS]
-fast_move_probability = 0.2
+fast_move_probability = 0.8
 fast_move_num_rollouts = 100
 full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83

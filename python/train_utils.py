@@ -7,7 +7,20 @@ import torch.nn as nn
 
 from configs import DirectoriesConfig, GameConfig, NetworkConfig, TrainingConfig
 from res_net import NeuralNet
+from trivial_net import TrivialNet
 from files import latest_file, localize_file, list_files
+
+
+def initialize_model(
+    network_config: NetworkConfig,
+    game_config: GameConfig,
+) -> nn.Module:
+    if network_config.model_class == "trivial":
+        return TrivialNet(game_config)
+    elif network_config.model_class == "resnet":
+        return NeuralNet(network_config, game_config)
+    else:
+        raise ValueError(f"Invalid model class: {network_config.model_class}")
 
 
 def list_game_data_files(
@@ -74,7 +87,9 @@ def maybe_download_files(
         if total_samples >= num_samples:
             break
 
-    print(f"Selected {len(selected_files)} game data files for download.")
+    print(
+        f"Selected {len(selected_files)} game data files with {total_samples} samples for download."
+    )
 
     # Localize the selected files (download if needed)
     return [localize_file(file_path) for file_path in selected_files]
@@ -85,12 +100,12 @@ def load_initial_state(
     game_config: GameConfig,
     training_config: TrainingConfig,
     directories_config: DirectoriesConfig,
-) -> tuple[NeuralNet, torch.optim.Optimizer, int]:
+) -> tuple[nn.Module, torch.optim.Optimizer, int]:
     """
     Loads the initial state of the model and optimizer from the training directory.
     """
     # Load the model and optimizer.
-    model = NeuralNet(network_config, game_config).to(device=training_config.device)
+    model = initialize_model(network_config, game_config)
     optimizer = torch.optim.Adam(model.parameters(), lr=training_config.learning_rate)
 
     initial_training_state = latest_file(directories_config.training_directory, ".pth")
@@ -104,6 +119,15 @@ def load_initial_state(
         initial_training_state = torch.load(initial_training_path)
         model.load_state_dict(initial_training_state["model"])
         optimizer.load_state_dict(initial_training_state["optimizer"])
+
+    # Move the model to the appropriate device.
+    model = model.to(device=training_config.device)
+
+    # Move optimizer state to the same device as the model.
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(training_config.device)
 
     return model, optimizer, samples
 

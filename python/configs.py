@@ -22,6 +22,7 @@ class GameConfig:
 
 @dataclass
 class NetworkConfig:
+    model_class: str
     main_body_channels: int
     residual_blocks: int
     value_head_channels: int
@@ -33,6 +34,7 @@ class NetworkConfig:
         with open(config_file, "rb") as f:
             data = tomllib.load(f)
 
+        self.model_class = data["network"]["model_class"]
         self.main_body_channels = data["network"]["main_body_channels"]
         self.residual_blocks = data["network"]["residual_blocks"]
         self.value_head_channels = data["network"]["value_head_channels"]
