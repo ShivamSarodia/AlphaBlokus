@@ -11,6 +11,6 @@ source deploy/setup_components/install_rust.sh
 source deploy/setup_components/install_node.sh
 source deploy/setup_components/setup_repo.sh
 source deploy/setup_components/install_grafana_alloy.sh
-source deploy/setup_components/run_rust_tests.sh
+source deploy/setup_components/run_cargo_tests.sh
 
 echo "🎉 Setup complete!"
