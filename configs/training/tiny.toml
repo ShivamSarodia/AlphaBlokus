@@ -21,6 +21,8 @@ batch_size = 128
 policy_loss_weight = 0.158
 sampling_ratio = 2.0
 window_size = 100000
+min_samples_for_save = 10000
+poll_interval_seconds = 60
 
 [directories]
 game_data_directory = "data/scrap/games/"

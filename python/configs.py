@@ -52,18 +52,23 @@ class TrainingConfig:
     sampling_ratio: float
     window_size: int
     device: str
+    min_samples_for_save: int
+    poll_interval_seconds: int
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
             data = tomllib.load(f)
 
-        self.num_epochs = data["training"]["num_epochs"]
-        self.learning_rate = data["training"]["learning_rate"]
-        self.batch_size = data["training"]["batch_size"]
-        self.policy_loss_weight = data["training"]["policy_loss_weight"]
-        self.sampling_ratio = data["training"]["sampling_ratio"]
-        self.window_size = data["training"]["window_size"]
-        self.device = data["training"]["device"]
+        training_data = data["training"]
+        self.num_epochs = training_data["num_epochs"]
+        self.learning_rate = training_data["learning_rate"]
+        self.batch_size = training_data["batch_size"]
+        self.policy_loss_weight = training_data["policy_loss_weight"]
+        self.sampling_ratio = training_data["sampling_ratio"]
+        self.window_size = training_data["window_size"]
+        self.device = training_data["device"]
+        self.min_samples_for_save = training_data.get("min_samples_for_save", 10000)
+        self.poll_interval_seconds = training_data.get("poll_interval_seconds", 60)
 
 
 @dataclass
