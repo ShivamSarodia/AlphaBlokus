@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     let _guard = utils::init_logger(&config.observability.logging);
     utils::init_metrics(&config.observability.metrics);
 
-    tracing::info!("Starting self-play with config: {:#?}", cli.config);
+    tracing::info!("Starting self-play with config: {:?}", config);
 
     config.game.load_move_profiles()?;
 
