@@ -52,3 +52,13 @@ prometheus.scrape "system" {
   targets    = prometheus.exporter.unix.host.targets
   forward_to = [prometheus.remote_write.metrics_service.receiver]
 }
+
+// For NVIDIA metrics
+
+prometheus.scrape "nvidia_smi" {
+  targets = [{
+    // My app's /metrics
+    __address__ = "127.0.0.1:9835",
+  }]
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+}
