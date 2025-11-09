@@ -102,6 +102,11 @@ TrtEngine::Impl::Impl(const std::string& model_path, std::size_t max_batch_size)
   check_trt(config != nullptr, "Failed to create TensorRT builder config");
   config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 1ULL << 30);
 
+  #pragma GCC diagnostic push
+  #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+  config->setFlag(nvinfer1::BuilderFlag::kFP16);
+  #pragma GCC diagnostic pop
+
   nvinfer1::IOptimizationProfile* profile = builder->createOptimizationProfile();
   check_trt(profile != nullptr, "Failed to create optimization profile");
 

@@ -2,6 +2,7 @@ use crate::config::NUM_PLAYERS;
 use crate::game::BoardSlice;
 use crate::game::{MovesArray, MovesBitSet};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MoveProfile {
@@ -17,10 +18,16 @@ pub struct MoveProfile {
 }
 
 // I don't love the naming here :/
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct MoveData {
     pub profiles: MovesArray<MoveProfile>,
     pub initial_moves_enabled: [MovesBitSet; NUM_PLAYERS],
+}
+
+impl fmt::Debug for MoveData {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[truncated]")
+    }
 }
 
 pub fn move_index_to_player_pov(

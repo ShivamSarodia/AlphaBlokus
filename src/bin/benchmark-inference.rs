@@ -22,10 +22,6 @@ fn main() -> Result<()> {
     dotenvy::dotenv().context("Failed to load .env file")?;
 
     let cli = Cli::parse();
-    println!(
-        "Starting inference benchmark with config:\n\n{:#?}",
-        cli.config
-    );
 
     let config =
         BenchmarkInferenceConfig::from_file(&cli.config).context("Failed to load config")?;
@@ -33,6 +29,8 @@ fn main() -> Result<()> {
         .game
         .load_move_profiles()
         .context("Failed to load move profiles")?;
+
+    println!("Starting inference benchmark with config:\n\n{:#?}", config,);
 
     run_benchmark_inference(config);
 
