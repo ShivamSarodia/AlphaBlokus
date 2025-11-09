@@ -237,9 +237,14 @@ mod tests {
         // Push 3 and 4.
         recorder.push_mcts_data(vec![data_3, data_4]);
 
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        // Wait for the file to be written.
+        for _ in 0..20 {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            if std::fs::read_dir(&directory).unwrap().count() > 0 {
+                break;
+            }
+        }
 
-        // The file should be written to disk with four rows of data.
         assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
         let file = std::fs::read_dir(&directory)
             .unwrap()
