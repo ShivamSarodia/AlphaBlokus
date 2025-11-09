@@ -88,15 +88,18 @@ where
             let current_path = current_model_path.read().await.clone();
 
             if latest_model == current_path {
+                metrics::counter!("reload_executor.model_not_changed_total").increment(1);
                 continue;
             }
 
             tracing::info!("Reloading executor with model {}", latest_model.display());
-
             {
                 let mut guard = executor.write().await;
                 *guard = builder(&latest_model);
             }
+
+            tracing::info!("Successfully loaded new model: {}", latest_model.display());
+            metrics::counter!("reload_executor.model_reloaded_total").increment(1);
 
             {
                 let mut guard = current_model_path.write().await;

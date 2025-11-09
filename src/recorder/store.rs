@@ -124,10 +124,14 @@ async fn write_mcts_data(mcts_data: Vec<MCTSData>, output_directory: &str) -> Re
     .await??;
 
     if output_directory.starts_with("s3://") {
-        write_mcts_data_to_s3(num_rows, body, output_directory).await
+        write_mcts_data_to_s3(num_rows, body, output_directory).await?;
     } else {
-        write_mcts_data_to_disk(num_rows, body, output_directory).await
+        write_mcts_data_to_disk(num_rows, body, output_directory).await?;
     }
+
+    metrics::counter!("game_data_rows_published_total").increment(num_rows as u64);
+
+    Ok(())
 }
 
 async fn write_mcts_data_to_disk(
