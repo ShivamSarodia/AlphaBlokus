@@ -22,7 +22,7 @@ class TrainingState:
 
 
 # Load configs.
-config_path = "configs/training/half.toml"
+config_path = "configs/training/half_vast.toml"
 game_config = GameConfig(config_path)
 network_config = NetworkConfig(config_path)
 training_config = TrainingConfig(config_path)
@@ -147,11 +147,13 @@ def run():
                 f"Accumulated {state.samples_since_last_save} new samples since last save. Waiting for {training_config.min_samples_for_save - state.samples_since_last_save} more samples before saving."
             )
 
-        # Wait before polling again
-        print(
-            f"Waiting {training_config.poll_interval_seconds} seconds before next poll..."
-        )
-        time.sleep(training_config.poll_interval_seconds)
+        # If there were no new samples, sleep before polling again for any new data.
+        if new_samples_trained == 0:
+            # Wait before polling again
+            print(
+                f"Waiting {training_config.poll_interval_seconds} seconds before next poll..."
+            )
+            time.sleep(training_config.poll_interval_seconds)
 
 
 run()
