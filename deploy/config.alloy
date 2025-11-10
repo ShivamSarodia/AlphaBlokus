@@ -1,7 +1,10 @@
 // For logs
 
 local.file_match "local_files" {
-  path_targets = [{"__path__" = "/tmp/log/alphablokus/*.log"}]
+  path_targets = [
+    {"__path__" = "/tmp/log/alphablokus/*.log"},
+    {"__path__" = "/tmp/log/alphablokus/*.log.*"},
+  ]
 }
 
 loki.source.file "log_scrape" {
