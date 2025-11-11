@@ -1,6 +1,7 @@
 use ahash::AHashMap as HashMap;
 use std::sync::Arc;
 
+use rand::seq::SliceRandom;
 use tokio::task::JoinSet;
 
 use crate::agents::{Agent, MCTSAgent, RandomAgent};
@@ -71,6 +72,22 @@ impl Engine {
                 vec![self.generate_single_agent(agent_config)],
                 [0; NUM_PLAYERS],
             ),
+            AgentGroupConfig::QuadArena(agent_configs) => {
+                // Create four agents from the four configs
+                let agents: Vec<Box<dyn Agent>> = agent_configs
+                    .iter()
+                    .map(|config| self.generate_single_agent(config))
+                    .collect();
+
+                // Create a randomized order mapping: [0, 1, 2, 3] shuffled
+                let mut order: [usize; NUM_PLAYERS] = [0, 1, 2, 3];
+                order.shuffle(&mut rand::rng());
+
+                // Map each player to the agent index in the randomized order
+                let player_to_agent_index: [usize; NUM_PLAYERS] = order;
+
+                (agents, player_to_agent_index)
+            }
         }
     }
 

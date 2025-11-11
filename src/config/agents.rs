@@ -6,6 +6,9 @@ use serde::Deserialize;
 pub enum AgentGroupConfig {
     /// The same agent is used by all four players.
     Single(AgentConfig),
+    /// Four different agents are used, one for each player. The order is
+    /// randomized for each game.
+    QuadArena([AgentConfig; 4]),
 }
 
 /// An agent config describes the type and behavior of a particular agent.
