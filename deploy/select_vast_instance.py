@@ -1,7 +1,10 @@
 import requests
 import json
+import os
+import time
 
 exclude_machines = {}
+VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 
 
 def search():
@@ -67,17 +70,32 @@ def print_table(offers):
 
     # Define columns: each column has a name and a function to extract/format the value
     columns = [
-        {"name": "ID", "extractor": lambda o: str(o["id"])},
-        {"name": "GPU", "extractor": lambda o: o["gpu_name"]},
+        {"name": "#", "extractor": lambda idx, _: str(idx)},
+        {"name": "GPU", "extractor": lambda _, offer: offer["gpu_name"]},
         {
             "name": "CPU",
-            "extractor": lambda o: o["cpu_name"][:18],
+            "extractor": lambda _, offer: offer["cpu_name"][:18],
         },
-        {"name": "Cost ($/hr)", "extractor": lambda o: f"{o['computed_cost']:.3f}"},
-        {"name": "CPU cores", "extractor": lambda o: str(o["cpu_cores"])},
-        {"name": "CPU GHz", "extractor": lambda o: str(round(o["available_cpu_ghz"]))},
-        {"name": "RAM (GB)", "extractor": lambda o: str(round(o["available_ram"]))},
-        {"name": "Location", "extractor": lambda o: o["geolocation"]},
+        {
+            "name": "Cost ($/hr)",
+            "extractor": lambda _, offer: f"{offer['computed_cost']:.3f}",
+        },
+        {
+            "name": "CPU GHz",
+            "extractor": lambda _, offer: str(round(offer["available_cpu_ghz"])),
+        },
+        {
+            "name": "RAM (GB)",
+            "extractor": lambda _, offer: str(round(offer["available_ram"])),
+        },
+        {
+            "name": "CPU cores",
+            "extractor": lambda _, offer: str(offer["cpu_cores"]),
+        },
+        {
+            "name": "Location",
+            "extractor": lambda _, offer: offer["geolocation"],
+        },
     ]
 
     # Auto-calculate column widths
@@ -86,8 +104,8 @@ def print_table(offers):
         # Start with header width
         max_width = len(col["name"])
         # Check all data values
-        for offer in offers:
-            value = col["extractor"](offer)
+        for idx, offer in enumerate(offers):
+            value = col["extractor"](idx, offer)
             max_width = max(max_width, len(str(value)))
         # Add padding
         widths.append(max_width + 1)
@@ -98,11 +116,108 @@ def print_table(offers):
     print("-" * len(header_row))
 
     # Print each offer as a row
-    for offer in offers:
-        row_data = [col["extractor"](offer) for col in columns]
+    for idx, offer in enumerate(offers):
+        row_data = [col["extractor"](idx, offer) for col in columns]
         row = " | ".join(d.ljust(w) for d, w in zip(row_data, widths))
         print(row)
 
 
+def select_instance(offers):
+    """Prompt user to select an instance and return the selected offer."""
+    if not offers:
+        return None
+
+    print_table(offers)
+
+    while True:
+        try:
+            choice = input(f"\nSelect an instance (0-{len(offers) - 1}): ").strip()
+            index = int(choice)
+            if 0 <= index < len(offers):
+                return offers[index]
+            else:
+                print(f"Please enter a number between 0 and {len(offers) - 1}")
+        except ValueError:
+            print("Please enter a valid number")
+        except (EOFError, KeyboardInterrupt):
+            print("\nCancelled.")
+            return None
+
+
+def create_from_template(offer_id):
+    url = f"https://console.vast.ai/api/v0/asks/{offer_id}/"
+    payload = json.dumps(
+        {
+            # "template_id": 302220,
+            "template_hash_id": "9fb234bb5f8d095c3f8c23f026894b6a",
+            "image": "vastai/base-image:@vastai-automatic-tag",
+            "env": {
+                "-p 1111:1111": "1",
+                "-p 6006:6006": "1",
+                "-p 8080:8080": "1",
+                "-p 8384:8384": "1",
+                "-p 72299:72299": "1",
+                "-p 12345:12345": "1",
+                "OPEN_BUTTON_PORT": "1111",
+                "OPEN_BUTTON_TOKEN": "1",
+                "JUPYTER_DIR": "/",
+                "DATA_DIRECTORY": "/workspace/",
+                "PORTAL_CONFIG": "localhost:1111:11111:/:Instance Portal|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal|localhost:8384:18384:/:Syncthing|localhost:6006:16006:/:Tensorboard",
+            },
+            "args_str": "",
+            "onstart": "initial_dir=$(pwd); mkdir -p /workspace; cd /workspace; git clone https://github.com/ShivamSarodia/AlphaBlokus; cd $initial_dir; entrypoint.sh",
+            "runtype": "jupyter_direc ssh_direc ssh_proxy",
+            "use_jupyter_lab": False,
+            "disk": 64,
+        }
+    )
+
+    headers = {
+        "Authorization": f"Bearer {VASTAI_API_KEY}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    response = requests.request("PUT", url, headers=headers, data=payload)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_instance(instance_id):
+    url = f"https://console.vast.ai/api/v0/instances/{instance_id}/"
+
+    payload = {}
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {VASTAI_API_KEY}",
+    }
+
+    response = requests.request("GET", url, headers=headers, data=payload)
+    response.raise_for_status()
+    return response.json()["instances"]
+
+
 offers = search()
-print_table(offers[:8])
+selected = select_instance(offers[:8])
+if not selected:
+    exit(1)
+
+print(f"\nSelected offer ID: {selected['id']}")
+created = create_from_template(selected["id"])
+
+instance_id = created["new_contract"]
+print(f"\nCreated instance: {instance_id}. Waiting for ports...")
+
+while True:
+    instance = get_instance(instance_id)
+    if not instance.get("ports", {}).get("22/tcp"):
+        time.sleep(1)
+        continue
+
+    ip_address = instance["public_ipaddr"]
+    port = instance["ports"]["22/tcp"][0]["HostPort"]
+    break
+
+print(
+    f"SSH with: ssh -i ~/.ssh/id_ed25519_personal -p {port} root@{ip_address} -L 8080:localhost:8080"
+)
