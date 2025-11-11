@@ -20,7 +20,7 @@ def search():
                 "inet_up": {"gt": 300},
                 "duration": {"gte": 1},
                 "geolocation": {"in": ["US", "CA"]},
-                "dph_total": {"lte": 0.2},
+                "dph_total": {"lte": 0.3},
                 "gpu_name": "RTX 3070",
                 "cpu_cores": {"gte": 8},
                 "cpu_ram": {"gte": 16},
@@ -74,6 +74,7 @@ def print_table(offers):
             "extractor": lambda o: o["cpu_name"][:18],
         },
         {"name": "Cost ($/hr)", "extractor": lambda o: f"{o['computed_cost']:.3f}"},
+        {"name": "CPU cores", "extractor": lambda o: str(o["cpu_cores"])},
         {"name": "CPU GHz", "extractor": lambda o: str(round(o["available_cpu_ghz"]))},
         {"name": "RAM (GB)", "extractor": lambda o: str(round(o["available_ram"]))},
         {"name": "Location", "extractor": lambda o: o["geolocation"]},
@@ -89,7 +90,7 @@ def print_table(offers):
             value = col["extractor"](offer)
             max_width = max(max_width, len(str(value)))
         # Add padding
-        widths.append(max_width + 2)
+        widths.append(max_width + 1)
 
     # Print header
     header_row = " | ".join(col["name"].ljust(w) for col, w in zip(columns, widths))
@@ -104,4 +105,4 @@ def print_table(offers):
 
 
 offers = search()
-print_table(offers[:5])
+print_table(offers[:8])
