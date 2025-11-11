@@ -1,6 +1,7 @@
 num_concurrent_games = 100
 
 [mcts_recorder]
+type = "directory"
 data_directory = "data/scrap/games"
 flush_row_count = 50
 

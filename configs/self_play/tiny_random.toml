@@ -1,6 +1,7 @@
 num_concurrent_games = 10
 
 [mcts_recorder]
+type = "directory"
 data_directory = "/tmp/alphablokus_self_play_tiny/games"
 flush_row_count = 10
 

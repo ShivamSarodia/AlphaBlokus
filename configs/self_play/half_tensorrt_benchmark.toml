@@ -7,6 +7,7 @@ type = "prometheus"
 type = "console"
 
 [mcts_recorder]
+type = "directory"
 data_directory = "/tmp/alphablokus_mcts_full/games"
 flush_row_count = 100000
 

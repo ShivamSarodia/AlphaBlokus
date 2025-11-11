@@ -84,6 +84,19 @@ impl Recorder {
         (Recorder { sender: channel.0 }, background_task)
     }
 
+    /// Create a no-op recorder that discards all data (for disabled recording).
+    pub fn disabled() -> (Self, tokio::task::JoinHandle<()>) {
+        let channel = mpsc::unbounded_channel();
+        let mut receiver = channel.1;
+        let background_task = tokio::spawn(async move {
+            while receiver.recv().await.is_some() {
+                // No-op: discard all data
+            }
+        });
+
+        (Recorder { sender: channel.0 }, background_task)
+    }
+
     pub fn push_mcts_data(&self, mcts_data: Vec<MCTSData>) {
         self.sender.send(mcts_data).unwrap();
     }

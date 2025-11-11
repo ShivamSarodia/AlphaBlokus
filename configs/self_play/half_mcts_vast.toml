@@ -9,6 +9,7 @@ directory = "/tmp/log/alphablokus/"
 filename = "self_play.log"
 
 [mcts_recorder]
+type = "directory"
 data_directory = "s3://alpha-blokus/half/games"
 flush_row_count = 10000
 

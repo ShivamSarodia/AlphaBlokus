@@ -9,8 +9,7 @@ directory = "/tmp/log/alphablokus/"
 filename = "self_play.log"
 
 [mcts_recorder]
-data_directory = "/tmp/local_games/"
-flush_row_count = 100000000
+type = "disabled"
 
 [[inference]]
 name = "00040015"

@@ -22,10 +22,13 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) {
             inference_clients.insert(inference_config.name.clone(), Arc::new(client));
         }
 
-        let (recorder, recorder_background_task) = Recorder::build_and_start(
-            config.mcts_recorder.flush_row_count,
-            config.mcts_recorder.data_directory.clone(),
-        );
+        let (recorder, recorder_background_task) = match &config.mcts_recorder {
+            crate::config::MCTSRecorderConfig::Disabled => Recorder::disabled(),
+            crate::config::MCTSRecorderConfig::Directory {
+                data_directory,
+                flush_row_count,
+            } => Recorder::build_and_start(*flush_row_count, data_directory.clone()),
+        };
 
         let mut engine = Engine::new(
             config.num_concurrent_games,
@@ -98,7 +101,7 @@ mod tests {
             num_concurrent_games: 10,
             num_total_games: 100,
             duration_seconds: 0,
-            mcts_recorder: MCTSRecorderConfig {
+            mcts_recorder: MCTSRecorderConfig::Directory {
                 data_directory: "/tmp/alphablokus_test_fixture".to_string(),
                 flush_row_count: 10,
             },
@@ -135,7 +138,7 @@ mod tests {
             num_concurrent_games: 10,
             num_total_games: 0, // Infinite games - would run forever without duration limit
             duration_seconds: 2, // Should stop after 2 seconds
-            mcts_recorder: MCTSRecorderConfig {
+            mcts_recorder: MCTSRecorderConfig::Directory {
                 data_directory: "/tmp/alphablokus_test_fixture_duration".to_string(),
                 flush_row_count: 10,
             },
