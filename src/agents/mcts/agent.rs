@@ -12,6 +12,7 @@ use crate::recorder::MCTSData;
 use async_trait::async_trait;
 
 pub struct MCTSAgent<T: inference::Client + Send + Sync> {
+    pub name: String,
     mcts_config: &'static MCTSConfig,
     game_config: &'static GameConfig,
     inference_client: Arc<T>,
@@ -29,6 +30,7 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
         inference_client: Arc<T>,
     ) -> Self {
         Self {
+            name: mcts_config.name.clone(),
             mcts_config,
             game_config,
             inference_client,
@@ -116,6 +118,10 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
 
 #[async_trait]
 impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
     async fn choose_move(&mut self, state: &State) -> usize {
         // Create a new node to represent the root of the search tree. Start by expanding the
         // node immediately.
@@ -194,6 +200,7 @@ mod tests {
         let game_config = testing::create_half_game_config();
 
         let fast_mcts_config: &'static MCTSConfig = Box::leak(Box::new(MCTSConfig {
+            name: "test_fast".to_string(),
             fast_move_probability: 1.0,
             fast_move_num_rollouts: 1,
             full_move_num_rollouts: 4,

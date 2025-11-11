@@ -17,7 +17,8 @@ model_path = "static/networks/res_net_full.onnx"
 batch_size = 128
 executor = { type = "tensorrt", max_batch_size = 128,  pool_size = 32 }
 
-[agents.Single.MCTS]
+[agents.Single]
+type = "mcts"
 fast_move_probability = 0.8
 fast_move_num_rollouts = 100
 full_move_num_rollouts = 500

@@ -98,7 +98,7 @@ impl Engine {
                 self.game_config,
                 Arc::clone(&self.inference_clients[&mcts_config.inference_config_name]),
             )),
-            AgentConfig::Random => Box::new(RandomAgent::default()),
+            AgentConfig::Random(random_config) => Box::new(RandomAgent::new(random_config)),
         }
     }
 
@@ -169,7 +169,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::MCTSConfig, inference::OrtExecutor, recorder::read_mcts_data_from_disk, testing,
+        config::MCTSConfig, config::RandomConfig, inference::OrtExecutor,
+        recorder::read_mcts_data_from_disk, testing,
     };
     use std::path::Path;
 
@@ -179,12 +180,17 @@ mod tests {
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
         let (recorder, _) = Recorder::build_and_start(1, directory);
+        let agent_group_config: &'static AgentGroupConfig = Box::leak(Box::new(
+            AgentGroupConfig::Single(AgentConfig::Random(RandomConfig {
+                name: "test_random".to_string(),
+            })),
+        ));
         let mut engine = Engine::new(
             5,
             expected_num_finished_games,
             HashMap::new(),
             game_config,
-            &AgentGroupConfig::Single(AgentConfig::Random),
+            agent_group_config,
             recorder,
         );
 
@@ -207,6 +213,7 @@ mod tests {
         ));
         let (recorder, _) = Recorder::build_and_start(1, directory.clone());
         let agent_group_config = AgentGroupConfig::Single(AgentConfig::MCTS(MCTSConfig {
+            name: "test_mcts_data".to_string(),
             fast_move_probability: 0.0,
             fast_move_num_rollouts: 10,
             full_move_num_rollouts: 10,
@@ -298,12 +305,17 @@ mod tests {
         let (recorder, _) = Recorder::build_and_start(1, directory);
 
         // Set num_total_games to 0 to enable infinite games
+        let agent_group_config = Box::leak(Box::new(AgentGroupConfig::Single(
+            AgentConfig::Random(RandomConfig {
+                name: "test_random".to_string(),
+            }),
+        )));
         let mut engine = Engine::new(
             5,
             0, // num_total_games = 0 means infinite games
             HashMap::new(),
             game_config,
-            &AgentGroupConfig::Single(AgentConfig::Random),
+            agent_group_config,
             recorder,
         );
 

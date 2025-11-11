@@ -85,7 +85,9 @@ mod tests {
                 num_piece_orientations: 91,
                 move_data: None,
             },
-            agents: AgentGroupConfig::Single(AgentConfig::Random),
+            agents: AgentGroupConfig::Single(AgentConfig::Random(crate::config::RandomConfig {
+                name: "test_random".to_string(),
+            })),
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
                 batch_size: 2,
@@ -120,7 +122,9 @@ mod tests {
                 num_piece_orientations: 91,
                 move_data: None,
             },
-            agents: AgentGroupConfig::Single(AgentConfig::Random),
+            agents: AgentGroupConfig::Single(AgentConfig::Random(crate::config::RandomConfig {
+                name: "test_random".to_string(),
+            })),
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
                 batch_size: 2,

@@ -11,7 +11,8 @@ batch_size = 32
 executor = { type = "ort" }
 reload = { poll_interval_seconds = 5 }
 
-[agents.Single.MCTS]
+[agents.Single]
+type = "mcts"
 fast_move_probability = 0.8
 fast_move_num_rollouts = 100
 full_move_num_rollouts = 500

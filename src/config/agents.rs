@@ -1,8 +1,13 @@
 use serde::Deserialize;
 
+fn default_agent_name() -> String {
+    "unnamed".to_string()
+}
+
 /// An agent group config describes the methodology for selecting agents for
 /// each game.
 #[derive(Deserialize, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum AgentGroupConfig {
     /// The same agent is used by all four players.
     Single(AgentConfig),
@@ -13,13 +18,17 @@ pub enum AgentGroupConfig {
 
 /// An agent config describes the type and behavior of a particular agent.
 #[derive(Deserialize, Debug)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentConfig {
+    #[serde(rename = "mcts")]
     MCTS(MCTSConfig),
-    Random,
+    Random(RandomConfig),
 }
 
 #[derive(Deserialize, Debug)]
 pub struct MCTSConfig {
+    #[serde(default = "default_agent_name")]
+    pub name: String,
     pub fast_move_probability: f32,
     pub fast_move_num_rollouts: u32,
     pub full_move_num_rollouts: u32,
@@ -32,4 +41,10 @@ pub struct MCTSConfig {
     /// MCTS agent. The config file must contain an inference config with this
     /// name.
     pub inference_config_name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct RandomConfig {
+    #[serde(default = "default_agent_name")]
+    pub name: String,
 }

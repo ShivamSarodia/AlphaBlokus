@@ -10,4 +10,7 @@ pub trait Agent: Send + Sync {
     fn flush_mcts_data(&mut self) -> Vec<MCTSData> {
         Vec::new()
     }
+
+    /// Return the name of this agent.
+    fn name(&self) -> &str;
 }

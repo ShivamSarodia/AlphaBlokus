@@ -11,7 +11,7 @@ batch_size = 2
 executor = { type = "ort" }
 
 [agents]
-Single = { Random = { } }
+Single = { type = "random" }
 
 [game]
 board_size = 5

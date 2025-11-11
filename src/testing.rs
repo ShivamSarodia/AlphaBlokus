@@ -71,6 +71,7 @@ pub fn create_half_game_config() -> &'static GameConfig {
 
 pub fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSConfig {
     Box::leak(Box::new(MCTSConfig {
+        name: "test_mcts".to_string(),
         fast_move_probability: 0.0,
         fast_move_num_rollouts: num_rollouts,
         full_move_num_rollouts: num_rollouts,
