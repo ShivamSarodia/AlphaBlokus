@@ -143,8 +143,10 @@ pub async fn play_one_game(
     // Accumulate game data from all agents. (In practice, usually only one
     // agent will have MCTS data to report.)
     let mut mcts_data = Vec::new();
+    let mut agent_names: Vec<String> = Vec::new();
     for mut agent in agents {
         mcts_data.extend(agent.flush_mcts_data());
+        agent_names.push(agent.name().to_string());
     }
 
     // Populate the game result in all game data.
@@ -161,6 +163,18 @@ pub async fn play_one_game(
 
     // Queue up the game data for recording.
     recorder.push_mcts_data(mcts_data);
+
+    for player in 0..NUM_PLAYERS {
+        // The counter doesn't support floating point values, so we increment
+        // by 1 for any win.
+        if result[player] > 0.0 {
+            metrics::counter!(
+                "games_won_by_agent_total",
+                "agent_name" => agent_names[player_to_agent_index[player]].clone(),
+            )
+            .increment(1);
+        }
+    }
 }
 
 #[cfg(test)]
