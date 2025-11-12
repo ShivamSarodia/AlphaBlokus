@@ -19,7 +19,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    dotenvy::dotenv().context("Failed to load .env file")?;
+    utils::load_env()?;
 
     let cli = Cli::parse();
 

@@ -1,6 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
 use std::path::PathBuf;
+
+use alpha_blokus::utils;
 
 #[derive(Parser)]
 #[command()]
@@ -10,7 +12,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    dotenvy::dotenv().context("Failed to load .env file")?;
+    utils::load_env()?;
 
     let _ = Cli::parse();
 

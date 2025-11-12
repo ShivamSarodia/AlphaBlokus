@@ -126,28 +126,37 @@ impl S3ModelDownloader {
 
         // Download the .onnx file
         tracing::info!("Downloading model from S3: {}", model_name);
-        self.download_file(model_name).await?;
+        self.download_file(model_name, true).await?;
 
         // Try to download the .onnx.data file (it may not exist)
         let data_filename = format!("{}.data", model_name);
-        self.download_file(&data_filename).await?;
+        self.download_file(&data_filename, false).await?;
 
         Ok(local_path)
     }
 
     /// Downloads a single file from S3 to the cache directory.
-    async fn download_file(&self, filename: &str) -> Result<()> {
+    async fn download_file(&self, filename: &str, required: bool) -> Result<()> {
         let final_s3_uri = self.s3_uri.with_filename(filename.to_string())?;
         let key = final_s3_uri.key();
 
-        let response = self
+        let response_result = self
             .client
             .get_object()
             .bucket(&self.s3_uri.bucket)
             .key(&key)
             .send()
-            .await
-            .context(format!("Failed to download {} from S3", filename))?;
+            .await;
+
+        let response = match response_result {
+            Ok(response) => response,
+            Err(e) if required => {
+                return Err(e).context(format!("Failed to download {} from S3", filename));
+            }
+            Err(_) => {
+                return Ok(());
+            }
+        };
 
         let local_path = self.cache_dir.join(filename);
         let mut file = fs::File::create(&local_path).await?;

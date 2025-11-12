@@ -4,13 +4,14 @@
 
 use alpha_blokus::inference::{ModelSource, S3ModelSource};
 use alpha_blokus::s3::S3ModelDownloader;
+use alpha_blokus::utils;
 use std::time::Duration;
 use tokio::fs;
 
 #[tokio::test]
 #[ignore]
 async fn test_s3_reload_integration() {
-    dotenvy::dotenv().unwrap();
+    utils::load_env().expect("Failed to load environment variables");
 
     // Test configuration - adjust this to match your R2 bucket
     let test_bucket = "alpha-blokus-staging";
