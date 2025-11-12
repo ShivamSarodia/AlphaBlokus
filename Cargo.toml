@@ -9,6 +9,7 @@ anyhow = "1.0.99"
 async-trait = "0.1.89"
 aws-config = { version = "1.8.6", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "1.106.0", features = ["behavior-version-latest"] }
+axum = "0.8.6"
 bit-set = { version = "0.8.0", features = ["serde"] }
 chrono = "0.4.42"
 chrono-tz = "0.10.4"
