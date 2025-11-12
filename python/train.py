@@ -30,6 +30,10 @@ training_config = TrainingConfig(config_path)
 directories_config = DirectoriesConfig(config_path)
 
 
+def log(message: str):
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+
+
 def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
     """
     Trains on new samples available since samples_last_trained.
@@ -46,14 +50,14 @@ def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
     if new_samples == 0:
         return samples_last_trained
 
-    print(f"Number of new samples available since last trained: {new_samples}")
+    log(f"Number of new samples available since last trained: {new_samples}")
 
     # Compute the number of samples to train on.
     num_samples = int(new_samples * training_config.sampling_ratio)
-    print(f"Number of samples to train on: {num_samples}")
+    log(f"Number of samples to train on: {num_samples}")
 
     if num_samples == 0:
-        print("Number of samples to train on is 0, skipping training.")
+        log("Number of samples to train on is 0, skipping training.")
         return samples_last_trained
 
     # Fetch game files.
@@ -63,7 +67,7 @@ def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
         training_config.window_size,
     )
     if not local_game_data_files:
-        print("No game data files found, skipping training.")
+        log("No game data files found, skipping training.")
         return samples_last_trained
 
     # Build a dataloader.
@@ -80,18 +84,18 @@ def save_model_and_state(model, optimizer, samples_total: int):
     # Save the model locally.
     if directories_config.model_directory.strip():
         onnx_path = directories_config.model_directory + f"{samples_total:08d}.onnx"
-        print("Saving model to:", onnx_path)
+        log(f"Saving model to: {onnx_path}")
         with from_localized(onnx_path) as onnx_path:
             model.save_onnx(onnx_path, training_config.device)
     else:
-        print("No model directory set, skipping model save.")
+        log("No model directory set, skipping model save.")
 
     # Save training state so we can resume training later.
     if directories_config.training_directory.strip():
         training_state_path = (
             directories_config.training_directory + f"{samples_total:08d}.pth"
         )
-        print("Saving training state to:", training_state_path)
+        log(f"Saving training state to: {training_state_path}")
         with from_localized(training_state_path) as training_state_path:
             torch.save(
                 {
@@ -101,7 +105,7 @@ def save_model_and_state(model, optimizer, samples_total: int):
                 training_state_path,
             )
     else:
-        print("No training directory set, skipping training state save.")
+        log("No training directory set, skipping training state save.")
 
 
 def run():
@@ -113,16 +117,15 @@ def run():
     # Initialize training state
     state = TrainingState(samples_last_trained=samples_last_trained)
 
-    print("Starting training loop...")
+    log("Starting training loop...")
     if state.samples_last_trained == 0:
-        print("Starting from scratch (no previous training state found)")
+        log("Starting from scratch (no previous training state found)")
     else:
-        print(f"Resuming from {state.samples_last_trained} samples")
-    print(f"Polling every {training_config.poll_interval_seconds} seconds")
-    print(
+        log(f"Resuming from {state.samples_last_trained} samples")
+    log(f"Polling every {training_config.poll_interval_seconds} seconds")
+    log(
         f"Will save model after accumulating {training_config.min_samples_for_save} new samples"
     )
-    print()
 
     while True:
         # Train on any new samples
@@ -137,21 +140,21 @@ def run():
 
         # Save if we've accumulated enough new samples
         if state.samples_since_last_save >= training_config.min_samples_for_save:
-            print(
+            log(
                 f"\nAccumulated {state.samples_since_last_save} new samples since last save. Saving model..."
             )
             save_model_and_state(model, optimizer, samples_total)
             state.samples_since_last_save = 0
-            print("Save complete!\n")
+            log("Save complete!\n")
         else:
-            print(
+            log(
                 f"Accumulated {state.samples_since_last_save} new samples since last save. Waiting for {training_config.min_samples_for_save - state.samples_since_last_save} more samples before saving."
             )
 
         # If there were no new samples, sleep before polling again for any new data.
         if new_samples_trained == 0:
             # Wait before polling again
-            print(
+            log(
                 f"Waiting {training_config.poll_interval_seconds} seconds before next poll..."
             )
             time.sleep(training_config.poll_interval_seconds)
