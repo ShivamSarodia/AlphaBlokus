@@ -1,6 +1,7 @@
 import torch
 import time
 from dataclasses import dataclass
+import sys
 
 from configs import GameConfig, NetworkConfig, TrainingConfig, DirectoriesConfig
 from train_utils import (
@@ -22,7 +23,7 @@ class TrainingState:
 
 
 # Load configs.
-config_path = "configs/training/half_vast.toml"
+config_path = sys.argv[1]
 game_config = GameConfig(config_path)
 network_config = NetworkConfig(config_path)
 training_config = TrainingConfig(config_path)

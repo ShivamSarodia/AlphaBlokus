@@ -218,6 +218,4 @@ while True:
     port = instance["ports"]["22/tcp"][0]["HostPort"]
     break
 
-print(
-    f"SSH with: ssh -i ~/.ssh/id_ed25519_personal -p {port} root@{ip_address} -L 8080:localhost:8080"
-)
+print(f"SSH with: ssh -i ~/.ssh/id_ed25519_personal -p {port} root@{ip_address}")
