@@ -4,18 +4,10 @@ num_concurrent_games = 1024
 type = "prometheus"
 
 [observability.logging]
-type = "file"
-directory = "/tmp/log/alphablokus/"
-filename = "self_play.log"
+type = "console"
 
 [mcts_recorder]
 type = "disabled"
-
-[[inference]]
-name = "00040015"
-model_path = "s3://alpha-blokus/half/models/00040015.onnx"
-batch_size = 128
-executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
 
 [[inference]]
 name = "00500124"

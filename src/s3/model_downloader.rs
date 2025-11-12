@@ -43,6 +43,13 @@ impl S3ModelDownloader {
 
     /// Syncs the latest model from S3 to local cache and returns the path.
     pub async fn sync_latest_model(&self) -> Result<PathBuf> {
+        // If the S3Uri is a specific file, just download that single file
+        if let Some(ref filename) = self.s3_uri.filename {
+            return self.download_model(filename).await;
+        }
+
+        // Otherwise, we need to list all models in S3 and find the latest one.
+
         // List all models in S3
         let s3_models = self.list_s3_models().await?;
 
@@ -55,15 +62,8 @@ impl S3ModelDownloader {
             )
         })?;
 
-        // Check if we already have this model cached
-        let local_path = self.cache_dir.join(latest_model);
-        if local_path.exists() {
-            return Ok(local_path);
-        }
-
         // Download the model
-        tracing::info!("Downloading model from S3: {}", latest_model);
-        self.download_model(latest_model).await?;
+        let local_path = self.download_model(latest_model).await?;
 
         // Clean up old models
         self.cleanup_old_models().await?;
@@ -117,27 +117,28 @@ impl S3ModelDownloader {
     }
 
     /// Downloads a model (both .onnx and .onnx.data if exists) from S3.
-    async fn download_model(&self, model_name: &str) -> Result<()> {
+    async fn download_model(&self, model_name: &str) -> Result<PathBuf> {
+        // Check if we already have this model cached. If so, just return that directly.
+        let local_path = self.cache_dir.join(model_name);
+        if local_path.exists() {
+            return Ok(local_path);
+        }
+
         // Download the .onnx file
+        tracing::info!("Downloading model from S3: {}", model_name);
         self.download_file(model_name).await?;
 
         // Try to download the .onnx.data file (it may not exist)
         let data_filename = format!("{}.data", model_name);
-        if let Err(e) = self.download_file(&data_filename).await {
-            // Log but don't fail if .data file doesn't exist
-            tracing::debug!("No .onnx.data file found (or failed to download): {}", e);
-        }
+        self.download_file(&data_filename).await?;
 
-        Ok(())
+        Ok(local_path)
     }
 
     /// Downloads a single file from S3 to the cache directory.
     async fn download_file(&self, filename: &str) -> Result<()> {
-        let key = if self.s3_uri.key().is_empty() {
-            filename.to_string()
-        } else {
-            format!("{}/{}", self.s3_uri.key(), filename)
-        };
+        let final_s3_uri = self.s3_uri.with_filename(filename.to_string())?;
+        let key = final_s3_uri.key();
 
         let response = self
             .client

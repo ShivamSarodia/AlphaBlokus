@@ -49,14 +49,9 @@ impl S3Uri {
         parts.join("/")
     }
 
-    /// Returns a new S3Uri with the specified filename. Errors if this S3Uri already has a filename.
+    /// Returns a new S3Uri with the specified filename.
+    /// Ignores any existing filename
     pub fn with_filename(&self, filename: String) -> Result<Self> {
-        if self.filename.is_some() {
-            return Err(anyhow::anyhow!(
-                "Cannot add filename to S3Uri that already has a filename"
-            ));
-        }
-
         Ok(Self {
             bucket: self.bucket.clone(),
             inner_path: self.inner_path.clone(),
@@ -166,18 +161,5 @@ mod tests {
         assert_eq!(uri_with_file.bucket, "my-bucket");
         assert_eq!(uri_with_file.filename, Some("file.txt".to_string()));
         assert_eq!(uri_with_file.key(), "file.txt");
-    }
-
-    #[test]
-    fn test_with_filename_errors_when_file_exists() {
-        let uri = S3Uri::new("s3://my-bucket/existing.txt".to_string()).unwrap();
-        let result = uri.with_filename("new.txt".to_string());
-        assert!(result.is_err());
-        assert!(
-            result
-                .unwrap_err()
-                .to_string()
-                .contains("already has a filename")
-        );
     }
 }

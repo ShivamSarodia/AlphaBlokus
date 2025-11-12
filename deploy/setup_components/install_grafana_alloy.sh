@@ -18,8 +18,9 @@ echo "deb [signed-by=/etc/apt/keyrings/grafana.gpg] https://apt.grafana.com stab
 sudo apt-get update
 sudo apt-get install -y alloy
 
-# Start Alloy
-nohup alloy run --server.http.listen-addr=0.0.0.0:12345 deploy/config.alloy >> /tmp/alloy.log 2>&1 &
+# Start Alloy.
+mkdir -p /workspace/data-alloy
+nohup alloy run --server.http.listen-addr=0.0.0.0:12345 deploy/config.alloy --storage.path /workspace/data-alloy >> /tmp/alloy.log 2>&1 &
 
 mkdir -p /tmp/log/alphablokus/
 echo "Alloy running (1)" >> /tmp/log/alphablokus/initial.log
