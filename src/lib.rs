@@ -7,6 +7,7 @@ pub mod recorder;
 pub mod s3;
 pub mod tensorrt;
 pub mod utils;
+pub mod web;
 
 #[cfg(test)]
 pub mod testing;

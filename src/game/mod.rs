@@ -6,7 +6,7 @@ mod state;
 
 pub mod move_data;
 pub use board::Board;
-pub use board_slice::BoardSlice;
+pub use board_slice::{BoardSlice, BoardSlice2D};
 pub use moves_array::MovesArray;
 pub use moves_array::MovesBitSet;
 pub use state::GameStatus;

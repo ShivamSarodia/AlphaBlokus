@@ -1,8 +1,12 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
 
-use alpha_blokus::utils;
+use alpha_blokus::{
+    config::{LoadableConfig, WebPlayConfig},
+    utils,
+    web::play,
+};
 
 #[derive(Parser)]
 #[command()]
@@ -11,10 +15,19 @@ struct Cli {
     config: PathBuf,
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     utils::load_env()?;
 
-    let _ = Cli::parse();
+    let Cli {
+        config: config_path,
+    } = Cli::parse();
 
-    Ok(())
+    let config = WebPlayConfig::from_file(&config_path).context("Failed to load config")?;
+    config
+        .game
+        .load_move_profiles()
+        .context("Failed to load move profiles")?;
+
+    play::run(config).await
 }

@@ -11,6 +11,6 @@ pub use game::GameConfig;
 pub use inference::{ExecutorConfig, InferenceConfig, ReloadConfig};
 pub use observability::{LoggingConfig, MetricsConfig, ObservabilityConfig};
 pub use parents::{
-    BenchmarkInferenceConfig, LoadableConfig, PreprocessMovesConfig, SelfPlayConfig,
+    BenchmarkInferenceConfig, LoadableConfig, PreprocessMovesConfig, SelfPlayConfig, WebPlayConfig,
 };
 pub use recorder::MCTSRecorderConfig;

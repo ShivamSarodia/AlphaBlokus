@@ -61,6 +61,13 @@ pub struct BenchmarkInferenceConfig {
 
 impl LoadableConfig for BenchmarkInferenceConfig {}
 
+#[derive(Deserialize, Debug)]
+pub struct WebPlayConfig {
+    pub game: GameConfig,
+}
+
+impl LoadableConfig for WebPlayConfig {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
