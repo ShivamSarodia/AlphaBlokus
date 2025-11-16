@@ -8,79 +8,30 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
-use crate::config::{GameConfig, LoadableConfig, WebPlayConfig};
-use crate::game::move_data::MoveProfile;
-use crate::game::{BoardSlice, BoardSlice2D, State as BlokusState};
+use crate::{
+    config::{GameConfig, LoadableConfig, WebPlayConfig},
+    game::BoardSlice,
+};
 
-struct AppState {
-    config: &'static WebPlayConfig,
-    inner: Arc<Mutex<InnerAppState>>,
-}
-
-#[derive(Clone)]
-struct InnerAppState {
-    blokus_state: BlokusState,
-}
-
-impl AppState {
-    pub fn new(config: &'static WebPlayConfig) -> Self {
-        AppState {
-            config,
-            inner: Arc::new(Mutex::new(InnerAppState {
-                blokus_state: BlokusState::new(&config.game),
-            })),
-        }
-    }
-}
-
-impl Clone for AppState {
-    fn clone(&self) -> Self {
-        AppState {
-            config: self.config,
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct GameResponse {
-    board_size: usize,
-    pieces: Vec<PieceResponse>,
-    board: Vec<BoardSlice2D>,
-    current_player: usize,
-}
+use super::{
+    response,
+    state::{AgentRunError, AppState},
+};
 
 #[derive(Deserialize)]
 struct MoveRequest {
-    cells: Vec<CellPayload>,
+    cells: Vec<[u8; 2]>,
 }
 
 #[derive(Deserialize)]
-struct CellPayload {
-    row: usize,
-    col: usize,
+struct AgentMoveRequest {
+    agent: String,
 }
 
-#[derive(Serialize)]
-struct PieceResponse {
-    id: usize,
-    squares: usize,
-    orientations: Vec<PieceOrientationResponse>,
-}
-
-#[derive(Serialize)]
-struct PieceOrientationResponse {
-    id: usize,
-    width: u8,
-    height: u8,
-    cells: Vec<[u8; 2]>,
-    valid: bool,
-}
+type ApiResult<T> = Result<T, ApiError>;
 
 pub fn load_config(path: &std::path::Path) -> Result<&'static WebPlayConfig> {
     let config = WebPlayConfig::from_file(path).context("Failed to load config")?;
@@ -92,7 +43,7 @@ pub fn load_config(path: &std::path::Path) -> Result<&'static WebPlayConfig> {
 }
 
 pub async fn run(config: &'static WebPlayConfig) -> Result<()> {
-    let app_state = AppState::new(config);
+    let app_state = AppState::build(config).await?;
     let router = build_router(app_state);
 
     start_server(router).await
@@ -102,6 +53,7 @@ fn build_router(app_state: AppState) -> Router {
     Router::new()
         .route("/api/game", get(get_game_state))
         .route("/api/move", post(post_move))
+        .route("/api/agent_move", post(post_agent_move))
         .with_state(app_state)
 }
 
@@ -117,233 +69,127 @@ async fn start_server(router: Router) -> Result<()> {
         .context("Server exited unexpectedly")
 }
 
-fn build_game_response(
-    inner_app_state: &InnerAppState,
-    config: &'static WebPlayConfig,
-) -> GameResponse {
-    let pieces = build_piece_response(&config.game, &inner_app_state.blokus_state);
-    let board = inner_app_state
-        .blokus_state
-        .board()
-        .slices()
-        .iter()
-        .map(|slice| slice.to_2d())
-        .collect::<Vec<_>>();
-    let current_player = inner_app_state.blokus_state.player();
-    GameResponse {
-        board_size: config.game.board_size,
-        pieces,
-        board,
-        current_player,
-    }
-}
-
-async fn get_game_state(State(app_state): State<AppState>) -> Json<GameResponse> {
-    let inner = app_state.inner.lock().await;
-
-    Json(build_game_response(&inner, app_state.config))
+async fn get_game_state(State(app_state): State<AppState>) -> Json<response::GameResponse> {
+    let session = app_state.session().await;
+    let agent_names = app_state.agent_names();
+    Json(response::build_game_response(
+        &session.state,
+        app_state.config,
+        agent_names,
+        session.pending_agent(),
+    ))
 }
 
 async fn post_move(
     State(app_state): State<AppState>,
     Json(request): Json<MoveRequest>,
-) -> Result<Json<GameResponse>, ApiError> {
-    if request.cells.is_empty() {
-        return Err(ApiError::InvalidMove("No cells provided".into()));
-    }
-
-    let board_size = app_state.config.game.board_size;
-    let move_slice = build_slice_from_cells(&request.cells, board_size)?;
-
-    let inner = app_state.inner.lock().await;
-    let move_index = find_move_by_shape(&move_slice, &app_state.config.game)
+) -> ApiResult<Json<response::GameResponse>> {
+    let game_config = &app_state.config.game;
+    let move_slice = build_slice_from_cells(&request.cells, game_config.board_size)?;
+    let move_index = find_move(&move_slice, game_config)
         .ok_or_else(|| ApiError::UnknownMove("No matching move found for provided cells".into()))?;
 
-    if !inner.blokus_state.is_valid_move(move_index) {
-        return Err(ApiError::MoveNotAllowed(
-            "Move is not valid in the current state".into(),
+    let mut session = app_state.session().await;
+    if session.has_pending_agent() {
+        return Err(ApiError::AgentBusy(
+            "An agent is currently selecting a move".into(),
         ));
     }
 
-    Ok(Json(build_game_response(&inner, app_state.config)))
-}
-
-fn compute_valid_orientations(state: &BlokusState, game_config: &'static GameConfig) -> Vec<bool> {
-    let mut validity = vec![false; game_config.num_piece_orientations];
-
-    for move_index in state.valid_moves() {
-        let profile = game_config.move_profiles().get(move_index);
-        validity[profile.piece_orientation_index] = true;
-    }
-
-    validity
-}
-
-fn build_piece_response(
-    game_config: &'static GameConfig,
-    state: &BlokusState,
-) -> Vec<PieceResponse> {
-    let validity = compute_valid_orientations(state, game_config);
-
-    let mut pieces = (0..game_config.num_pieces)
-        .map(|piece_index| PieceResponse {
-            id: piece_index,
-            squares: 0,
-            orientations: Vec::new(),
-        })
-        .collect::<Vec<_>>();
-
-    let mut orientation_shapes: Vec<Option<OrientationShape>> =
-        vec![None; game_config.num_piece_orientations];
-
-    for profile in game_config.move_profiles().iter() {
-        let orientation_idx = profile.piece_orientation_index;
-        if orientation_shapes[orientation_idx].is_none() {
-            orientation_shapes[orientation_idx] = Some(OrientationShape::from_profile(
-                profile,
-                game_config.board_size,
+    let agent_names = app_state.agent_names();
+    {
+        let game = &mut session.state;
+        if !game.is_valid_move(move_index) {
+            return Err(ApiError::MoveNotAllowed(
+                "Move is not valid in the current state".into(),
             ));
         }
+        game.apply_move(move_index);
     }
 
-    for orientation in orientation_shapes.into_iter().flatten() {
-        let piece = &mut pieces[orientation.piece_index];
-        if piece.squares == 0 {
-            piece.squares = orientation.cells.len();
-        }
-        piece.orientations.push(orientation.to_response(&validity));
-    }
-
-    pieces
+    Ok(Json(response::build_game_response(
+        &session.state,
+        app_state.config,
+        agent_names,
+        session.pending_agent(),
+    )))
 }
 
-#[derive(Clone)]
-struct OrientationShape {
-    id: usize,
-    piece_index: usize,
-    width: u8,
-    height: u8,
-    cells: Vec<[u8; 2]>,
-}
-
-impl OrientationShape {
-    fn from_profile(profile: &MoveProfile, board_size: usize) -> Self {
-        let mut min_x = board_size;
-        let mut min_y = board_size;
-        let mut max_x = 0;
-        let mut max_y = 0;
-        let mut cells = Vec::new();
-
-        for x in 0..board_size {
-            for y in 0..board_size {
-                if profile.occupied_cells.get((x, y)) {
-                    min_x = min_x.min(x);
-                    min_y = min_y.min(y);
-                    max_x = max_x.max(x);
-                    max_y = max_y.max(y);
-                    cells.push((x, y));
-                }
+async fn post_agent_move(
+    State(app_state): State<AppState>,
+    Json(request): Json<AgentMoveRequest>,
+) -> ApiResult<StatusCode> {
+    match app_state.start_agent_move(&request.agent).await {
+        Ok(_) => Ok(StatusCode::ACCEPTED),
+        Err(error) => Err(match error {
+            AgentRunError::AgentNotFound => ApiError::AgentNotFound(format!(
+                "Agent '{}' is not defined in the server config",
+                request.agent
+            )),
+            AgentRunError::AgentBusy => {
+                ApiError::AgentBusy("An agent is already selecting a move".into())
             }
-        }
-
-        if cells.is_empty() {
-            return OrientationShape {
-                id: profile.piece_orientation_index,
-                piece_index: profile.piece_index,
-                width: 0,
-                height: 0,
-                cells: Vec::new(),
-            };
-        }
-
-        let width = (max_x - min_x + 1) as u8;
-        let height = (max_y - min_y + 1) as u8;
-
-        let normalized_cells = cells
-            .into_iter()
-            .map(|(x, y)| [(x - min_x) as u8, (y - min_y) as u8])
-            .collect();
-
-        OrientationShape {
-            id: profile.piece_orientation_index,
-            piece_index: profile.piece_index,
-            width,
-            height,
-            cells: normalized_cells,
-        }
-    }
-
-    fn to_response(&self, validity: &[bool]) -> PieceOrientationResponse {
-        PieceOrientationResponse {
-            id: self.id,
-            width: self.width,
-            height: self.height,
-            cells: self.cells.clone(),
-            valid: validity.get(self.id).copied().unwrap_or(false),
-        }
+            AgentRunError::NoMovesAvailable => {
+                ApiError::MoveNotAllowed("No valid moves are available".into())
+            }
+            AgentRunError::AgentFailed => {
+                ApiError::AgentFailed("Failed to communicate with the agent task".into())
+            }
+        }),
     }
 }
 
-fn build_slice_from_cells(
-    cells: &[CellPayload],
-    board_size: usize,
-) -> Result<BoardSlice, ApiError> {
+fn build_slice_from_cells(cells: &[[u8; 2]], board_size: usize) -> ApiResult<BoardSlice> {
     let mut slice = BoardSlice::new(board_size);
-    for cell in cells {
-        if cell.row >= board_size || cell.col >= board_size {
+
+    for [row, col] in cells {
+        let row = *row as usize;
+        let col = *col as usize;
+        if row >= board_size || col >= board_size {
             return Err(ApiError::InvalidMove(format!(
                 "Cell ({}, {}) is out of bounds",
-                cell.row, cell.col
+                row, col
             )));
         }
-        slice.set((cell.col, cell.row), true);
+        slice.set((col, row), true);
     }
     Ok(slice)
 }
 
-fn find_move_by_shape(slice: &BoardSlice, config: &'static GameConfig) -> Option<usize> {
-    for (index, profile) in config.move_profiles().iter().enumerate() {
-        if board_slices_equal(slice, &profile.occupied_cells) {
-            return Some(index);
-        }
-    }
-    None
-}
-
-fn board_slices_equal(a: &BoardSlice, b: &BoardSlice) -> bool {
-    if a.size() != b.size() {
-        return false;
-    }
-
-    let size = a.size();
-    for x in 0..size {
-        for y in 0..size {
-            if a.get((x, y)) != b.get((x, y)) {
-                return false;
-            }
-        }
-    }
-    true
+fn find_move(slice: &BoardSlice, config: &'static GameConfig) -> Option<usize> {
+    config
+        .move_profiles()
+        .iter()
+        .position(|profile| slice == &profile.occupied_cells)
 }
 
 enum ApiError {
     InvalidMove(String),
     UnknownMove(String),
     MoveNotAllowed(String),
+    AgentNotFound(String),
+    AgentBusy(String),
+    AgentFailed(String),
+}
+
+impl ApiError {
+    fn into_parts(self) -> (StatusCode, String) {
+        match self {
+            ApiError::InvalidMove(message) | ApiError::UnknownMove(message) => {
+                (StatusCode::BAD_REQUEST, message)
+            }
+            ApiError::MoveNotAllowed(message) | ApiError::AgentBusy(message) => {
+                (StatusCode::CONFLICT, message)
+            }
+            ApiError::AgentNotFound(message) => (StatusCode::NOT_FOUND, message),
+            ApiError::AgentFailed(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        match self {
-            ApiError::InvalidMove(message) => {
-                (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))).into_response()
-            }
-            ApiError::UnknownMove(message) => {
-                (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))).into_response()
-            }
-            ApiError::MoveNotAllowed(message) => {
-                (StatusCode::CONFLICT, Json(json!({ "error": message }))).into_response()
-            }
-        }
+        let (status, message) = self.into_parts();
+        (status, Json(json!({ "error": message }))).into_response()
     }
 }

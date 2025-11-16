@@ -5,7 +5,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::config::{
-    AgentGroupConfig, GameConfig, InferenceConfig, MCTSRecorderConfig, ObservabilityConfig,
+    AgentConfig, AgentGroupConfig, GameConfig, InferenceConfig, MCTSRecorderConfig,
+    ObservabilityConfig,
 };
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
@@ -64,6 +65,10 @@ impl LoadableConfig for BenchmarkInferenceConfig {}
 #[derive(Deserialize, Debug)]
 pub struct WebPlayConfig {
     pub game: GameConfig,
+    #[serde(default)]
+    pub agents: Vec<AgentConfig>,
+    #[serde(default)]
+    pub inference: Vec<InferenceConfig>,
 }
 
 impl LoadableConfig for WebPlayConfig {}

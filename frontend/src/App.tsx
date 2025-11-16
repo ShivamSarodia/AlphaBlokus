@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const PREVIEW_CELL_SIZE = 16
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const GAME_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/game` : '/api/game'
 const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/move` : '/api/move'
+const AGENT_MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/agent_move` : '/api/agent_move'
 const PLAYER_COLORS = ['#2563eb', '#fbbf24', '#ef4444', '#22c55e']
 
 type BackendOrientation = {
@@ -34,6 +35,11 @@ type GameStateResponse = {
   pieces: BackendPiece[]
   board: BackendBoardSlice[]
   current_player: number
+  agents?: string[]
+  pending_agent?: string | null
+  game_over?: boolean
+  scores?: number[]
+  tile_counts?: number[]
 }
 
 const createEmptyBoard = (size: number) =>
@@ -60,7 +66,19 @@ const buildBoardFromSlices = (slices: BackendBoardSlice[] | undefined, boardSize
   return board
 }
 
-const normalizeGameState = (payload: GameStateResponse) => {
+type NormalizedGameState = {
+  boardSize: number
+  pieces: BackendPiece[]
+  board: string[][]
+  currentPlayer: number
+  agents: string[]
+  pendingAgent: string | null
+  gameOver: boolean
+  scores: number[] | null
+  tileCounts: number[]
+}
+
+const normalizeGameState = (payload: GameStateResponse): NormalizedGameState => {
   const normalizedPieces = (payload.pieces ?? [])
     .map((piece) => ({
       ...piece,
@@ -82,6 +100,17 @@ const normalizeGameState = (payload: GameStateResponse) => {
     pieces: normalizedPieces,
     board: normalizedBoard,
     currentPlayer,
+    agents: Array.isArray(payload.agents) ? payload.agents : [],
+    pendingAgent:
+      typeof payload.pending_agent === 'string' && payload.pending_agent.length > 0
+        ? payload.pending_agent
+        : null,
+    gameOver: Boolean(payload.game_over),
+    scores:
+      Array.isArray(payload.scores) && payload.scores.length > 0
+        ? payload.scores
+        : null,
+    tileCounts: Array.isArray(payload.tile_counts) ? payload.tile_counts : [],
   }
 }
 
@@ -97,23 +126,43 @@ function App() {
   const [isSubmittingMove, setIsSubmittingMove] = useState(false)
   const [hasLoaded, setHasLoaded] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [agents, setAgents] = useState<string[]>([])
+  const [selectedAgentName, setSelectedAgentName] = useState<string>('')
+  const [pendingAgent, setPendingAgent] = useState<string | null>(null)
+  const [gameOver, setGameOver] = useState(false)
+  const [scores, setScores] = useState<number[] | null>(null)
+  const [tileCounts, setTileCounts] = useState<number[]>([])
+  const [autoAgentAssignments, setAutoAgentAssignments] = useState<Record<number, string>>({})
+
+  const applyGameState = useCallback((normalized: NormalizedGameState) => {
+    setPieces(normalized.pieces)
+    setBoard(normalized.board)
+    setBoardSize((current) => (normalized.boardSize !== current ? normalized.boardSize : current))
+    setCurrentPlayer(normalized.currentPlayer)
+    setAgents(normalized.agents)
+    setPendingAgent(normalized.pendingAgent)
+    setGameOver(normalized.gameOver)
+    setScores(normalized.scores)
+    setTileCounts(normalized.tileCounts)
+    setHasLoaded(true)
+  }, [])
+
+const fetchGameState = useCallback(async () => {
+    const response = await fetch(GAME_ENDPOINT)
+    if (!response.ok) {
+      throw new Error('Game endpoint returned an error')
+    }
+    const payload = (await response.json()) as GameStateResponse
+    return normalizeGameState(payload)
+  }, [])
 
   useEffect(() => {
     let isMounted = true
     const loadGameState = async () => {
       try {
-        const response = await fetch(GAME_ENDPOINT)
-        if (!response.ok) {
-          return
-        }
-        const payload = (await response.json()) as GameStateResponse
-        if (isMounted && Number.isFinite(payload.board_size) && payload.board_size > 0) {
-          const normalized = normalizeGameState(payload)
-          setBoardSize(normalized.boardSize)
-          setPieces(normalized.pieces)
-          setBoard(normalized.board)
-          setCurrentPlayer(normalized.currentPlayer)
-          setHasLoaded(true)
+        const normalized = await fetchGameState()
+        if (isMounted && Number.isFinite(normalized.boardSize) && normalized.boardSize > 0) {
+          applyGameState(normalized)
         }
       } catch {
         // Ignore errors; fall back to default size.
@@ -124,7 +173,43 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [applyGameState, fetchGameState])
+
+  useEffect(() => {
+    if (!pendingAgent) {
+      return
+    }
+
+    let isCancelled = false
+    const interval = setInterval(async () => {
+      try {
+        const normalized = await fetchGameState()
+        if (!isCancelled) {
+          applyGameState(normalized)
+          if (!normalized.pendingAgent) {
+            clearInterval(interval)
+          }
+        }
+      } catch {
+        // Ignore polling errors; will retry on next tick.
+      }
+    }, 1500)
+
+    return () => {
+      isCancelled = true
+      clearInterval(interval)
+    }
+  }, [pendingAgent, applyGameState, fetchGameState])
+
+  useEffect(() => {
+    if (agents.length === 0) {
+      setSelectedAgentName('')
+      return
+    }
+    if (!selectedAgentName || !agents.includes(selectedAgentName)) {
+      setSelectedAgentName(agents[0] ?? '')
+    }
+  }, [agents, selectedAgentName])
 
   useEffect(() => {
     if (boardSize === null) {
@@ -170,8 +255,19 @@ function App() {
     return new Set(pendingPlacement.cells.map(({ row, col }) => cellKey(row, col)))
   }, [pendingPlacement])
 
+  const isAgentThinking = Boolean(pendingAgent)
+  const autoAgentForCurrentPlayer = autoAgentAssignments[currentPlayer] ?? null
+  const isAutoForCurrentPlayer = Boolean(autoAgentForCurrentPlayer)
+  const interactionLocked = isAgentThinking || gameOver
+  const winningScore = useMemo(() => {
+    if (!scores || scores.length === 0) {
+      return null
+    }
+    return Math.max(...scores)
+  }, [scores])
+
   const handleOrientationSelect = (pieceId: number, orientation: BackendOrientation) => {
-    if (pendingPlacement || !orientation.valid) {
+    if (pendingPlacement || !orientation.valid || interactionLocked) {
       return
     }
     setErrorMessage(null)
@@ -184,7 +280,8 @@ function App() {
       pendingPlacement ||
       boardSize === null ||
       !board ||
-      isSubmittingMove
+      isSubmittingMove ||
+      interactionLocked
     ) {
       return
     }
@@ -218,7 +315,7 @@ function App() {
   }
 
   const handleConfirmPlacement = async () => {
-    if (!pendingPlacement || isSubmittingMove) {
+    if (!pendingPlacement || isSubmittingMove || interactionLocked) {
       return
     }
 
@@ -227,7 +324,9 @@ function App() {
       const response = await fetch(MOVE_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cells: pendingPlacement.cells }),
+        body: JSON.stringify({
+          cells: pendingPlacement.cells.map(({ row, col }) => [row, col] as [number, number]),
+        }),
       })
 
       if (!response.ok) {
@@ -241,13 +340,10 @@ function App() {
       const payload = (await response.json()) as GameStateResponse
       const normalized = normalizeGameState(payload)
 
-      setPieces(normalized.pieces)
-      setBoard(normalized.board)
-      setBoardSize((current) => (normalized.boardSize !== current ? normalized.boardSize : current))
-      setCurrentPlayer(normalized.currentPlayer)
-      setHasLoaded(true)
+      applyGameState(normalized)
       setPendingPlacement(null)
       setSelectedOrientation(null)
+      setExpandedPieceId(null)
       setErrorMessage(null)
     } catch (error) {
       console.error('Failed to submit move', error)
@@ -256,6 +352,59 @@ function App() {
       setIsSubmittingMove(false)
     }
   }
+
+  const requestAgentMove = useCallback(
+    async (agentName: string | null) => {
+      if (!agentName || isSubmittingMove || interactionLocked) {
+        return
+      }
+
+      setIsSubmittingMove(true)
+      setErrorMessage(null)
+      try {
+        const response = await fetch(AGENT_MOVE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent: agentName }),
+        })
+
+        if (!response.ok) {
+          const body = await response.json().catch(async () => ({ error: await response.text() }))
+          setErrorMessage(body?.error ?? 'Agent request rejected by server.')
+          return
+        }
+
+        setPendingAgent(agentName)
+        const normalized = await fetchGameState().catch(() => null)
+        if (normalized) {
+          applyGameState(normalized)
+        }
+      } catch (error) {
+        console.error('Failed to request agent move', error)
+        setErrorMessage('Something went wrong requesting the agent move.')
+      } finally {
+        setIsSubmittingMove(false)
+      }
+    },
+    [applyGameState, fetchGameState, interactionLocked, isSubmittingMove],
+  )
+
+  const handleAgentMove = async () => {
+    await requestAgentMove(selectedAgentName)
+  }
+
+  useEffect(() => {
+    if (!autoAgentForCurrentPlayer || pendingAgent || interactionLocked) {
+      return
+    }
+    requestAgentMove(autoAgentForCurrentPlayer)
+  }, [
+    autoAgentForCurrentPlayer,
+    pendingAgent,
+    interactionLocked,
+    currentPlayer,
+    requestAgentMove,
+  ])
 
   const handleUndoPlacement = () => {
     setPendingPlacement(null)
@@ -270,10 +419,6 @@ function App() {
           <div>
             <h1>AlphaBlokus</h1>
           </div>
-          <div className="board-meta">
-            <span>Board size</span>
-            <strong>Loading…</strong>
-          </div>
         </header>
       </main>
     )
@@ -284,10 +429,6 @@ function App() {
       <header className="app__header">
         <div>
           <h1>AlphaBlokus</h1>
-        </div>
-        <div className="board-meta">
-          <span>Board size</span>
-          <strong>{boardSize} × {boardSize}</strong>
         </div>
       </header>
 
@@ -340,7 +481,7 @@ function App() {
                     onMouseEnter={() => setHoverCell({ row: rowIndex, col: colIndex })}
                     onFocus={() => setHoverCell({ row: rowIndex, col: colIndex })}
                     onClick={() => handleCellClick(rowIndex, colIndex)}
-                    disabled={Boolean(pendingPlacement) || isSubmittingMove}
+                    disabled={Boolean(pendingPlacement) || isSubmittingMove || interactionLocked}
                     style={inlineStyle}
                     aria-label={`Row ${rowIndex + 1}, Column ${colIndex + 1}`}
                   />
@@ -365,88 +506,187 @@ function App() {
               </button>
             </div>
           )}
+          {tileCounts.length > 0 && (
+            <div className="tile-counts tile-counts--inline">
+              {tileCounts.map((count, index) => {
+                const color = PLAYER_COLORS[index % PLAYER_COLORS.length] ?? '#475467'
+                return (
+                  <div key={index} className="tile-counts__entry">
+                    <span style={{ color }}>Player {index + 1}</span>
+                    <strong>{count}</strong>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+          {pendingAgent && (
+            <p className="agent-message">Agent <strong>{pendingAgent}</strong> is selecting a move…</p>
+          )}
+          {gameOver && scores && (
+            <div className="scoreboard">
+              <h3>Final scores</h3>
+              <ul className="scoreboard__list">
+                {scores.map((score, index) => {
+                  const color = PLAYER_COLORS[index % PLAYER_COLORS.length] ?? '#475467'
+                  const isLeader = winningScore !== null && score === winningScore
+                  return (
+                    <li key={index} className={isLeader ? 'scoreboard__entry scoreboard__entry--leader' : 'scoreboard__entry'}>
+                      <span style={{ color }}>Player {index + 1}</span>
+                      <strong>{score.toFixed(2)}</strong>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
           {errorMessage && <p className="error-message">{errorMessage}</p>}
         </div>
 
-        <aside className="pieces-panel">
-          <div className="pieces-header">
-            <h2>Pieces</h2>
-            <span>
-              {
-                pieces.filter((piece) => piece.orientations.some((orientation) => orientation.valid))
-                  .length
-              }
-              /{pieces.length || 0} playable
-            </span>
-          </div>
+        <div className="sidebar">
+          <aside className="pieces-panel">
+            <div className="pieces-header">
+              <h2>Pieces</h2>
+              <span>
+                {
+                  pieces.filter((piece) => piece.orientations.some((orientation) => orientation.valid))
+                    .length
+                }
+                /{pieces.length || 0} playable
+              </span>
+            </div>
 
-          <div className="pieces-list">
-            {pieces.map((piece) => {
-              const isExpanded = expandedPieceId === piece.id
-              const isSelected = selectedOrientation?.pieceId === piece.id
-              const previewOrientation = piece.orientations[0]
-              const playerColor =
-                PLAYER_COLORS[currentPlayer % PLAYER_COLORS.length] ?? PLAYER_COLORS[0]
+            <div className="pieces-list">
+              {pieces.map((piece) => {
+                const isExpanded = expandedPieceId === piece.id
+                const isSelected = selectedOrientation?.pieceId === piece.id
+                const previewOrientation = piece.orientations[0]
+                const hasPlayableOrientation = piece.orientations.some((orientation) => orientation.valid)
+                const playerColor =
+                  PLAYER_COLORS[currentPlayer % PLAYER_COLORS.length] ?? PLAYER_COLORS[0]
 
-              return (
-                <div
-                  key={piece.id}
-                  className={`piece-card${isSelected ? ' piece-card--active' : ''}`}
-                >
-                  <button
-                    type="button"
-                    className="piece-card__header"
-                    onClick={() => setExpandedPieceId(isExpanded ? null : piece.id)}
-                    aria-label={`Piece ${piece.id}`}
+                return (
+                  <div
+                    key={piece.id}
+                    className={`piece-card${isSelected ? ' piece-card--active' : ''}${
+                      !hasPlayableOrientation ? ' piece-card--faded' : ''
+                    }`}
                   >
-                    {previewOrientation ? (
-                      <OrientationPreview
-                        orientation={previewOrientation}
-                        className="piece-card__preview"
-                        color={playerColor}
-                      />
-                    ) : (
-                      <span className="piece-card__preview empty">No orientations</span>
-                    )}
-                    <div className="piece-card__meta">
-                      <span className="piece-card__label" style={{ color: playerColor }}>
-                        Piece {piece.id}
+                    <button
+                      type="button"
+                      className="piece-card__header"
+                      onClick={() => setExpandedPieceId(isExpanded ? null : piece.id)}
+                      aria-label={`Piece ${piece.id}`}
+                    >
+                      {previewOrientation ? (
+                        <OrientationPreview
+                          orientation={previewOrientation}
+                          className="piece-card__preview"
+                          color={playerColor}
+                        />
+                      ) : (
+                        <span className="piece-card__preview empty">No orientations</span>
+                      )}
+                      <div className="piece-card__meta">
+                        <span className="piece-card__count">{piece.squares}</span>
+                      </div>
+                      <span className="piece-card__toggle" aria-hidden="true">
+                        {isExpanded ? '−' : '+'}
                       </span>
-                      <span className="piece-card__count">{piece.squares}</span>
-                    </div>
-                    <span className="piece-card__toggle" aria-hidden="true">
-                      {isExpanded ? '−' : '+'}
-                    </span>
-                  </button>
+                    </button>
 
-                  {isExpanded && (
-                    <div className="orientation-grid">
-                      {piece.orientations.map((orientation) => {
-                        const isOrientationSelected =
-                          selectedOrientation?.orientation.id === orientation.id
-                        const disabled = !orientation.valid || Boolean(pendingPlacement) || isSubmittingMove
-                        return (
-                          <button
-                            type="button"
-                            key={orientation.id}
-                            className={`orientation${isOrientationSelected ? ' orientation--selected' : ''
-                              }${!orientation.valid ? ' orientation--disabled' : ''}`}
-                            onClick={() => handleOrientationSelect(piece.id, orientation)}
-                            disabled={disabled}
-                            aria-pressed={isOrientationSelected}
-                          >
-                            <OrientationPreview orientation={orientation} color={playerColor} />
-                            <span>{orientation.valid ? 'Playable' : 'Blocked'}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </aside>
+                    {isExpanded && (
+                      <div className="orientation-grid">
+                        {piece.orientations.map((orientation) => {
+                          const isOrientationSelected =
+                            selectedOrientation?.orientation.id === orientation.id
+                          const disabled =
+                            !orientation.valid ||
+                            Boolean(pendingPlacement) ||
+                            isSubmittingMove ||
+                            interactionLocked
+                          return (
+                            <button
+                              type="button"
+                              key={orientation.id}
+                              className={`orientation${isOrientationSelected ? ' orientation--selected' : ''
+                                }${!orientation.valid ? ' orientation--disabled' : ''}`}
+                              onClick={() => handleOrientationSelect(piece.id, orientation)}
+                              disabled={disabled}
+                              aria-pressed={isOrientationSelected}
+                            >
+                              <OrientationPreview orientation={orientation} color={playerColor} />
+                              <span>{orientation.valid ? 'Playable' : 'Blocked'}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </aside>
+
+          {agents.length > 0 && (
+            <section className="agent-panel">
+              <div className="agent-panel__header">
+                <h2>Agent Move</h2>
+                {pendingAgent && (
+                  <span className="agent-panel__status">Running: {pendingAgent}</span>
+                )}
+              </div>
+              <div className="agent-panel__body agent-controls">
+                <label>
+                  Agent
+                  <select
+                    value={selectedAgentName}
+                    onChange={(event) => setSelectedAgentName(event.target.value)}
+                    disabled={agents.length === 0 || isSubmittingMove || interactionLocked}
+                  >
+                    {agents.map((agent) => (
+                      <option key={agent} value={agent}>
+                        {agent}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="agent-panel__checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isAutoForCurrentPlayer}
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        if (!selectedAgentName) {
+                          return
+                        }
+                        setAutoAgentAssignments((prev) => ({
+                          ...prev,
+                          [currentPlayer]: selectedAgentName,
+                        }))
+                      } else {
+                        setAutoAgentAssignments((prev) => {
+                          const next = { ...prev }
+                          delete next[currentPlayer]
+                          return next
+                        })
+                      }
+                    }}
+                    disabled={!selectedAgentName || isSubmittingMove}
+                  />
+                  Auto-play player {currentPlayer + 1}
+                </label>
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={handleAgentMove}
+                  disabled={!selectedAgentName || isSubmittingMove || interactionLocked}
+                >
+                  {isAgentThinking ? 'Agent playing…' : 'Agent move'}
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
       </section>
     </main>
   )
