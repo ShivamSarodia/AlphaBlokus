@@ -335,7 +335,7 @@ const fetchGameState = useCallback(async () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cells: pendingPlacement.cells.map(({ row, col }) => [row, col] as [number, number]),
+          cells: pendingPlacement.cells.map(({ row, col }) => [col, row] as [number, number]),
         }),
       })
 

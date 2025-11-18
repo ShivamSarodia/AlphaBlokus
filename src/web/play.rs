@@ -80,15 +80,7 @@ async fn post_move(
     Json(request): Json<MoveRequest>,
 ) -> ApiResult<Json<response::GameResponse>> {
     let game_config = &app_state.config.game;
-    let move_slice = BoardSlice::from_cells(
-        game_config.board_size,
-        // TODO: Update the frontend to send the cells as [col, row] instead of [row, col].
-        &request
-            .cells
-            .iter()
-            .map(|[row, col]| [*col, *row])
-            .collect::<Vec<_>>(),
-    );
+    let move_slice = BoardSlice::from_cells(game_config.board_size, &request.cells);
     let move_index = find_move(&move_slice, game_config)
         .ok_or_else(|| ApiError::UnknownMove("No matching move found for provided cells".into()))?;
 
