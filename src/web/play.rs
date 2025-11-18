@@ -23,7 +23,7 @@ use super::{
 
 #[derive(Deserialize)]
 struct MoveRequest {
-    cells: Vec<[u8; 2]>,
+    cells: Vec<[usize; 2]>,
 }
 
 #[derive(Deserialize)]
@@ -72,13 +72,7 @@ async fn start_server(router: Router) -> Result<()> {
 
 async fn get_game_state(State(app_state): State<AppState>) -> Json<response::GameResponse> {
     let session = app_state.session().await;
-    let agent_names = app_state.agent_names();
-    Json(response::build_game_response(
-        &session.state,
-        app_state.config,
-        agent_names,
-        session.pending_agent(),
-    ))
+    Json(app_state.game_response(&session))
 }
 
 async fn post_move(
@@ -86,7 +80,15 @@ async fn post_move(
     Json(request): Json<MoveRequest>,
 ) -> ApiResult<Json<response::GameResponse>> {
     let game_config = &app_state.config.game;
-    let move_slice = build_slice_from_cells(&request.cells, game_config.board_size)?;
+    let move_slice = BoardSlice::from_cells(
+        game_config.board_size,
+        // TODO: Update the frontend to send the cells as [col, row] instead of [row, col].
+        &request
+            .cells
+            .iter()
+            .map(|[row, col]| [*col, *row])
+            .collect::<Vec<_>>(),
+    );
     let move_index = find_move(&move_slice, game_config)
         .ok_or_else(|| ApiError::UnknownMove("No matching move found for provided cells".into()))?;
 
@@ -97,7 +99,6 @@ async fn post_move(
         ));
     }
 
-    let agent_names = app_state.agent_names();
     {
         let game = &mut session.state;
         if !game.is_valid_move(move_index) {
@@ -108,12 +109,7 @@ async fn post_move(
         game.apply_move(move_index);
     }
 
-    Ok(Json(response::build_game_response(
-        &session.state,
-        app_state.config,
-        agent_names,
-        session.pending_agent(),
-    )))
+    Ok(Json(app_state.game_response(&session)))
 }
 
 async fn post_agent_move(
@@ -143,29 +139,7 @@ async fn post_agent_move(
 async fn post_reset(State(app_state): State<AppState>) -> ApiResult<Json<response::GameResponse>> {
     app_state.reset().await;
     let session = app_state.session().await;
-    Ok(Json(response::build_game_response(
-        &session.state,
-        app_state.config,
-        app_state.agent_names(),
-        session.pending_agent(),
-    )))
-}
-
-fn build_slice_from_cells(cells: &[[u8; 2]], board_size: usize) -> ApiResult<BoardSlice> {
-    let mut slice = BoardSlice::new(board_size);
-
-    for [row, col] in cells {
-        let row = *row as usize;
-        let col = *col as usize;
-        if row >= board_size || col >= board_size {
-            return Err(ApiError::InvalidMove(format!(
-                "Cell ({}, {}) is out of bounds",
-                row, col
-            )));
-        }
-        slice.set((col, row), true);
-    }
-    Ok(slice)
+    Ok(Json(app_state.game_response(&session)))
 }
 
 fn find_move(slice: &BoardSlice, config: &'static GameConfig) -> Option<usize> {
@@ -176,7 +150,6 @@ fn find_move(slice: &BoardSlice, config: &'static GameConfig) -> Option<usize> {
 }
 
 enum ApiError {
-    InvalidMove(String),
     UnknownMove(String),
     MoveNotAllowed(String),
     AgentNotFound(String),
@@ -187,9 +160,7 @@ enum ApiError {
 impl ApiError {
     fn into_parts(self) -> (StatusCode, String) {
         match self {
-            ApiError::InvalidMove(message) | ApiError::UnknownMove(message) => {
-                (StatusCode::BAD_REQUEST, message)
-            }
+            ApiError::UnknownMove(message) => (StatusCode::BAD_REQUEST, message),
             ApiError::MoveNotAllowed(message) | ApiError::AgentBusy(message) => {
                 (StatusCode::CONFLICT, message)
             }
