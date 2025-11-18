@@ -54,6 +54,7 @@ fn build_router(app_state: AppState) -> Router {
         .route("/api/game", get(get_game_state))
         .route("/api/move", post(post_move))
         .route("/api/agent_move", post(post_agent_move))
+        .route("/api/reset", post(post_reset))
         .with_state(app_state)
 }
 
@@ -137,6 +138,17 @@ async fn post_agent_move(
             }
         }),
     }
+}
+
+async fn post_reset(State(app_state): State<AppState>) -> ApiResult<Json<response::GameResponse>> {
+    app_state.reset().await;
+    let session = app_state.session().await;
+    Ok(Json(response::build_game_response(
+        &session.state,
+        app_state.config,
+        app_state.agent_names(),
+        session.pending_agent(),
+    )))
 }
 
 fn build_slice_from_cells(cells: &[[u8; 2]], board_size: usize) -> ApiResult<BoardSlice> {

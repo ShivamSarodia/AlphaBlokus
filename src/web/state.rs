@@ -71,33 +71,31 @@ impl AppState {
         let session = Arc::clone(&self.session);
         let agent_name = agent.name.clone();
         tokio::spawn(async move {
-            match reply_receiver.await {
-                Ok(move_index) => {
-                    let mut guard = session.lock().await;
-                    if guard.pending_agent() == Some(agent_name.as_str()) {
-                        if guard.state.is_valid_move(move_index) {
-                            guard.state.apply_move(move_index);
-                        } else {
-                            warn!(
-                                agent = %agent_name,
-                                move_index,
-                                "Agent produced invalid move"
-                            );
-                        }
-                        guard.clear_pending_agent();
-                    }
+            let move_index = reply_receiver
+                .await
+                .expect("Agent failed to produce a move");
+
+            let mut guard = session.lock().await;
+            if guard.pending_agent() == Some(agent_name.as_str()) {
+                if guard.state.is_valid_move(move_index) {
+                    guard.state.apply_move(move_index);
+                } else {
+                    warn!(
+                        agent = %agent_name,
+                        move_index,
+                        "Agent produced invalid move"
+                    );
                 }
-                Err(_) => {
-                    warn!(agent = %agent_name, "Agent failed to produce a move");
-                    let mut guard = session.lock().await;
-                    if guard.pending_agent() == Some(agent_name.as_str()) {
-                        guard.clear_pending_agent();
-                    }
-                }
+                guard.clear_pending_agent();
             }
         });
 
         Ok(())
+    }
+
+    pub async fn reset(&self) {
+        let mut session = self.session().await;
+        session.reset();
     }
 }
 
@@ -112,6 +110,7 @@ pub enum AgentRunError {
 pub struct GameSession {
     pub state: BlokusState,
     pending_agent: Option<String>,
+    game_config: &'static GameConfig,
 }
 
 impl GameSession {
@@ -119,6 +118,7 @@ impl GameSession {
         Self {
             state: BlokusState::new(game_config),
             pending_agent: None,
+            game_config,
         }
     }
 
@@ -136,6 +136,11 @@ impl GameSession {
 
     fn clear_pending_agent(&mut self) {
         self.pending_agent = None;
+    }
+
+    fn reset(&mut self) {
+        self.state = BlokusState::new(self.game_config);
+        self.clear_pending_agent();
     }
 }
 

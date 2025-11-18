@@ -6,7 +6,9 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, ''
 const GAME_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/game` : '/api/game'
 const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/move` : '/api/move'
 const AGENT_MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/agent_move` : '/api/agent_move'
+const RESET_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/reset` : '/api/reset'
 const PLAYER_COLORS = ['#2563eb', '#fbbf24', '#ef4444', '#22c55e']
+const NUM_PLAYERS = 4
 
 type BackendOrientation = {
   id: number
@@ -127,12 +129,13 @@ function App() {
   const [hasLoaded, setHasLoaded] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [agents, setAgents] = useState<string[]>([])
-  const [selectedAgentName, setSelectedAgentName] = useState<string>('')
   const [pendingAgent, setPendingAgent] = useState<string | null>(null)
   const [gameOver, setGameOver] = useState(false)
   const [scores, setScores] = useState<number[] | null>(null)
   const [tileCounts, setTileCounts] = useState<number[]>([])
-  const [autoAgentAssignments, setAutoAgentAssignments] = useState<Record<number, string>>({})
+  const [playerAssignments, setPlayerAssignments] = useState<string[]>(() =>
+    Array(NUM_PLAYERS).fill('human'),
+  )
 
   const applyGameState = useCallback((normalized: NormalizedGameState) => {
     setPieces(normalized.pieces)
@@ -202,14 +205,18 @@ const fetchGameState = useCallback(async () => {
   }, [pendingAgent, applyGameState, fetchGameState])
 
   useEffect(() => {
-    if (agents.length === 0) {
-      setSelectedAgentName('')
-      return
-    }
-    if (!selectedAgentName || !agents.includes(selectedAgentName)) {
-      setSelectedAgentName(agents[0] ?? '')
-    }
-  }, [agents, selectedAgentName])
+    setPlayerAssignments((prev) => {
+      let changed = false
+      const next = prev.map((assignment) => {
+        if (assignment !== 'human' && !agents.includes(assignment)) {
+          changed = true
+          return 'human'
+        }
+        return assignment
+      })
+      return changed ? next : prev
+    })
+  }, [agents])
 
   useEffect(() => {
     if (boardSize === null) {
@@ -256,8 +263,10 @@ const fetchGameState = useCallback(async () => {
   }, [pendingPlacement])
 
   const isAgentThinking = Boolean(pendingAgent)
-  const autoAgentForCurrentPlayer = autoAgentAssignments[currentPlayer] ?? null
-  const isAutoForCurrentPlayer = Boolean(autoAgentForCurrentPlayer)
+  const currentAssignment = playerAssignments[currentPlayer] ?? 'human'
+  const autoAgentForCurrentPlayer =
+    currentAssignment !== 'human' ? currentAssignment : null
+  const isHumanTurn = autoAgentForCurrentPlayer === null
   const interactionLocked = isAgentThinking || gameOver
   const winningScore = useMemo(() => {
     if (!scores || scores.length === 0) {
@@ -267,7 +276,7 @@ const fetchGameState = useCallback(async () => {
   }, [scores])
 
   const handleOrientationSelect = (pieceId: number, orientation: BackendOrientation) => {
-    if (pendingPlacement || !orientation.valid || interactionLocked) {
+    if (pendingPlacement || !orientation.valid || interactionLocked || !isHumanTurn) {
       return
     }
     setErrorMessage(null)
@@ -281,7 +290,8 @@ const fetchGameState = useCallback(async () => {
       boardSize === null ||
       !board ||
       isSubmittingMove ||
-      interactionLocked
+      interactionLocked ||
+      !isHumanTurn
     ) {
       return
     }
@@ -315,7 +325,7 @@ const fetchGameState = useCallback(async () => {
   }
 
   const handleConfirmPlacement = async () => {
-    if (!pendingPlacement || isSubmittingMove || interactionLocked) {
+    if (!pendingPlacement || isSubmittingMove || interactionLocked || !isHumanTurn) {
       return
     }
 
@@ -389,12 +399,8 @@ const fetchGameState = useCallback(async () => {
     [applyGameState, fetchGameState, interactionLocked, isSubmittingMove],
   )
 
-  const handleAgentMove = async () => {
-    await requestAgentMove(selectedAgentName)
-  }
-
   useEffect(() => {
-    if (!autoAgentForCurrentPlayer || pendingAgent || interactionLocked) {
+    if (!autoAgentForCurrentPlayer || pendingAgent || interactionLocked || isSubmittingMove) {
       return
     }
     requestAgentMove(autoAgentForCurrentPlayer)
@@ -402,9 +408,38 @@ const fetchGameState = useCallback(async () => {
     autoAgentForCurrentPlayer,
     pendingAgent,
     interactionLocked,
+    isSubmittingMove,
     currentPlayer,
     requestAgentMove,
   ])
+
+  const handleResetGame = async () => {
+    if (isSubmittingMove) {
+      return
+    }
+    setIsSubmittingMove(true)
+    setErrorMessage(null)
+    try {
+      const response = await fetch(RESET_ENDPOINT, { method: 'POST' })
+      if (!response.ok) {
+        const body = await response.json().catch(async () => ({ error: await response.text() }))
+        setErrorMessage(body?.error ?? 'Failed to reset game.')
+        return
+      }
+      const payload = (await response.json()) as GameStateResponse
+      const normalized = normalizeGameState(payload)
+      applyGameState(normalized)
+      setPendingPlacement(null)
+      setSelectedOrientation(null)
+      setExpandedPieceId(null)
+      setPlayerAssignments(Array(NUM_PLAYERS).fill('human'))
+    } catch (error) {
+      console.error('Failed to reset game', error)
+      setErrorMessage('Something went wrong resetting the game.')
+    } finally {
+      setIsSubmittingMove(false)
+    }
+  }
 
   const handleUndoPlacement = () => {
     setPendingPlacement(null)
@@ -430,6 +465,14 @@ const fetchGameState = useCallback(async () => {
         <div>
           <h1>AlphaBlokus</h1>
         </div>
+        <button
+          type="button"
+          className="secondary reset-button"
+          onClick={handleResetGame}
+          disabled={isSubmittingMove}
+        >
+          Restart game
+        </button>
       </header>
 
       <section className="layout">
@@ -518,6 +561,11 @@ const fetchGameState = useCallback(async () => {
                 )
               })}
             </div>
+          )}
+          {!isHumanTurn && autoAgentForCurrentPlayer && !pendingAgent && (
+            <p className="agent-message">
+              Player {currentPlayer + 1} is controlled by <strong>{autoAgentForCurrentPlayer}</strong>.
+            </p>
           )}
           {pendingAgent && (
             <p className="agent-message">Agent <strong>{pendingAgent}</strong> is selecting a move…</p>
@@ -627,65 +675,52 @@ const fetchGameState = useCallback(async () => {
             </div>
           </aside>
 
-          {agents.length > 0 && (
-            <section className="agent-panel">
-              <div className="agent-panel__header">
-                <h2>Agent Move</h2>
-                {pendingAgent && (
-                  <span className="agent-panel__status">Running: {pendingAgent}</span>
-                )}
-              </div>
-              <div className="agent-panel__body agent-controls">
-                <label>
-                  Agent
-                  <select
-                    value={selectedAgentName}
-                    onChange={(event) => setSelectedAgentName(event.target.value)}
-                    disabled={agents.length === 0 || isSubmittingMove || interactionLocked}
+          <section className="agent-panel">
+            <div className="agent-panel__header">
+              <h2>Players</h2>
+              {pendingAgent && (
+                <span className="agent-panel__status">Running: {pendingAgent}</span>
+              )}
+            </div>
+            <ul className="agent-panel__list">
+              {playerAssignments.map((assignment, playerIndex) => {
+                const isCurrentPlayer = playerIndex === currentPlayer
+                return (
+                  <li
+                    key={playerIndex}
+                    className={`agent-panel__row${
+                      isCurrentPlayer ? ' agent-panel__row--current' : ''
+                    }`}
                   >
-                    {agents.map((agent) => (
-                      <option key={agent} value={agent}>
-                        {agent}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="agent-panel__checkbox">
-                  <input
-                    type="checkbox"
-                    checked={isAutoForCurrentPlayer}
-                    onChange={(event) => {
-                      if (event.target.checked) {
-                        if (!selectedAgentName) {
-                          return
-                        }
-                        setAutoAgentAssignments((prev) => ({
-                          ...prev,
-                          [currentPlayer]: selectedAgentName,
-                        }))
-                      } else {
-                        setAutoAgentAssignments((prev) => {
-                          const next = { ...prev }
-                          delete next[currentPlayer]
-                          return next
-                        })
-                      }
-                    }}
-                    disabled={!selectedAgentName || isSubmittingMove}
-                  />
-                  Auto-play player {currentPlayer + 1}
-                </label>
-                <button
-                  type="button"
-                  className="secondary"
-                  onClick={handleAgentMove}
-                  disabled={!selectedAgentName || isSubmittingMove || interactionLocked}
-                >
-                  {isAgentThinking ? 'Agent playing…' : 'Agent move'}
-                </button>
-              </div>
-            </section>
-          )}
+                    <div className="agent-panel__player">
+                      <span>Player {playerIndex + 1}</span>
+                      <small>
+                        {playerAssignments[playerIndex] === 'human'
+                          ? 'Human'
+                          : playerAssignments[playerIndex]}
+                      </small>
+                    </div>
+                    <select
+                      value={assignment}
+                      onChange={(event) => {
+                        const value = event.target.value
+                        setPlayerAssignments((prev) =>
+                          prev.map((entry, idx) => (idx === playerIndex ? value : entry)),
+                        )
+                      }}
+                    >
+                      <option value="human">Human</option>
+                      {agents.map((agent) => (
+                        <option key={agent} value={agent}>
+                          {agent}
+                        </option>
+                      ))}
+                    </select>
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
         </div>
       </section>
     </main>
