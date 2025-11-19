@@ -22,8 +22,7 @@ batch_size = 128
 policy_loss_weight = 0.158
 sampling_ratio = 2.0
 window_size = 200000
-# min_samples_for_save = 20000
-min_samples_for_save = 0
+min_samples_for_save = 20000
 poll_interval_seconds = 10
 
 [directories]
