@@ -29,6 +29,14 @@ impl BoardSlice {
         }
     }
 
+    pub fn from_cells(size: usize, cells: &[[usize; 2]]) -> Self {
+        let mut slice = BoardSlice::new(size);
+        for pos in cells {
+            slice.set((pos[0], pos[1]), true);
+        }
+        slice
+    }
+
     pub fn size(&self) -> usize {
         self.size
     }

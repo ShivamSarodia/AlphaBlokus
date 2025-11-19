@@ -1,26 +1,38 @@
+use crate::config::{GameConfig, InferenceConfig};
 use crate::utils;
 use crate::{
     config::SelfPlayConfig, gameplay::Engine, inference::DefaultClient, recorder::Recorder,
 };
 use ahash::AHashMap as HashMap;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
+
+pub async fn build_inference_clients(
+    inference_configs: &'static [InferenceConfig],
+    game_config: &'static GameConfig,
+    cancel_token: CancellationToken,
+) -> HashMap<String, Arc<DefaultClient>> {
+    let mut clients = HashMap::<String, Arc<DefaultClient>>::new();
+
+    for inference_config in inference_configs {
+        let client = DefaultClient::from_inference_config(
+            inference_config,
+            game_config,
+            cancel_token.clone(),
+        )
+        .await;
+        clients.insert(inference_config.name.clone(), Arc::new(client));
+    }
+    clients
+}
 
 pub fn run_selfplay(config: &'static SelfPlayConfig) {
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(async move {
-        let mut inference_clients = HashMap::<String, Arc<DefaultClient>>::new();
-
         let cancel_token = utils::setup_cancel_token();
 
-        for inference_config in &config.inference {
-            let cancel_token = cancel_token.clone();
-
-            let client =
-                DefaultClient::from_inference_config(inference_config, &config.game, cancel_token)
-                    .await;
-
-            inference_clients.insert(inference_config.name.clone(), Arc::new(client));
-        }
+        let inference_clients =
+            build_inference_clients(&config.inference, &config.game, cancel_token.clone()).await;
 
         let (recorder, recorder_background_task) = match &config.mcts_recorder {
             crate::config::MCTSRecorderConfig::Disabled => Recorder::disabled(),

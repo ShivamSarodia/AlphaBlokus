@@ -10,6 +10,21 @@ use crate::game::{GameStatus, State};
 use crate::inference::DefaultClient;
 use crate::recorder::Recorder;
 
+pub fn build_agent(
+    agent_config: &'static AgentConfig,
+    game_config: &'static GameConfig,
+    inference_clients: &HashMap<String, Arc<DefaultClient>>,
+) -> Box<dyn Agent> {
+    match agent_config {
+        AgentConfig::MCTS(mcts_config) => Box::new(MCTSAgent::new(
+            mcts_config,
+            game_config,
+            Arc::clone(&inference_clients[&mcts_config.inference_config_name]),
+        )),
+        AgentConfig::Random(random_config) => Box::new(RandomAgent::new(random_config)),
+    }
+}
+
 pub struct Engine {
     num_concurrent_games: u32,
     num_total_games: u32,
@@ -92,14 +107,7 @@ impl Engine {
     }
 
     fn generate_single_agent(&self, agent_config: &'static AgentConfig) -> Box<dyn Agent> {
-        match agent_config {
-            AgentConfig::MCTS(mcts_config) => Box::new(MCTSAgent::new(
-                mcts_config,
-                self.game_config,
-                Arc::clone(&self.inference_clients[&mcts_config.inference_config_name]),
-            )),
-            AgentConfig::Random(random_config) => Box::new(RandomAgent::new(random_config)),
-        }
+        build_agent(agent_config, self.game_config, &self.inference_clients)
     }
 
     pub async fn play_games(&mut self) -> u32 {
