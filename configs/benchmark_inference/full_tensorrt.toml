@@ -1,5 +1,5 @@
 num_concurrent_threads = 1024
-duration_seconds = 10
+duration_seconds = 30
 
 [game]
 board_size = 20

@@ -1,5 +1,4 @@
 num_concurrent_games = 1024
-duration_seconds = 600
 
 [observability.metrics]
 type = "prometheus"
@@ -16,7 +15,7 @@ flush_row_count = 100000
 name = "default"
 model_path = "static/networks/res_net_full.onnx"
 batch_size = 128
-executor = { type = "tensorrt", max_batch_size = 128,  pool_size = 32 }
+executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
 
 [agents.Single]
 type = "mcts"
