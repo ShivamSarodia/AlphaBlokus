@@ -1,158 +1,148 @@
+use ahash::AHashMap as HashMap;
 use std::sync::Arc;
+use tokio::sync::{Mutex, MutexGuard};
+use tokio_util::sync::CancellationToken;
 
-use anyhow::Result;
-use tokio::sync::{Mutex, MutexGuard, oneshot};
-use tracing::warn;
-
-use crate::{
-    config::{GameConfig, WebPlayConfig},
-    game::State as BlokusState,
-};
-
-use super::{
-    agents::{AgentRegistry, AgentRequestError},
-    response,
-};
+use crate::agents::Agent;
+use crate::gameplay;
+use crate::web::serve::ApiError;
+use crate::{config::WebPlayConfig, game::State as BlokusState};
 
 #[derive(Clone)]
 pub struct AppState {
+    // Config that originally started the server.
     pub config: &'static WebPlayConfig,
-    session: Arc<Mutex<GameSession>>,
+
+    // Agents that can play in this game.
     agents: AgentRegistry,
+
+    // Session for the current game. Behind an Arc and Mutex to allow for concurrent
+    // access.
+    session: Arc<Mutex<GameSession>>,
+}
+
+pub struct GameSession {
+    // State of the current Blokus game.
+    pub blokus_state: BlokusState,
+
+    // Name of the agent that is currently playing, if any.
+    pub pending_agent: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct AgentRegistry {
+    agents: HashMap<String, Arc<Mutex<Box<dyn Agent>>>>,
 }
 
 impl AppState {
-    pub async fn build(config: &'static WebPlayConfig) -> Result<Self> {
-        let agents = AgentRegistry::build(&config.agents, &config.game, &config.inference).await?;
-        Ok(Self {
+    pub async fn build(config: &'static WebPlayConfig) -> Self {
+        Self {
             config,
-            session: Arc::new(Mutex::new(GameSession::new(&config.game))),
-            agents,
-        })
+            agents: AgentRegistry::build(config).await,
+            // TODO: We can probably implement some better synchronization here to ensure
+            // that multiple agents / resets / etc can't conflict.
+            session: Arc::new(Mutex::new(GameSession {
+                blokus_state: BlokusState::new(&config.game),
+                pending_agent: None,
+            })),
+        }
+    }
+
+    pub async fn reset(&self) {
+        // TODO: Consider resetting the agent registry here as well.
+        *self.session.lock().await = GameSession {
+            blokus_state: BlokusState::new(&self.config.game),
+            pending_agent: None,
+        };
+    }
+
+    pub fn agent_names(&self) -> Vec<String> {
+        self.agents.agent_names()
     }
 
     pub async fn session(&self) -> MutexGuard<'_, GameSession> {
         self.session.lock().await
     }
 
-    pub fn agent_names(&self) -> Vec<String> {
-        self.agents.names()
-    }
-
-    pub fn game_response(&self, session: &GameSession) -> response::GameResponse {
-        response::build_game_response(
-            &session.state,
-            self.config,
-            self.agent_names(),
-            session.pending_agent(),
-        )
-    }
-
-    pub async fn start_agent_move(&self, agent_name: &str) -> Result<(), AgentRunError> {
-        if !self.agents.contains(agent_name) {
-            return Err(AgentRunError::AgentNotFound);
-        }
-
-        let snapshot = {
+    pub async fn start_agent_move(&self, agent_name: &str) -> Result<(), ApiError> {
+        // Confirm that we're ok to start the agent move and set the pending agent.
+        let state = {
             let mut session = self.session().await;
-            if session.has_pending_agent() {
-                return Err(AgentRunError::AgentBusy);
+
+            // Set the pending agent.
+            if session.pending_agent.is_some() {
+                return Err(ApiError::AgentBusy(
+                    "An agent is already selecting a move".into(),
+                ));
             }
-            if !session.state.any_valid_moves() {
-                return Err(AgentRunError::NoMovesAvailable);
-            }
-            session.set_pending_agent(agent_name);
-            session.state.clone()
+            session.pending_agent = Some(agent_name.to_string());
+            session.blokus_state.clone()
         };
 
-        let (reply_sender, reply_receiver) = oneshot::channel();
-        if let Err(error) = self.agents.request_move(agent_name, snapshot, reply_sender) {
-            let mut session = self.session().await;
-            session.clear_pending_agent();
-            return Err(error.into());
-        }
-
+        // Grab the agent from the registry.
+        let agent = self.agents.get_agent(agent_name).await;
         let session = Arc::clone(&self.session);
-        let agent_name = agent_name.to_string();
-        tokio::spawn(async move {
-            let move_index = reply_receiver
-                .await
-                .expect("Agent failed to produce a move");
 
-            let mut guard = session.lock().await;
-            if guard.pending_agent() == Some(agent_name.as_str()) {
-                if guard.state.is_valid_move(move_index) {
-                    guard.state.apply_move(move_index);
-                } else {
-                    warn!(
-                        agent = %agent_name,
-                        move_index,
-                        "Agent produced invalid move"
-                    );
-                }
-                guard.clear_pending_agent();
-            }
+        // Initiate a separate task to run that agent.
+        tokio::spawn(async move {
+            // Run the agent to chose a move.
+            let move_index = agent.lock().await.choose_move(&state).await;
+
+            // Apply the move to the state.
+            let mut session = session.lock().await;
+            session.blokus_state.apply_move(move_index);
+            session.pending_agent = None;
         });
 
         Ok(())
     }
-
-    pub async fn reset(&self) {
-        let mut session = self.session().await;
-        session.reset();
-    }
-}
-
-#[derive(Debug)]
-pub enum AgentRunError {
-    AgentNotFound,
-    AgentBusy,
-    NoMovesAvailable,
-    AgentFailed,
-}
-
-impl From<AgentRequestError> for AgentRunError {
-    fn from(error: AgentRequestError) -> Self {
-        match error {
-            AgentRequestError::AgentNotFound => AgentRunError::AgentNotFound,
-            AgentRequestError::AgentFailed => AgentRunError::AgentFailed,
-        }
-    }
-}
-
-pub struct GameSession {
-    pub state: BlokusState,
-    pending_agent: Option<String>,
-    game_config: &'static GameConfig,
 }
 
 impl GameSession {
-    fn new(game_config: &'static GameConfig) -> Self {
-        Self {
-            state: BlokusState::new(game_config),
-            pending_agent: None,
-            game_config,
+    pub async fn apply_human_move(&mut self, move_index: usize) -> Result<(), ApiError> {
+        if self.pending_agent.is_some() {
+            return Err(ApiError::AgentBusy(
+                "Human player cannot make a move when an agent is selecting a move".into(),
+            ));
         }
+        if !self.blokus_state.is_valid_move(move_index) {
+            return Err(ApiError::MoveNotAllowed(
+                "The selected move is not valid".into(),
+            ));
+        }
+        self.blokus_state.apply_move(move_index);
+
+        Ok(())
+    }
+}
+
+impl AgentRegistry {
+    pub async fn build(config: &'static WebPlayConfig) -> Self {
+        let inference_clients = gameplay::build_inference_clients(
+            &config.inference,
+            &config.game,
+            CancellationToken::new(),
+        )
+        .await;
+
+        let agents = HashMap::from_iter(
+            config
+                .agents
+                .iter()
+                .map(|agent_config| {
+                    gameplay::build_agent(agent_config, &config.game, &inference_clients)
+                })
+                .map(|agent| (agent.name().to_string(), Arc::new(Mutex::new(agent)))),
+        );
+
+        Self { agents }
     }
 
-    pub fn pending_agent(&self) -> Option<&str> {
-        self.pending_agent.as_deref()
+    pub async fn get_agent(&self, agent_name: &str) -> Arc<Mutex<Box<dyn Agent>>> {
+        Arc::clone(self.agents.get(agent_name).expect("Agent not found"))
     }
 
-    pub fn has_pending_agent(&self) -> bool {
-        self.pending_agent.is_some()
-    }
-
-    fn set_pending_agent(&mut self, name: &str) {
-        self.pending_agent = Some(name.to_string());
-    }
-
-    fn clear_pending_agent(&mut self) {
-        self.pending_agent = None;
-    }
-
-    fn reset(&mut self) {
-        self.state = BlokusState::new(self.game_config);
-        self.clear_pending_agent();
+    fn agent_names(&self) -> Vec<String> {
+        self.agents.keys().cloned().collect()
     }
 }

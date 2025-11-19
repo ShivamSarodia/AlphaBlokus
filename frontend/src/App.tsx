@@ -1,10 +1,12 @@
+// Vibe-coded frontend for the AlphaBlokus game server.
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const PREVIEW_CELL_SIZE = 16
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const GAME_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/game` : '/api/game'
-const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/move` : '/api/move'
+const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/human_move` : '/api/human_move'
 const AGENT_MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/agent_move` : '/api/agent_move'
 const RESET_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/reset` : '/api/reset'
 const PLAYER_COLORS = ['#2563eb', '#fbbf24', '#ef4444', '#22c55e']
@@ -150,7 +152,7 @@ function App() {
     setHasLoaded(true)
   }, [])
 
-const fetchGameState = useCallback(async () => {
+  const fetchGameState = useCallback(async () => {
     const response = await fetch(GAME_ENDPOINT)
     if (!response.ok) {
       throw new Error('Game endpoint returned an error')
@@ -502,10 +504,10 @@ const fetchGameState = useCallback(async () => {
                   inlineStyle = preview.isValid
                     ? { background: preview.color }
                     : {
-                        background: preview.color,
-                        backgroundImage:
-                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.6) 0 6px, transparent 6px 12px)',
-                      }
+                      background: preview.color,
+                      backgroundImage:
+                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.6) 0 6px, transparent 6px 12px)',
+                    }
                 } else if (isPending && pendingPlacement) {
                   const pendingColor =
                     PLAYER_COLORS[currentPlayer % PLAYER_COLORS.length] ?? PLAYER_COLORS[0]
@@ -615,9 +617,8 @@ const fetchGameState = useCallback(async () => {
                 return (
                   <div
                     key={piece.id}
-                    className={`piece-card${isSelected ? ' piece-card--active' : ''}${
-                      !hasPlayableOrientation ? ' piece-card--faded' : ''
-                    }`}
+                    className={`piece-card${isSelected ? ' piece-card--active' : ''}${!hasPlayableOrientation ? ' piece-card--faded' : ''
+                      }`}
                   >
                     <button
                       type="button"
@@ -688,9 +689,8 @@ const fetchGameState = useCallback(async () => {
                 return (
                   <li
                     key={playerIndex}
-                    className={`agent-panel__row${
-                      isCurrentPlayer ? ' agent-panel__row--current' : ''
-                    }`}
+                    className={`agent-panel__row${isCurrentPlayer ? ' agent-panel__row--current' : ''
+                      }`}
                   >
                     <div className="agent-panel__player">
                       <span>Player {playerIndex + 1}</span>

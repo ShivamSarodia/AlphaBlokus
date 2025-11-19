@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use alpha_blokus::{
     config::{LoadableConfig, WebPlayConfig},
     utils,
-    web::play,
+    web::run,
 };
 
 #[derive(Parser)]
@@ -29,5 +29,6 @@ async fn main() -> Result<()> {
         .load_move_profiles()
         .context("Failed to load move profiles")?;
 
-    play::run(config).await
+    run(config).await;
+    Ok(())
 }
