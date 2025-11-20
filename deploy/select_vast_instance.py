@@ -93,6 +93,10 @@ def print_table(offers):
             "extractor": lambda _, offer: str(offer["cpu_cores"]),
         },
         {
+            "name": "GPU Fraction",
+            "extractor": lambda _, offer: str(round(offer["gpu_frac"], 2)),
+        },
+        {
             "name": "Location",
             "extractor": lambda _, offer: offer["geolocation"],
         },

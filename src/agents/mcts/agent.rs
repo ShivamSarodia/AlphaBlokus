@@ -123,6 +123,13 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
     }
 
     async fn choose_move(&mut self, state: &State) -> usize {
+        let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
+        let num_rollouts = if is_fast_move {
+            self.mcts_config.fast_move_num_rollouts
+        } else {
+            self.mcts_config.full_move_num_rollouts
+        };
+
         // Create a new node to represent the root of the search tree. Start by expanding the
         // node immediately.
         let mut search_root = Node::build_and_expand(
@@ -130,16 +137,10 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
             self.inference_client.as_ref(),
             self.mcts_config,
             self.game_config,
-            true,
+            // Add noise only on full moves, not on fast moves.
+            !is_fast_move,
         )
         .await;
-
-        let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
-        let num_rollouts = if is_fast_move {
-            self.mcts_config.fast_move_num_rollouts
-        } else {
-            self.mcts_config.full_move_num_rollouts
-        };
 
         // Run the rollouts, which formulates the search tree.
         for _ in 0..num_rollouts {

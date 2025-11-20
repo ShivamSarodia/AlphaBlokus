@@ -18,8 +18,8 @@ name = "random"
 [[agents]]
 type = "mcts"
 name = "mcts"
-fast_move_probability = 0.8
-fast_move_num_rollouts = 100
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
 # Play with noise 0 to skip exploration

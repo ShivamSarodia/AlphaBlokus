@@ -1,0 +1,52 @@
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"
+
+[[inference]]
+name = "smart"
+model_path = "s3://alpha-blokus/full/models"
+batch_size = 1
+executor = { type = "ort" }
+
+[[inference]]
+name = "dumb"
+model_path = "s3://alpha-blokus/full/models/02501775.onnx"
+batch_size = 1
+executor = { type = "ort" }
+
+[[agents]]
+type = "random"
+name = "random"
+
+[[agents]]
+type = "mcts"
+name = "mcts_smart"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+# Play with noise 0 to skip exploration
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 0
+# Play with temperature 0 to select the best move always
+move_selection_temperature = 0.0
+inference_config_name = "smart"
+
+[[agents]]
+type = "mcts"
+name = "mcts_dumb"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+# Play with noise 0 to skip exploration
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 0
+# Play with temperature 0 to select the best move always
+move_selection_temperature = 0.0
+inference_config_name = "dumb"
