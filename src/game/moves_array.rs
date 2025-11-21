@@ -42,8 +42,8 @@ impl<T> MovesArray<T> {
         MovesArray { values }
     }
 
-    pub fn get(&self, index: usize) -> &T {
-        &self.values[index]
+    pub fn get<U: Into<usize>>(&self, index: U) -> &T {
+        &self.values[index.into()]
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {

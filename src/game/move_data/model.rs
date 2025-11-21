@@ -30,8 +30,8 @@ impl fmt::Debug for MoveData {
     }
 }
 
-pub fn move_index_to_player_pov(
-    move_index: usize,
+pub fn move_index_to_player_pov<T: Into<usize>>(
+    move_index: T,
     player: usize,
     move_profiles: &MovesArray<MoveProfile>,
 ) -> usize {

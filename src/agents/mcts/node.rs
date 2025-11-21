@@ -19,18 +19,18 @@ pub struct Node {
     /// Mapping from move index to array index for this node. That is, only valid moves are
     /// stored in the Vec<> below to save memory, and this map is used to convert from a move
     /// index like 15,423 to the array index like 21 at which that move is stored.
-    move_index_to_array_index: HashMap<usize, usize>,
+    move_index_to_array_index: HashMap<u16, u16>,
     /// Mapping from array index to move index for this node.
-    array_index_to_move_index: Vec<usize>,
+    array_index_to_move_index: Vec<u16>,
     /// Mapping from array index to move index from player POV for this node.
-    array_index_to_player_pov_move_index: Vec<usize>,
+    array_index_to_player_pov_move_index: Vec<u16>,
     /// Summed values for each child of this node, computed over time
     /// from backpropagation.
     children_value_sums: Vec<[f32; NUM_PLAYERS]>,
     /// Visit counts for each child of this node over backpropagation.
-    children_visit_counts: Vec<u32>,
+    children_visit_counts: Vec<u16>,
     /// Sum of the visit counts for all children of this node.
-    children_visit_counts_sum: u32,
+    children_visit_counts_sum: u16,
     /// Prior probabilities for each child of this node, computed from
     /// network policy evaluation.
     children_prior_probabilities: Vec<f32>,
@@ -103,19 +103,21 @@ impl Node {
     }
 
     fn initialize_move_mappings(&mut self, state: &State) {
-        self.array_index_to_move_index = state.valid_moves().collect::<Vec<usize>>();
+        self.array_index_to_move_index =
+            state.valid_moves().map(|x| x as u16).collect::<Vec<u16>>();
         self.array_index_to_player_pov_move_index = self
             .array_index_to_move_index
             .iter()
             .map(|&move_index| {
                 move_index_to_player_pov(move_index, self.player, self.game_config.move_profiles())
+                    as u16
             })
-            .collect::<Vec<usize>>();
+            .collect::<Vec<u16>>();
         self.move_index_to_array_index = HashMap::from_iter(
             self.array_index_to_move_index
                 .iter()
                 .enumerate()
-                .map(|(array_index, &move_index)| (move_index, array_index)),
+                .map(|(array_index, &move_index)| (move_index, array_index as u16)),
         );
         self.num_valid_moves = self.array_index_to_move_index.len();
     }
@@ -142,7 +144,11 @@ impl Node {
         let inference_result = inference_client
             .evaluate(inference::Request {
                 board: state.board().clone_with_player_pov(self.player as i32),
-                valid_move_indexes: self.array_index_to_player_pov_move_index.clone(),
+                valid_move_indexes: self
+                    .array_index_to_player_pov_move_index
+                    .iter()
+                    .map(|&x| x.into())
+                    .collect(),
             })
             .await;
 
@@ -206,7 +212,7 @@ impl Node {
             }
         }
 
-        self.array_index_to_move_index[max_index]
+        self.array_index_to_move_index[max_index].into()
     }
 
     fn exploration_scores(&self) -> Vec<f32> {
@@ -283,7 +289,7 @@ impl Node {
             dist.sample(&mut rand::rng())
         };
 
-        self.array_index_to_move_index[array_index]
+        self.array_index_to_move_index[array_index].into()
     }
 
     pub fn generate_mcts_data(&self, game_id: u64, state: &State) -> MCTSData {
@@ -292,7 +298,11 @@ impl Node {
             turn: state.turn(),
             game_id,
             board: state.board().clone_with_player_pov(self.player as i32),
-            valid_moves: self.array_index_to_player_pov_move_index.clone(),
+            valid_moves: self
+                .array_index_to_player_pov_move_index
+                .iter()
+                .map(|&x| x.into())
+                .collect(),
             valid_move_tuples: self
                 .array_index_to_player_pov_move_index
                 .iter()
@@ -305,15 +315,22 @@ impl Node {
                     )
                 })
                 .collect::<Vec<(usize, usize, usize)>>(),
-            visit_counts: self.children_visit_counts.clone(),
+            visit_counts: self
+                .children_visit_counts
+                .iter()
+                .map(|&x| x as u32)
+                .collect(),
             // This will be populated externally when the game is over.
             game_result: [0.0; NUM_PLAYERS],
         }
     }
 
     #[inline]
-    pub fn get_array_index(&self, move_index: usize) -> usize {
-        *self.move_index_to_array_index.get(&move_index).unwrap()
+    pub fn get_array_index<U: Into<usize>>(&self, move_index: U) -> usize {
+        *self
+            .move_index_to_array_index
+            .get(&(move_index.into() as u16))
+            .unwrap() as usize
     }
 
     pub fn get_child(&self, move_index: usize) -> Option<&Node> {
