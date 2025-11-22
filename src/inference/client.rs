@@ -9,7 +9,8 @@ use crate::{
     config::{ExecutorConfig, GameConfig, InferenceConfig, NUM_PLAYERS},
     game::Board,
     inference::{
-        Executor, LocalModelSource, OrtExecutor, ReloadExecutor, S3ModelSource, batcher::Batcher,
+        Executor, LocalModelSource, OrtExecutor, RandomExecutor, ReloadExecutor, S3ModelSource,
+        batcher::Batcher,
     },
     s3::S3ModelDownloader,
 };
@@ -150,6 +151,9 @@ fn build_executor(
 ) -> Box<dyn Executor> {
     match executor_config {
         ExecutorConfig::Ort => Box::new(OrtExecutor::build(model_path, game_config).unwrap()),
+        ExecutorConfig::Random { sleep_duration_ms } => Box::new(RandomExecutor::build(
+            Duration::from_millis(*sleep_duration_ms),
+        )),
         #[cfg(cuda)]
         ExecutorConfig::Tensorrt {
             max_batch_size,

@@ -14,6 +14,9 @@ pub struct InferenceConfig {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExecutorConfig {
     Ort,
+    Random {
+        sleep_duration_ms: u64,
+    },
     Tensorrt {
         max_batch_size: usize,
         pool_size: usize,
