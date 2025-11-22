@@ -1,21 +1,19 @@
-num_concurrent_games = 100
+num_concurrent_games = 1024
+duration_seconds = 30
 
 [mcts_recorder]
-type = "directory"
-data_directory = "data/scrap/games"
-flush_row_count = 50
+type = "disabled"
 
 [[inference]]
 name = "default"
-model_path = "static/networks/trivial_net_full.onnx"
-batch_size = 25
-executor = { type = "ort" }
-reload = { poll_interval_seconds = 10 }
+model_path = ""
+batch_size = 128
+executor = { type = "random", sleep_duration_ms = 2 }
 
 [agents.Single]
 type = "mcts"
-fast_move_probability = 0.8
-fast_move_num_rollouts = 100
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
 root_dirichlet_noise_fraction = 0.25

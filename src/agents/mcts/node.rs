@@ -34,9 +34,10 @@ pub struct Node {
     /// Prior probabilities for each child of this node, computed from
     /// network policy evaluation.
     children_prior_probabilities: Vec<f32>,
-    /// Children of this node. This vector is populated as children get get created through
-    /// backpropagation.
-    children: Vec<Option<Node>>,
+    /// Children of this node. This map is populated as children get created through
+    /// backpropagation. This is a map from *move* index to child node.
+    /// We use a HashMap here instead of a Vec because it is vastly more memory efficient.
+    children: HashMap<u16, Node>,
     game_config: &'static GameConfig,
     mcts_config: &'static MCTSConfig,
 }
@@ -59,8 +60,7 @@ impl Node {
             move_index_to_array_index: HashMap::new(),
             array_index_to_move_index: Vec::new(),
             array_index_to_player_pov_move_index: Vec::new(),
-            // Initialized by initialize_children
-            children: Vec::new(),
+            children: HashMap::new(),
             children_value_sums: vec![[0.0; NUM_PLAYERS]; 0],
             children_visit_counts: vec![0; 0],
             children_visit_counts_sum: 0,
@@ -123,10 +123,6 @@ impl Node {
     }
 
     fn initialize_children(&mut self) {
-        self.children = Vec::with_capacity(self.num_valid_moves);
-        for _ in 0..self.num_valid_moves {
-            self.children.push(None);
-        }
         self.children_value_sums = vec![[0.0; NUM_PLAYERS]; self.num_valid_moves];
         self.children_visit_counts = vec![0; self.num_valid_moves];
         self.children_visit_counts_sum = 0;
@@ -334,12 +330,11 @@ impl Node {
     }
 
     pub fn get_child(&self, move_index: usize) -> Option<&Node> {
-        self.children[self.get_array_index(move_index)].as_ref()
+        self.children.get(&(move_index as u16))
     }
 
     pub fn get_child_mut(&mut self, move_index: usize) -> Option<&mut Node> {
-        let array_index = self.get_array_index(move_index);
-        self.children[array_index].as_mut()
+        self.children.get_mut(&(move_index as u16))
     }
 
     pub fn has_child(&self, move_index: usize) -> bool {
@@ -347,8 +342,7 @@ impl Node {
     }
 
     pub fn add_child(&mut self, move_index: usize, child_node: Self) {
-        let array_index = self.get_array_index(move_index);
-        self.children[array_index] = Some(child_node);
+        self.children.insert(move_index as u16, child_node);
     }
 
     pub fn increment_child_value_sum(&mut self, move_index: usize, values: [f32; NUM_PLAYERS]) {
