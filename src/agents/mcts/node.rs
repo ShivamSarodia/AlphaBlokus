@@ -2,6 +2,7 @@ use ahash::AHashMap as HashMap;
 use log::debug;
 use rand_distr::Distribution;
 use rand_distr::weighted::WeightedIndex;
+use serde::{Deserialize, Serialize};
 
 use crate::config::GameConfig;
 use crate::game::move_data::move_index_to_player_pov;
@@ -40,6 +41,39 @@ pub struct Node {
     children: HashMap<u16, Node>,
     game_config: &'static GameConfig,
     mcts_config: &'static MCTSConfig,
+}
+
+/// A struct that contains just the information useful to analyze a node
+/// in the MCTS analyzer tool.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct NodeAnalysis {
+    player: usize,
+    num_valid_moves: usize,
+    value: [f32; NUM_PLAYERS],
+    move_index_to_array_index: HashMap<u16, u16>,
+    array_index_to_move_index: Vec<u16>,
+    array_index_to_player_pov_move_index: Vec<u16>,
+    children_value_sums: Vec<[f32; NUM_PLAYERS]>,
+    children_visit_counts: Vec<u16>,
+    children_visit_counts_sum: u16,
+    children_prior_probabilities: Vec<f32>,
+}
+
+impl NodeAnalysis {
+    pub fn from_node(node: &Node) -> Self {
+        NodeAnalysis {
+            player: node.player,
+            num_valid_moves: node.num_valid_moves,
+            value: node.value,
+            move_index_to_array_index: node.move_index_to_array_index.clone(),
+            array_index_to_move_index: node.array_index_to_move_index.clone(),
+            array_index_to_player_pov_move_index: node.array_index_to_player_pov_move_index.clone(),
+            children_value_sums: node.children_value_sums.clone(),
+            children_visit_counts: node.children_visit_counts.clone(),
+            children_visit_counts_sum: node.children_visit_counts_sum,
+            children_prior_probabilities: node.children_prior_probabilities.clone(),
+        }
+    }
 }
 
 impl Node {

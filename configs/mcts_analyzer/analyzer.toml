@@ -1,0 +1,27 @@
+state_file = "/tmp/state.json"
+output_file = "/tmp/analyze_output.json"
+
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"
+
+[[inference]]
+name = "default"
+model_path = "s3://alpha-blokus/full/models/04213034.onnx"
+batch_size = 1
+executor = { type = "ort" }
+
+[mcts_config]
+type = "mcts"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.25
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 0.0
+inference_config_name = "default"

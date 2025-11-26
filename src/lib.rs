@@ -3,6 +3,7 @@ pub mod config;
 pub mod game;
 pub mod gameplay;
 pub mod inference;
+pub mod mcts_analyzer;
 pub mod recorder;
 pub mod s3;
 pub mod tensorrt;

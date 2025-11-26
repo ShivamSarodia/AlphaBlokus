@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::config::{GameConfig, NUM_PLAYERS};
 use crate::game::MovesBitSet;
 use crate::game::display::{BoardDisplay, BoardDisplayLayer, BoardDisplayShape};
@@ -20,6 +22,16 @@ pub struct State {
     moves_enabled: [MovesBitSet; NUM_PLAYERS],
     moves_ruled_out: [MovesBitSet; NUM_PLAYERS],
     game_config: &'static GameConfig,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SerializableState {
+    board: Board,
+    player: usize,
+    turn: u16,
+    last_move_played: Option<(usize, usize)>,
+    moves_enabled: [MovesBitSet; NUM_PLAYERS],
+    moves_ruled_out: [MovesBitSet; NUM_PLAYERS],
 }
 
 impl State {
@@ -135,6 +147,31 @@ impl State {
 
     pub fn board(&self) -> &Board {
         &self.board
+    }
+}
+
+impl SerializableState {
+    pub fn from_state(state: &State) -> Self {
+        SerializableState {
+            board: state.board.clone(),
+            player: state.player,
+            turn: state.turn,
+            last_move_played: state.last_move_played,
+            moves_enabled: state.moves_enabled.clone(),
+            moves_ruled_out: state.moves_ruled_out.clone(),
+        }
+    }
+
+    pub fn to_state(self, game_config: &'static GameConfig) -> State {
+        State {
+            board: self.board,
+            player: self.player,
+            turn: self.turn,
+            last_move_played: self.last_move_played,
+            moves_enabled: self.moves_enabled,
+            moves_ruled_out: self.moves_ruled_out,
+            game_config,
+        }
     }
 }
 

@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ahash = "0.8.12"
+ahash = { version = "0.8.12", features = ["serde"] }
 anyhow = "1.0.99"
 async-trait = "0.1.89"
 aws-config = { version = "1.8.6", features = ["behavior-version-latest"] }

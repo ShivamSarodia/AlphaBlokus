@@ -1,11 +1,11 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::config::{
-    AgentConfig, AgentGroupConfig, GameConfig, InferenceConfig, MCTSRecorderConfig,
+    AgentConfig, AgentGroupConfig, GameConfig, InferenceConfig, MCTSConfig, MCTSRecorderConfig,
     ObservabilityConfig,
 };
 
@@ -72,6 +72,17 @@ pub struct WebPlayConfig {
 }
 
 impl LoadableConfig for WebPlayConfig {}
+
+#[derive(Deserialize, Debug)]
+pub struct MCTSAnalyzerConfig {
+    pub game: GameConfig,
+    pub state_file: PathBuf,
+    pub output_file: PathBuf,
+    pub inference: Vec<InferenceConfig>,
+    pub mcts_config: MCTSConfig,
+}
+
+impl LoadableConfig for MCTSAnalyzerConfig {}
 
 #[cfg(test)]
 mod tests {

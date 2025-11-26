@@ -114,15 +114,8 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
             node = node.unwrap().get_child_mut(move_index);
         }
     }
-}
 
-#[async_trait]
-impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    async fn choose_move(&mut self, state: &State) -> usize {
+    pub async fn choose_move_with_node(&mut self, state: &State) -> (usize, Node) {
         let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
         let num_rollouts = if is_fast_move {
             self.mcts_config.fast_move_num_rollouts
@@ -154,7 +147,18 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
                 .push(search_root.generate_mcts_data(self.game_id, state));
         }
 
-        move_index
+        (move_index, search_root)
+    }
+}
+
+#[async_trait]
+impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    async fn choose_move(&mut self, state: &State) -> usize {
+        self.choose_move_with_node(state).await.0
     }
 
     fn flush_mcts_data(&mut self) -> Vec<MCTSData> {
