@@ -22,8 +22,9 @@ pub struct AppState {
 }
 
 pub struct GameSession {
-    // State of the current Blokus game.
-    pub blokus_state: BlokusState,
+    // States of the current Blokus game, from oldest to newest.
+    // Current state is the last element.
+    pub blokus_states: Vec<BlokusState>,
 
     // Name of the agent that is currently playing, if any.
     pub pending_agent: Option<String>,
@@ -42,7 +43,7 @@ impl AppState {
             // TODO: We can probably implement some better synchronization here to ensure
             // that multiple agents / resets / etc can't conflict.
             session: Arc::new(Mutex::new(GameSession {
-                blokus_state: BlokusState::new(&config.game),
+                blokus_states: vec![BlokusState::new(&config.game)],
                 pending_agent: None,
             })),
         }
@@ -51,7 +52,7 @@ impl AppState {
     pub async fn reset(&self) {
         // TODO: Consider resetting the agent registry here as well.
         *self.session.lock().await = GameSession {
-            blokus_state: BlokusState::new(&self.config.game),
+            blokus_states: vec![BlokusState::new(&self.config.game)],
             pending_agent: None,
         };
     }
@@ -76,7 +77,7 @@ impl AppState {
                 ));
             }
             session.pending_agent = Some(agent_name.to_string());
-            session.blokus_state.clone()
+            session.blokus_states.last().unwrap().clone()
         };
 
         // Grab the agent from the registry.
@@ -90,7 +91,9 @@ impl AppState {
 
             // Apply the move to the state.
             let mut session = session.lock().await;
-            session.blokus_state.apply_move(move_index);
+            let mut cloned_state = session.blokus_states.last().unwrap().clone();
+            cloned_state.apply_move(move_index);
+            session.blokus_states.push(cloned_state);
             session.pending_agent = None;
         });
 
@@ -105,12 +108,15 @@ impl GameSession {
                 "Human player cannot make a move when an agent is selecting a move".into(),
             ));
         }
-        if !self.blokus_state.is_valid_move(move_index) {
+        if !self.blokus_states.last().unwrap().is_valid_move(move_index) {
             return Err(ApiError::MoveNotAllowed(
                 "The selected move is not valid".into(),
             ));
         }
-        self.blokus_state.apply_move(move_index);
+
+        let mut cloned_state = self.blokus_states.last().unwrap().clone();
+        cloned_state.apply_move(move_index);
+        self.blokus_states.push(cloned_state);
 
         Ok(())
     }

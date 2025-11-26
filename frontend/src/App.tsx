@@ -9,6 +9,8 @@ const GAME_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/game` : '/api/game'
 const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/human_move` : '/api/human_move'
 const AGENT_MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/agent_move` : '/api/agent_move'
 const RESET_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/reset` : '/api/reset'
+const BACK_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/back` : '/api/back'
+const SAVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/save_game_state` : '/api/save_game_state'
 const PLAYER_COLORS = ['#2563eb', '#fbbf24', '#ef4444', '#22c55e']
 const NUM_PLAYERS = 4
 
@@ -138,6 +140,8 @@ function App() {
   const [playerAssignments, setPlayerAssignments] = useState<string[]>(() =>
     Array(NUM_PLAYERS).fill('human'),
   )
+  const [autoPlayPaused, setAutoPlayPaused] = useState(false)
+  const [isSavingGame, setIsSavingGame] = useState(false)
 
   const applyGameState = useCallback((normalized: NormalizedGameState) => {
     setPieces(normalized.pieces)
@@ -402,11 +406,18 @@ function App() {
   )
 
   useEffect(() => {
-    if (!autoAgentForCurrentPlayer || pendingAgent || interactionLocked || isSubmittingMove) {
+    if (
+      autoPlayPaused ||
+      !autoAgentForCurrentPlayer ||
+      pendingAgent ||
+      interactionLocked ||
+      isSubmittingMove
+    ) {
       return
     }
     requestAgentMove(autoAgentForCurrentPlayer)
   }, [
+    autoPlayPaused,
     autoAgentForCurrentPlayer,
     pendingAgent,
     interactionLocked,
@@ -443,6 +454,54 @@ function App() {
     }
   }
 
+  const handleStepBack = async () => {
+    if (isSubmittingMove) {
+      return
+    }
+    setIsSubmittingMove(true)
+    setErrorMessage(null)
+    try {
+      const response = await fetch(BACK_ENDPOINT, { method: 'POST' })
+      if (!response.ok) {
+        const body = await response.json().catch(async () => ({ error: await response.text() }))
+        setErrorMessage(body?.error ?? 'Failed to go back.')
+        return
+      }
+      const payload = (await response.json()) as GameStateResponse
+      const normalized = normalizeGameState(payload)
+      applyGameState(normalized)
+      setPendingPlacement(null)
+      setSelectedOrientation(null)
+      setExpandedPieceId(null)
+      setAutoPlayPaused(true)
+    } catch (error) {
+      console.error('Failed to step back', error)
+      setErrorMessage('Something went wrong going back a turn.')
+    } finally {
+      setIsSubmittingMove(false)
+    }
+  }
+
+  const handleSaveGameState = async () => {
+    if (isSavingGame) {
+      return
+    }
+    setIsSavingGame(true)
+    setErrorMessage(null)
+    try {
+      const response = await fetch(SAVE_ENDPOINT, { method: 'POST' })
+      if (!response.ok) {
+        const body = await response.json().catch(async () => ({ error: await response.text() }))
+        setErrorMessage(body?.error ?? 'Failed to save game.')
+      }
+    } catch (error) {
+      console.error('Failed to save game', error)
+      setErrorMessage('Something went wrong saving the game.')
+    } finally {
+      setIsSavingGame(false)
+    }
+  }
+
   const handleUndoPlacement = () => {
     setPendingPlacement(null)
     setSelectedOrientation(null)
@@ -467,14 +526,32 @@ function App() {
         <div>
           <h1>AlphaBlokus</h1>
         </div>
-        <button
-          type="button"
-          className="secondary reset-button"
-          onClick={handleResetGame}
-          disabled={isSubmittingMove}
-        >
-          Restart game
-        </button>
+        <div className="header-actions">
+          <button
+            type="button"
+            className="secondary"
+            onClick={handleSaveGameState}
+            disabled={isSavingGame}
+          >
+            Save game
+          </button>
+          <button
+            type="button"
+            className="secondary"
+            onClick={handleStepBack}
+            disabled={isSubmittingMove}
+          >
+            Step back
+          </button>
+          <button
+            type="button"
+            className="secondary reset-button"
+            onClick={handleResetGame}
+            disabled={isSubmittingMove}
+          >
+            Restart game
+          </button>
+        </div>
       </header>
 
       <section className="layout">
@@ -678,10 +755,25 @@ function App() {
 
           <section className="agent-panel">
             <div className="agent-panel__header">
-              <h2>Players</h2>
-              {pendingAgent && (
-                <span className="agent-panel__status">Running: {pendingAgent}</span>
-              )}
+              <div>
+                <h2>Players</h2>
+                {pendingAgent && (
+                  <span className="agent-panel__status">Running: {pendingAgent}</span>
+                )}
+                {autoPlayPaused && (
+                  <span className="agent-panel__status agent-panel__status--paused">
+                    Auto play paused
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                className={`secondary agent-panel__pause${autoPlayPaused ? ' agent-panel__pause--active' : ''
+                  }`}
+                onClick={() => setAutoPlayPaused((prev) => !prev)}
+              >
+                {autoPlayPaused ? 'Resume auto play' : 'Pause auto play'}
+              </button>
             </div>
             <ul className="agent-panel__list">
               {playerAssignments.map((assignment, playerIndex) => {

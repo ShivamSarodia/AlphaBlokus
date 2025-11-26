@@ -43,7 +43,7 @@ pub async fn get_game(State(app_state): State<AppState>) -> Json<GameResponse> {
 
 pub async fn build_game_response(app_state: &AppState) -> GameResponse {
     let session = app_state.session().await;
-    let blokus_state = &session.blokus_state;
+    let blokus_state = session.blokus_states.last().unwrap();
 
     let pieces = build_piece_response(&app_state.config.game, blokus_state);
     let board = blokus_state

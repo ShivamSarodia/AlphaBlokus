@@ -7,7 +7,7 @@ move_data_file = "static/move_data/full.bin"
 
 [[inference]]
 name = "smart"
-model_path = "s3://alpha-blokus/full/models"
+model_path = "s3://alpha-blokus/full/models/04213034.onnx"
 batch_size = 1
 executor = { type = "ort" }
 
