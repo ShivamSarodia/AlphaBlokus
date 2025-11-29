@@ -10,8 +10,8 @@ use std::net::SocketAddr;
 use crate::{
     config::WebPlayConfig,
     web::{
-        get_game::get_game, post_agent_move::post_agent_move, post_back::post_back,
-        post_human_move::post_human_move, post_reset::post_reset,
+        get_game::get_game, get_move_cells::get_move_cells, post_agent_move::post_agent_move,
+        post_back::post_back, post_human_move::post_human_move, post_reset::post_reset,
         post_save_game_state::post_save_game_state, state::AppState,
     },
 };
@@ -32,6 +32,7 @@ fn build_router(app_state: AppState) -> Router {
         .route("/api/reset", post(post_reset))
         .route("/api/back", post(post_back))
         .route("/api/save_game_state", post(post_save_game_state))
+        .route("/api/move/{move_index}/cells", get(get_move_cells))
         .with_state(app_state)
 }
 

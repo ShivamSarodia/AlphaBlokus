@@ -1,4 +1,5 @@
 mod get_game;
+mod get_move_cells;
 mod post_agent_move;
 mod post_back;
 mod post_human_move;

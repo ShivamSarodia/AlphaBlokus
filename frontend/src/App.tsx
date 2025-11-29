@@ -7,6 +7,7 @@ const PREVIEW_CELL_SIZE = 16
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 const GAME_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/game` : '/api/game'
 const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/human_move` : '/api/human_move'
+const MOVE_CELLS_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/move` : '/api/move'
 const AGENT_MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/agent_move` : '/api/agent_move'
 const RESET_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/reset` : '/api/reset'
 const BACK_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/back` : '/api/back'
@@ -137,6 +138,9 @@ function App() {
   const [gameOver, setGameOver] = useState(false)
   const [scores, setScores] = useState<number[] | null>(null)
   const [tileCounts, setTileCounts] = useState<number[]>([])
+  const [moveIndexInput, setMoveIndexInput] = useState('')
+  const [isFetchingMoveByIndex, setIsFetchingMoveByIndex] = useState(false)
+  const [previewedMoveIndex, setPreviewedMoveIndex] = useState<number | null>(null)
   const [playerAssignments, setPlayerAssignments] = useState<string[]>(() =>
     Array(NUM_PLAYERS).fill('human'),
   )
@@ -230,6 +234,7 @@ function App() {
     }
     setSelectedOrientation(null)
     setPendingPlacement(null)
+    setPreviewedMoveIndex(null)
     setHoverCell(null)
     setErrorMessage(null)
   }, [boardSize])
@@ -327,7 +332,54 @@ function App() {
       orientationId: selectedOrientation.orientation.id,
       cells,
     })
+    setPreviewedMoveIndex(null)
     setErrorMessage(null)
+  }
+
+  const handlePreviewMoveIndex = async (event?: React.FormEvent<HTMLFormElement>) => {
+    event?.preventDefault()
+    if (interactionLocked || !isHumanTurn || isSubmittingMove) {
+      return
+    }
+
+    const parsedIndex = Number.parseInt(moveIndexInput.trim(), 10)
+    if (!Number.isFinite(parsedIndex) || parsedIndex < 0) {
+      setErrorMessage('Enter a valid move index to preview.')
+      return
+    }
+
+    setIsFetchingMoveByIndex(true)
+    setErrorMessage(null)
+    try {
+      const response = await fetch(`${MOVE_CELLS_ENDPOINT}/${parsedIndex}/cells`)
+      if (!response.ok) {
+        const body = await response.json().catch(async () => ({ error: await response.text() }))
+        setErrorMessage(body?.error ?? 'Unable to load move cells for that index.')
+        return
+      }
+
+      const payload = (await response.json()) as { cells?: [number, number][] }
+      const cells = (payload.cells ?? []).map(([col, row]) => ({ row, col }))
+      if (cells.length === 0) {
+        setErrorMessage('No cells returned for that move index.')
+        return
+      }
+
+      setPendingPlacement({
+        pieceId: -1,
+        orientationId: parsedIndex,
+        cells,
+      })
+      setPreviewedMoveIndex(parsedIndex)
+      setSelectedOrientation(null)
+      setExpandedPieceId(null)
+      setHoverCell(null)
+    } catch (error) {
+      console.error('Failed to preview move index', error)
+      setErrorMessage('Something went wrong loading that move.')
+    } finally {
+      setIsFetchingMoveByIndex(false)
+    }
   }
 
   const handleConfirmPlacement = async () => {
@@ -350,6 +402,7 @@ function App() {
         setErrorMessage(body?.error ?? 'Move rejected by server.')
         setPendingPlacement(null)
         setSelectedOrientation(null)
+        setPreviewedMoveIndex(null)
         return
       }
 
@@ -360,6 +413,7 @@ function App() {
       setPendingPlacement(null)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
+      setPreviewedMoveIndex(null)
       setErrorMessage(null)
     } catch (error) {
       console.error('Failed to submit move', error)
@@ -445,6 +499,7 @@ function App() {
       setPendingPlacement(null)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
+      setPreviewedMoveIndex(null)
       setPlayerAssignments(Array(NUM_PLAYERS).fill('human'))
     } catch (error) {
       console.error('Failed to reset game', error)
@@ -473,6 +528,7 @@ function App() {
       setPendingPlacement(null)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
+      setPreviewedMoveIndex(null)
       setAutoPlayPaused(true)
     } catch (error) {
       console.error('Failed to step back', error)
@@ -505,6 +561,7 @@ function App() {
   const handleUndoPlacement = () => {
     setPendingPlacement(null)
     setSelectedOrientation(null)
+    setPreviewedMoveIndex(null)
     setErrorMessage(null)
   }
 
@@ -556,6 +613,31 @@ function App() {
 
       <section className="layout">
         <div className="board-panel" onMouseLeave={() => setHoverCell(null)}>
+          <form className="move-index-form" onSubmit={handlePreviewMoveIndex}>
+            <label htmlFor="move-index-input">Preview move by index</label>
+            <div className="move-index-form__controls">
+              <input
+                id="move-index-input"
+                type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                min={0}
+                placeholder="e.g. 1234"
+                value={moveIndexInput}
+                onChange={(event) => setMoveIndexInput(event.target.value)}
+                disabled={interactionLocked || isSubmittingMove || isFetchingMoveByIndex || !isHumanTurn}
+              />
+              <button
+                type="submit"
+                className="secondary"
+                disabled={
+                  interactionLocked || isSubmittingMove || isFetchingMoveByIndex || !isHumanTurn
+                }
+              >
+                {isFetchingMoveByIndex ? 'Loading…' : 'Show move'}
+              </button>
+            </div>
+          </form>
           <div
             className="board-grid"
             style={{ gridTemplateColumns: `repeat(${boardSize}, 28px)` }}
@@ -614,6 +696,9 @@ function App() {
 
           {pendingPlacement && (
             <div className="placement-actions">
+              {previewedMoveIndex !== null && (
+                <span className="move-index-chip">Move #{previewedMoveIndex}</span>
+              )}
               <button
                 type="button"
                 className="primary"

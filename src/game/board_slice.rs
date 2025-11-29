@@ -64,6 +64,18 @@ impl BoardSlice {
         }
     }
 
+    pub fn to_cells(&self) -> Vec<(usize, usize)> {
+        let mut cells = Vec::new();
+        for x in 0..self.size {
+            for y in 0..self.size {
+                if self.get((x, y)) {
+                    cells.push((x, y));
+                }
+            }
+        }
+        cells
+    }
+
     pub fn from_2d(slice_2d: &BoardSlice2D) -> Self {
         let mut board_slice = BoardSlice::new(slice_2d.size);
         for x in 0..slice_2d.size {
