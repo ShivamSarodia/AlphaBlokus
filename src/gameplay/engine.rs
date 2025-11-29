@@ -245,6 +245,7 @@ mod tests {
             temperature_turn_cutoff: 10,
             move_selection_temperature: 0.0,
             inference_config_name: "default".to_string(),
+            trace_file: None,
         }));
         let mut engine = Engine::new(
             1,

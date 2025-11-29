@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use serde::Deserialize;
 
 fn default_agent_name() -> String {
@@ -41,6 +43,15 @@ pub struct MCTSConfig {
     /// MCTS agent. The config file must contain an inference config with this
     /// name.
     pub inference_config_name: String,
+    /// If provided, saves debug information for each move as a new file in this directory.
+    #[serde(default)]
+    pub trace_file: Option<PathBuf>,
+}
+
+impl MCTSConfig {
+    pub fn tracing_enabled(&self) -> bool {
+        self.trace_file.is_some()
+    }
 }
 
 #[derive(Deserialize, Debug)]

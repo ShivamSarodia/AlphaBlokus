@@ -35,6 +35,7 @@ temperature_turn_cutoff = 0
 # Play with temperature 0 to select the best move always
 move_selection_temperature = 0.0
 inference_config_name = "smart"
+trace_file = "/tmp/alphablokus_trace"
 
 [[agents]]
 type = "mcts"

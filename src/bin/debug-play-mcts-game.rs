@@ -37,6 +37,7 @@ fn main() -> Result<()> {
         temperature_turn_cutoff: 24,
         move_selection_temperature: 1.0,
         inference_config_name: "".to_string(),
+        trace_file: None,
     }));
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {

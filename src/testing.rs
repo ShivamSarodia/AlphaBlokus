@@ -81,6 +81,7 @@ pub fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSC
         temperature_turn_cutoff: 10,
         move_selection_temperature: temperature,
         inference_config_name: "".to_string(),
+        trace_file: None,
     }))
 }
 

@@ -1,9 +1,9 @@
 use ahash::AHashMap as HashMap;
-use log::debug;
+use rand::Rng;
 use rand_distr::Distribution;
 use rand_distr::weighted::WeightedIndex;
-use serde::{Deserialize, Serialize};
 
+use crate::agents::mcts::tracing::{MCTSTrace, record_mcts_trace};
 use crate::config::GameConfig;
 use crate::game::move_data::move_index_to_player_pov;
 use crate::inference;
@@ -11,6 +11,10 @@ use crate::recorder::MCTSData;
 use crate::{config::MCTSConfig, config::NUM_PLAYERS, game::State};
 
 pub struct Node {
+    /// Unique identifier for the node, for trace purposes.
+    pub id: u64,
+    /// Unique identifier for the search, which all nodes in the search tree share.
+    pub search_id: u64,
     /// Player to move.
     player: usize,
     /// Number of valid moves for the player at this node.
@@ -43,42 +47,10 @@ pub struct Node {
     mcts_config: &'static MCTSConfig,
 }
 
-/// A struct that contains just the information useful to analyze a node
-/// in the MCTS analyzer tool.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct NodeAnalysis {
-    player: usize,
-    num_valid_moves: usize,
-    value: [f32; NUM_PLAYERS],
-    move_index_to_array_index: HashMap<u16, u16>,
-    array_index_to_move_index: Vec<u16>,
-    array_index_to_player_pov_move_index: Vec<u16>,
-    children_value_sums: Vec<[f32; NUM_PLAYERS]>,
-    children_visit_counts: Vec<u16>,
-    children_visit_counts_sum: u16,
-    children_prior_probabilities: Vec<f32>,
-}
-
-impl NodeAnalysis {
-    pub fn from_node(node: &Node) -> Self {
-        NodeAnalysis {
-            player: node.player,
-            num_valid_moves: node.num_valid_moves,
-            value: node.value,
-            move_index_to_array_index: node.move_index_to_array_index.clone(),
-            array_index_to_move_index: node.array_index_to_move_index.clone(),
-            array_index_to_player_pov_move_index: node.array_index_to_player_pov_move_index.clone(),
-            children_value_sums: node.children_value_sums.clone(),
-            children_visit_counts: node.children_visit_counts.clone(),
-            children_visit_counts_sum: node.children_visit_counts_sum,
-            children_prior_probabilities: node.children_prior_probabilities.clone(),
-        }
-    }
-}
-
 impl Node {
     pub async fn build_and_expand<T: inference::Client>(
         state: &State,
+        search_id: u64,
         inference_client: &T,
         mcts_config: &'static MCTSConfig,
         game_config: &'static GameConfig,
@@ -86,6 +58,8 @@ impl Node {
     ) -> Self {
         let mut result = Self {
             // Initialized here.
+            id: rand::rng().random::<u64>(),
+            search_id,
             player: state.player(),
             game_config,
             mcts_config,
@@ -104,9 +78,28 @@ impl Node {
         };
         result.initialize_move_mappings(state);
         result.initialize_children();
+
+        if mcts_config.tracing_enabled() {
+            record_mcts_trace(
+                MCTSTrace::CreatedNode {
+                    node_id: result.id,
+                    search_id,
+                    num_valid_moves: result.num_valid_moves,
+                    move_index_to_array_index: result.move_index_to_array_index.clone(),
+                    array_index_to_move_index: result.array_index_to_move_index.clone(),
+                    array_index_to_player_pov_move_index: result
+                        .array_index_to_player_pov_move_index
+                        .clone(),
+                },
+                mcts_config,
+            )
+            .await;
+        }
+
         result
             .initialize_inference_results(state, inference_client)
             .await;
+
         if add_noise {
             result.add_noise();
         }
@@ -185,6 +178,19 @@ impl Node {
         // Store the results back into the node.
         self.set_value_from_player_pov(inference_result.value);
         self.set_prior_probabilities(inference_result.policy);
+
+        if self.mcts_config.tracing_enabled() {
+            record_mcts_trace(
+                MCTSTrace::NetworkEvalResult {
+                    node_id: self.id,
+                    search_id: self.search_id,
+                    value: self.get_value_as_universal_pov(),
+                    policy: self.children_prior_probabilities.clone(),
+                },
+                self.mcts_config,
+            )
+            .await;
+        }
     }
 
     pub fn get_value_as_universal_pov(&self) -> [f32; NUM_PLAYERS] {
@@ -227,7 +233,7 @@ impl Node {
 
     /// Returns the move index (in universal perspective) with the highest UCB score at
     /// this node.
-    pub fn select_move_by_ucb(&self) -> usize {
+    pub async fn select_move_by_ucb(&self) -> usize {
         let mut max_score = f32::NEG_INFINITY;
         let mut max_index = 0;
 
@@ -242,7 +248,27 @@ impl Node {
             }
         }
 
-        self.array_index_to_move_index[max_index].into()
+        let result = self.array_index_to_move_index[max_index].into();
+
+        if self.mcts_config.tracing_enabled() {
+            record_mcts_trace(
+                MCTSTrace::SelectedMoveByUcb {
+                    node_id: self.id,
+                    search_id: self.search_id,
+                    move_index: result,
+                    array_index: max_index,
+                    children_visit_counts: self.children_visit_counts.clone(),
+                    children_visit_counts_sum: self.children_visit_counts_sum,
+                    children_prior_probabilities: self.children_prior_probabilities.clone(),
+                    exploration_scores,
+                    exploitation_scores,
+                },
+                self.mcts_config,
+            )
+            .await;
+        }
+
+        result
     }
 
     fn exploration_scores(&self) -> Vec<f32> {
@@ -277,7 +303,7 @@ impl Node {
         result
     }
 
-    pub fn select_move_to_play(&self, state: &State) -> usize {
+    pub async fn select_move_to_play(&self, state: &State) -> usize {
         let temperature = if state.turn() < self.mcts_config.temperature_turn_cutoff {
             self.mcts_config.move_selection_temperature
         } else {
@@ -306,20 +332,28 @@ impl Node {
                 .map(|x| x / normalization_factor)
                 .collect::<Vec<f32>>();
 
-            debug!(
-                "Selecting move to play.\nWeights: {:?}\nUnnormalized Weights: {:?}\nPrior Probabilities: {:?}\nValue Sums: {:?}\nVisit Counts: {:?}\nMove Indexes: {:?}",
-                weights,
-                unnormalized_weights,
-                self.children_prior_probabilities,
-                self.children_value_sums,
-                self.children_visit_counts,
-                self.array_index_to_move_index
-            );
             let dist = WeightedIndex::new(&weights).unwrap();
             dist.sample(&mut rand::rng())
         };
 
-        self.array_index_to_move_index[array_index].into()
+        let result = self.array_index_to_move_index[array_index].into();
+
+        if self.mcts_config.tracing_enabled() {
+            record_mcts_trace(
+                MCTSTrace::SelectedMoveToPlay {
+                    node_id: self.id,
+                    search_id: self.search_id,
+                    temperature,
+                    children_visit_counts: self.children_visit_counts.clone(),
+                    move_index: result,
+                    array_index,
+                },
+                self.mcts_config,
+            )
+            .await;
+        }
+
+        result
     }
 
     pub fn generate_mcts_data(&self, game_id: u64, state: &State) -> MCTSData {
