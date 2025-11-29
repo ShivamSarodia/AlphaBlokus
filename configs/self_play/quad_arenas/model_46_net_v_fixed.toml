@@ -1,0 +1,80 @@
+num_concurrent_games = 1024
+duration_seconds = 1200
+
+[observability.metrics]
+type = "prometheus"
+
+[observability.logging]
+type = "console"
+
+[mcts_recorder]
+type = "disabled"
+
+[[inference]]
+name = "default"
+model_path = "s3://alpha-blokus/full/models/04613343.onnx"
+batch_size = 128
+executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
+
+[[agents.QuadArena]]
+name = "mcts_100_rollouts_fixed_value_46"
+type = "mcts"
+inference_config_name = "default"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 100
+full_move_num_rollouts = 100
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 100
+move_selection_temperature = 1.0
+default_exploitation_value = { type = "fixed_value", value = 0.25 }
+
+[[agents.QuadArena]]
+name = "mcts_100_rollouts_network_value_46"
+type = "mcts"
+inference_config_name = "default"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 100
+full_move_num_rollouts = 100
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 100
+move_selection_temperature = 1.0
+default_exploitation_value = { type = "network_value" }
+
+[[agents.QuadArena]]
+name = "mcts_500_rollouts_fixed_value_46"
+type = "mcts"
+inference_config_name = "default"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 100
+move_selection_temperature = 1.0
+default_exploitation_value = { type = "fixed_value", value = 0.25 }
+
+[[agents.QuadArena]]
+name = "mcts_500_rollouts_network_value_46"
+type = "mcts"
+inference_config_name = "default"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 100
+move_selection_temperature = 1.0
+default_exploitation_value = { type = "network_value" }
+
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"
