@@ -39,6 +39,7 @@ pub enum MCTSTrace {
         search_id: u64,
         move_index: usize,
         array_index: usize,
+        children_value_sums: Vec<[f32; NUM_PLAYERS]>,
         children_visit_counts: Vec<u16>,
         children_visit_counts_sum: u16,
         children_prior_probabilities: Vec<f32>,

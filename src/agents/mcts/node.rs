@@ -257,6 +257,7 @@ impl Node {
                     search_id: self.search_id,
                     move_index: result,
                     array_index: max_index,
+                    children_value_sums: self.children_value_sums.clone(),
                     children_visit_counts: self.children_visit_counts.clone(),
                     children_visit_counts_sum: self.children_visit_counts_sum,
                     children_prior_probabilities: self.children_prior_probabilities.clone(),
