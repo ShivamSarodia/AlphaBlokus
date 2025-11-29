@@ -334,6 +334,11 @@
   border: 1px solid #cbd5f5;
 }
 
+.move-index-chip--muted {
+  background: #f8fafc;
+  color: #475467;
+}
+
 .primary,
 .secondary {
   border: none;

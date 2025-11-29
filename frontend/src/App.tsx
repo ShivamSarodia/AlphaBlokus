@@ -8,6 +8,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, ''
 const GAME_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/game` : '/api/game'
 const MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/human_move` : '/api/human_move'
 const MOVE_CELLS_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/move` : '/api/move'
+const MOVE_INDEX_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/move_index` : '/api/move_index'
 const AGENT_MOVE_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/agent_move` : '/api/agent_move'
 const RESET_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/reset` : '/api/reset'
 const BACK_ENDPOINT = API_BASE_URL ? `${API_BASE_URL}/back` : '/api/back'
@@ -140,7 +141,8 @@ function App() {
   const [tileCounts, setTileCounts] = useState<number[]>([])
   const [moveIndexInput, setMoveIndexInput] = useState('')
   const [isFetchingMoveByIndex, setIsFetchingMoveByIndex] = useState(false)
-  const [previewedMoveIndex, setPreviewedMoveIndex] = useState<number | null>(null)
+  const [pendingMoveIndex, setPendingMoveIndex] = useState<number | null>(null)
+  const [isFetchingPendingMoveIndex, setIsFetchingPendingMoveIndex] = useState(false)
   const [playerAssignments, setPlayerAssignments] = useState<string[]>(() =>
     Array(NUM_PLAYERS).fill('human'),
   )
@@ -234,7 +236,7 @@ function App() {
     }
     setSelectedOrientation(null)
     setPendingPlacement(null)
-    setPreviewedMoveIndex(null)
+    setPendingMoveIndex(null)
     setHoverCell(null)
     setErrorMessage(null)
   }, [boardSize])
@@ -272,6 +274,63 @@ function App() {
 
     return new Set(pendingPlacement.cells.map(({ row, col }) => cellKey(row, col)))
   }, [pendingPlacement])
+
+  useEffect(() => {
+    setIsFetchingPendingMoveIndex(false)
+    if (!pendingPlacement) {
+      setPendingMoveIndex(null)
+      setIsFetchingPendingMoveIndex(false)
+      return
+    }
+    if (pendingMoveIndex !== null) {
+      return
+    }
+
+    let isCancelled = false
+    const fetchMoveIndex = async () => {
+      setIsFetchingPendingMoveIndex(true)
+      try {
+        const response = await fetch(MOVE_INDEX_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cells: pendingPlacement.cells.map(({ row, col }) => [col, row] as [number, number]),
+          }),
+        })
+
+        if (!response.ok) {
+          const body = await response.json().catch(async () => ({ error: await response.text() }))
+          if (!isCancelled) {
+            setErrorMessage(body?.error ?? 'Unable to find move index for this placement.')
+          }
+          return
+        }
+
+        const payload = (await response.json()) as { move_index?: number }
+        if (!isCancelled) {
+          if (typeof payload.move_index === 'number') {
+            setPendingMoveIndex(payload.move_index)
+          } else {
+            setErrorMessage('Unable to find move index for this placement.')
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch move index', error)
+        if (!isCancelled) {
+          setErrorMessage('Something went wrong finding the move index.')
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsFetchingPendingMoveIndex(false)
+        }
+      }
+    }
+
+    fetchMoveIndex()
+    return () => {
+      isCancelled = true
+    }
+  }, [pendingPlacement, pendingMoveIndex])
 
   const isAgentThinking = Boolean(pendingAgent)
   const currentAssignment = playerAssignments[currentPlayer] ?? 'human'
@@ -332,7 +391,7 @@ function App() {
       orientationId: selectedOrientation.orientation.id,
       cells,
     })
-    setPreviewedMoveIndex(null)
+    setPendingMoveIndex(null)
     setErrorMessage(null)
   }
 
@@ -370,7 +429,7 @@ function App() {
         orientationId: parsedIndex,
         cells,
       })
-      setPreviewedMoveIndex(parsedIndex)
+      setPendingMoveIndex(parsedIndex)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
       setHoverCell(null)
@@ -402,7 +461,7 @@ function App() {
         setErrorMessage(body?.error ?? 'Move rejected by server.')
         setPendingPlacement(null)
         setSelectedOrientation(null)
-        setPreviewedMoveIndex(null)
+        setPendingMoveIndex(null)
         return
       }
 
@@ -413,7 +472,7 @@ function App() {
       setPendingPlacement(null)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
-      setPreviewedMoveIndex(null)
+      setPendingMoveIndex(null)
       setErrorMessage(null)
     } catch (error) {
       console.error('Failed to submit move', error)
@@ -499,7 +558,7 @@ function App() {
       setPendingPlacement(null)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
-      setPreviewedMoveIndex(null)
+      setPendingMoveIndex(null)
       setPlayerAssignments(Array(NUM_PLAYERS).fill('human'))
     } catch (error) {
       console.error('Failed to reset game', error)
@@ -528,7 +587,7 @@ function App() {
       setPendingPlacement(null)
       setSelectedOrientation(null)
       setExpandedPieceId(null)
-      setPreviewedMoveIndex(null)
+      setPendingMoveIndex(null)
       setAutoPlayPaused(true)
     } catch (error) {
       console.error('Failed to step back', error)
@@ -561,7 +620,7 @@ function App() {
   const handleUndoPlacement = () => {
     setPendingPlacement(null)
     setSelectedOrientation(null)
-    setPreviewedMoveIndex(null)
+    setPendingMoveIndex(null)
     setErrorMessage(null)
   }
 
@@ -696,8 +755,12 @@ function App() {
 
           {pendingPlacement && (
             <div className="placement-actions">
-              {previewedMoveIndex !== null && (
-                <span className="move-index-chip">Move #{previewedMoveIndex}</span>
+              {pendingMoveIndex !== null ? (
+                <span className="move-index-chip">Move #{pendingMoveIndex}</span>
+              ) : (
+                isFetchingPendingMoveIndex && (
+                  <span className="move-index-chip move-index-chip--muted">Finding move index…</span>
+                )
               )}
               <button
                 type="button"
