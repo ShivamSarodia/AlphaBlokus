@@ -222,6 +222,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_mcts_data_writing() {
+        use crate::config::DefaultExploitationValue;
+
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
         let inference_client = Arc::new(DefaultClient::build_and_start(
@@ -246,6 +248,7 @@ mod tests {
             move_selection_temperature: 0.0,
             inference_config_name: "default".to_string(),
             trace_file: None,
+            default_exploitation_value: DefaultExploitationValue::NetworkValue,
         }));
         let mut engine = Engine::new(
             1,

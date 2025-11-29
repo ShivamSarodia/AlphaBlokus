@@ -7,8 +7,8 @@ use log::debug;
 use std::path::{Path, PathBuf};
 
 use alpha_blokus::agents::MCTSAgent;
-use alpha_blokus::config::GameConfig;
 use alpha_blokus::config::MCTSConfig;
+use alpha_blokus::config::{DefaultExploitationValue, GameConfig};
 use alpha_blokus::game::{GameStatus, State};
 use alpha_blokus::inference;
 use alpha_blokus::utils;
@@ -38,6 +38,7 @@ fn main() -> Result<()> {
         move_selection_temperature: 1.0,
         inference_config_name: "".to_string(),
         trace_file: None,
+        default_exploitation_value: DefaultExploitationValue::NetworkValue,
     }));
 
     tokio::runtime::Runtime::new().unwrap().block_on(async {

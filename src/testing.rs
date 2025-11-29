@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::config::{GameConfig, MCTSConfig};
+use crate::config::{DefaultExploitationValue, GameConfig, MCTSConfig};
 use once_cell::sync::Lazy;
 use rand::Rng;
 
@@ -82,6 +82,7 @@ pub fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSC
         move_selection_temperature: temperature,
         inference_config_name: "".to_string(),
         trace_file: None,
+        default_exploitation_value: DefaultExploitationValue::NetworkValue,
     }))
 }
 

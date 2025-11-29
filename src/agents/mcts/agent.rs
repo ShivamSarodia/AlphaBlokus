@@ -201,6 +201,7 @@ mod tests {
     use std::sync::Mutex;
 
     use super::*;
+    use crate::config::DefaultExploitationValue;
     use crate::inference::softmax_inplace;
     use crate::{config::NUM_PLAYERS, testing};
     use itertools::Itertools;
@@ -246,6 +247,7 @@ mod tests {
             move_selection_temperature: 0.0,
             inference_config_name: "".to_string(),
             trace_file: None,
+            default_exploitation_value: DefaultExploitationValue::NetworkValue,
         }));
         let fast_client = Arc::new(MockInferenceClient {
             requests: Mutex::new(Vec::new()),

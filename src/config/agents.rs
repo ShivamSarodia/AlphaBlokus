@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Deserialize;
+use serde::Serialize;
 
 fn default_agent_name() -> String {
     "unnamed".to_string()
@@ -39,6 +40,8 @@ pub struct MCTSConfig {
     pub ucb_exploration_factor: f32,
     pub temperature_turn_cutoff: u16,
     pub move_selection_temperature: f32,
+    #[serde(default)]
+    pub default_exploitation_value: DefaultExploitationValue,
     /// The name of the inference config that the engine should pass to the
     /// MCTS agent. The config file must contain an inference config with this
     /// name.
@@ -58,4 +61,14 @@ impl MCTSConfig {
 pub struct RandomConfig {
     #[serde(default = "default_agent_name")]
     pub name: String,
+}
+
+#[derive(Deserialize, Debug, Serialize, Clone, Copy, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DefaultExploitationValue {
+    #[default]
+    NetworkValue,
+    FixedValue {
+        value: f32,
+    },
 }

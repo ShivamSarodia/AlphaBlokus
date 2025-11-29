@@ -8,7 +8,10 @@ use crate::config::GameConfig;
 use crate::game::move_data::move_index_to_player_pov;
 use crate::inference;
 use crate::recorder::MCTSData;
-use crate::{config::MCTSConfig, config::NUM_PLAYERS, game::State};
+use crate::{
+    config::{DefaultExploitationValue, MCTSConfig, NUM_PLAYERS},
+    game::State,
+};
 
 pub struct Node {
     /// Unique identifier for the node, for trace purposes.
@@ -292,9 +295,12 @@ impl Node {
         for array_index in 0..self.num_valid_moves {
             let visit_count = self.children_visit_counts[array_index];
             if visit_count == 0 {
-                // If this move has never been tried, assign a score based on the neural network
-                // evaluation of this node.
-                result.push(self.value[self.player]);
+                // If this move has never been tried, assign a score based on configured source.
+                let score = match self.mcts_config.default_exploitation_value {
+                    DefaultExploitationValue::NetworkValue => self.value[self.player],
+                    DefaultExploitationValue::FixedValue { value } => value,
+                };
+                result.push(score);
             } else {
                 // Otherwise, assign a score by averaging the values of the child nodes.
                 let score = self.children_value_sums[array_index][self.player] / visit_count as f32;
