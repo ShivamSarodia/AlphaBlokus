@@ -137,7 +137,11 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
     }
 
     async fn choose_move(&mut self, state: &State) -> usize {
-        let search_id = rand::rng().random::<u64>();
+        let search_id: u64 = chrono::Utc::now()
+            .timestamp_nanos_opt()
+            .unwrap()
+            .try_into()
+            .unwrap();
         let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
         let num_rollouts = if is_fast_move {
             self.mcts_config.fast_move_num_rollouts

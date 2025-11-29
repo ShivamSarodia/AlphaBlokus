@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Literal, TypedDict, Union, Any, Callable
+import itertools
 
 
 # ----- Python mirrors of the Rust MCTSTrace variants -----
@@ -68,6 +69,9 @@ class SelectedMoveToPlay:
     search_id: int = 0
     temperature: float = 0.0
     children_visit_counts: List[int] | None = None
+    children_value_sums: List[List[float]] | None = None
+    children_visit_counts_sum: int = 0
+    children_prior_probabilities: List[float] | None = None
     move_index: int = 0
     array_index: int = 0
 
@@ -117,11 +121,21 @@ def parse_trace_obj(obj: _TraceDict) -> MCTSTrace:
     return cls(**{k: v for k, v in obj.items() if k != "type"})
 
 
-def iter_trace_log(path: Path | str) -> Iterable[MCTSTrace]:
+def iter_trace_log(
+    path: Path | str, newest_first: bool = False, rows: int | None = None
+) -> Iterable[MCTSTrace]:
     """Yield traces from a log file written by `record_mcts_trace`."""
     path = Path(path)
     with path.open("r", encoding="utf-8") as handle:
-        for line_num, raw in enumerate(handle, start=1):
+        print("Reading file into memory...")
+        lines = handle.readlines()
+        if newest_first:
+            lines.reverse()
+        if rows is not None:
+            lines = lines[:rows]
+        print("Done reading file into memory.")
+        print("Parsing lines...")
+        for line_num, raw in enumerate(lines, start=1):
             line = raw.strip()
             if not line:
                 continue
@@ -132,11 +146,19 @@ def iter_trace_log(path: Path | str) -> Iterable[MCTSTrace]:
                 raise ValueError(
                     f"Failed to parse trace line {line_num}: {exc}"
                 ) from exc
+        print("Done parsing lines.")
 
 
-def load_trace_log(path: Path | str) -> List[MCTSTrace]:
-    """Read the entire trace log into memory."""
-    return list(iter_trace_log(path))
+def get_search_ids(logs: List[MCTSTrace], max: int) -> List[int]:
+    """Get the recent search ids."""
+    search_ids = []
+    for log in logs:
+        search_id = getattr(log, "search_id", None)
+        if search_id is not None and search_id not in search_ids:
+            search_ids.append(search_id)
+        if len(search_ids) >= max:
+            break
+    return search_ids
 
 
 def filter_by_search_id(logs: List[MCTSTrace], search_id: int) -> List[MCTSTrace]:
