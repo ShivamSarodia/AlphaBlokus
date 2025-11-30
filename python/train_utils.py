@@ -134,7 +134,7 @@ def load_initial_state(
 
 def load_game_data(
     game_config: GameConfig,
-    training_config: TrainingConfig,
+    batch_size: int,
     local_file_paths: List[str],
     num_samples: int,
 ) -> torch.utils.data.DataLoader:
@@ -188,9 +188,7 @@ def load_game_data(
     )[0]
 
     # Return a dataloader for the dataset.
-    return torch.utils.data.DataLoader(
-        dataset, batch_size=training_config.batch_size, shuffle=True
-    )
+    return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 
 def get_loss(

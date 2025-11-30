@@ -72,7 +72,7 @@ def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
 
     # Build a dataloader.
     dataloader = load_game_data(
-        game_config, training_config, local_game_data_files, num_samples
+        game_config, training_config.batch_size, local_game_data_files, num_samples
     )
     train_loop(dataloader, model, optimizer, training_config)
 
