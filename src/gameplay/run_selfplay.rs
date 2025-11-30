@@ -102,6 +102,7 @@ mod tests {
             },
             agents: AgentGroupConfig::Single(AgentConfig::Random(crate::config::RandomConfig {
                 name: "test_random".to_string(),
+                from_largest: false,
             })),
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
@@ -139,6 +140,7 @@ mod tests {
             },
             agents: AgentGroupConfig::Single(AgentConfig::Random(crate::config::RandomConfig {
                 name: "test_random".to_string(),
+                from_largest: false,
             })),
             inference: vec![InferenceConfig {
                 name: "default".to_string(),

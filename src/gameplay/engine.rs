@@ -26,7 +26,9 @@ pub fn build_agent(
             game_config,
             Arc::clone(&inference_clients[&policy_sampling_config.inference_config_name]),
         )),
-        AgentConfig::Random(random_config) => Box::new(RandomAgent::new(random_config)),
+        AgentConfig::Random(random_config) => {
+            Box::new(RandomAgent::new(random_config, game_config))
+        }
     }
 }
 
@@ -210,6 +212,7 @@ mod tests {
         let agent_group_config: &'static AgentGroupConfig = Box::leak(Box::new(
             AgentGroupConfig::Single(AgentConfig::Random(RandomConfig {
                 name: "test_random".to_string(),
+                from_largest: false,
             })),
         ));
         let mut engine = Engine::new(
@@ -339,6 +342,7 @@ mod tests {
         let agent_group_config = Box::leak(Box::new(AgentGroupConfig::Single(
             AgentConfig::Random(RandomConfig {
                 name: "test_random".to_string(),
+                from_largest: false,
             }),
         )));
         let mut engine = Engine::new(

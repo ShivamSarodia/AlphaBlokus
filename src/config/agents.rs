@@ -62,6 +62,9 @@ impl MCTSConfig {
 pub struct RandomConfig {
     #[serde(default = "default_agent_name")]
     pub name: String,
+    /// If true, sample only from moves with the largest occupied cell count.
+    #[serde(default)]
+    pub from_largest: bool,
 }
 
 #[derive(Deserialize, Debug)]
