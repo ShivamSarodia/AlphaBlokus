@@ -26,6 +26,7 @@ pub enum AgentConfig {
     #[serde(rename = "mcts")]
     MCTS(MCTSConfig),
     Random(RandomConfig),
+    PolicySampling(PolicySamplingConfig),
 }
 
 #[derive(Deserialize, Debug)]
@@ -61,6 +62,18 @@ impl MCTSConfig {
 pub struct RandomConfig {
     #[serde(default = "default_agent_name")]
     pub name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PolicySamplingConfig {
+    #[serde(default = "default_agent_name")]
+    pub name: String,
+    /// The name of the inference config that the engine should pass to the
+    /// policy sampling agent. The config file must contain an inference config with this
+    /// name.
+    pub inference_config_name: String,
+    /// Temperature used to scale the policy probabilities before sampling.
+    pub temperature: f32,
 }
 
 #[derive(Deserialize, Debug, Serialize, Clone, Copy, Default)]
