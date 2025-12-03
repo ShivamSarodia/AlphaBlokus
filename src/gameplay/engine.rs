@@ -146,8 +146,19 @@ pub async fn play_one_game(
 ) {
     let mut state = State::new(game_config);
     loop {
-        let agent = &mut agents[player_to_agent_index[state.player()]];
-        let move_index = agent.choose_move(&state).await;
+        // Select the move for the current player using the playing agent.
+        let playing_agent_index = player_to_agent_index[state.player()];
+        let playing_agent = &mut agents[playing_agent_index];
+        let move_index = playing_agent.choose_move(&state).await;
+
+        // Report the selected move to the other agents to update their state.
+        for (i, agent) in agents.iter_mut().enumerate() {
+            if i == playing_agent_index {
+                continue;
+            }
+            agent.report_move(&state, move_index).await;
+        }
+
         let game_state = state.apply_move(move_index);
         metrics::counter!("moves_made_total").increment(1);
         if game_state == GameStatus::GameOver {
