@@ -4,7 +4,7 @@ use std::sync::Arc;
 use rand::seq::SliceRandom;
 use tokio::task::JoinSet;
 
-use crate::agents::{Agent, MCTSAgent, PolicySamplingAgent, RandomAgent};
+use crate::agents::{Agent, MCTSAgent, PentobiAgent, PolicySamplingAgent, RandomAgent};
 use crate::config::{AgentConfig, AgentGroupConfig, GameConfig, NUM_PLAYERS};
 use crate::game::{GameStatus, State};
 use crate::inference::DefaultClient;
@@ -26,6 +26,9 @@ pub fn build_agent(
             game_config,
             Arc::clone(&inference_clients[&policy_sampling_config.inference_config_name]),
         )),
+        AgentConfig::Pentobi(pentobi_config) => {
+            Box::new(PentobiAgent::build(pentobi_config, game_config))
+        }
         AgentConfig::Random(random_config) => {
             Box::new(RandomAgent::new(random_config, game_config))
         }

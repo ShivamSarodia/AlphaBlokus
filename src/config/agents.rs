@@ -27,6 +27,7 @@ pub enum AgentConfig {
     MCTS(MCTSConfig),
     Random(RandomConfig),
     PolicySampling(PolicySamplingConfig),
+    Pentobi(PentobiConfig),
 }
 
 #[derive(Deserialize, Debug)]
@@ -77,6 +78,15 @@ pub struct PolicySamplingConfig {
     pub inference_config_name: String,
     /// Temperature used to scale the policy probabilities before sampling.
     pub temperature: f32,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PentobiConfig {
+    #[serde(default = "default_agent_name")]
+    pub name: String,
+    pub binary_path: PathBuf,
+    pub opening_book: PathBuf,
+    pub level: u8,
 }
 
 #[derive(Deserialize, Debug, Serialize, Clone, Copy, Default)]

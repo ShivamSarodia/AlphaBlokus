@@ -7,8 +7,8 @@ mod recorder;
 
 pub const NUM_PLAYERS: usize = 4;
 pub use agents::{
-    AgentConfig, AgentGroupConfig, DefaultExploitationValue, MCTSConfig, PolicySamplingConfig,
-    RandomConfig,
+    AgentConfig, AgentGroupConfig, DefaultExploitationValue, MCTSConfig, PentobiConfig,
+    PolicySamplingConfig, RandomConfig,
 };
 pub use game::GameConfig;
 pub use inference::{ExecutorConfig, InferenceConfig, ReloadConfig};

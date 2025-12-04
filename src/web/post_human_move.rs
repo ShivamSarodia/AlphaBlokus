@@ -33,6 +33,9 @@ pub async fn post_human_move(
 
     tracing::info!("Identified move index: {:?}", move_index);
 
+    // Report the move to all the agents to update their states.
+    app_state.report_human_move(move_index).await?;
+
     // Apply the move to the current session. Be sure to drop the guard after.
     {
         let mut session = app_state.session().await;

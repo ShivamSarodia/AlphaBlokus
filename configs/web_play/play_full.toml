@@ -20,6 +20,7 @@ executor = { type = "ort" }
 [[agents]]
 type = "random"
 name = "random"
+from_largest = true
 
 [[agents]]
 type = "mcts"
@@ -35,7 +36,7 @@ temperature_turn_cutoff = 0
 # Play with temperature 0 to select the best move always
 move_selection_temperature = 0.0
 inference_config_name = "smart"
-trace_file = "/tmp/alphablokus_trace"
+# trace_file = "/tmp/alphablokus_trace"
 
 [[agents]]
 type = "mcts"
@@ -51,3 +52,10 @@ temperature_turn_cutoff = 0
 # Play with temperature 0 to select the best move always
 move_selection_temperature = 0.0
 inference_config_name = "dumb"
+
+[[agents]]
+type = "pentobi"
+name = "pentobi"
+binary_path = "/Users/shivamsarodia/Dev/pentobi/pentobi_gtp/pentobi-gtp"
+opening_book = "/Users/shivamsarodia/Dev/pentobi/opening_books/book_classic.blksgf"
+level = 4

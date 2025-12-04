@@ -81,7 +81,14 @@ impl AppState {
         };
 
         // Grab the agent from the registry.
-        let agent = self.agents.get_agent(agent_name).await;
+        let agent = self.agents.get_agent(agent_name);
+        let other_agents = self
+            .agents
+            .agent_names()
+            .iter()
+            .filter(|name| *name != agent_name)
+            .map(|name| self.agents.get_agent(name))
+            .collect::<Vec<_>>();
         let session = Arc::clone(&self.session);
 
         // Initiate a separate task to run that agent.
@@ -92,10 +99,33 @@ impl AppState {
             // Apply the move to the state.
             let mut session = session.lock().await;
             let mut cloned_state = session.blokus_states.last().unwrap().clone();
+
+            // Report the move to all the other agents.
+            for other_agent in other_agents {
+                other_agent
+                    .lock()
+                    .await
+                    .report_move(&state, move_index)
+                    .await;
+            }
+
             cloned_state.apply_move(move_index);
             session.blokus_states.push(cloned_state);
             session.pending_agent = None;
         });
+
+        Ok(())
+    }
+
+    pub async fn report_human_move(&self, move_index: usize) -> Result<(), ApiError> {
+        let state = {
+            let session = self.session().await;
+            session.blokus_states.last().unwrap().clone()
+        };
+
+        for agent in self.agents.iter() {
+            agent.lock().await.report_move(&state, move_index).await;
+        }
 
         Ok(())
     }
@@ -144,11 +174,15 @@ impl AgentRegistry {
         Self { agents }
     }
 
-    pub async fn get_agent(&self, agent_name: &str) -> Arc<Mutex<Box<dyn Agent>>> {
+    pub fn get_agent(&self, agent_name: &str) -> Arc<Mutex<Box<dyn Agent>>> {
         Arc::clone(self.agents.get(agent_name).expect("Agent not found"))
     }
 
     fn agent_names(&self) -> Vec<String> {
         self.agents.keys().cloned().collect()
+    }
+
+    fn iter(&self) -> impl Iterator<Item = Arc<Mutex<Box<dyn Agent>>>> {
+        self.agents.values().cloned()
     }
 }
