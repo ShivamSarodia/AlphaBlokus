@@ -17,6 +17,9 @@ pub enum AgentGroupConfig {
     /// Four different agents are used, one for each player. The order is
     /// randomized for each game.
     QuadArena([AgentConfig; 4]),
+    /// Two different agents are used, with each agent playing twice. The order
+    /// is randomized for each game.
+    DuoArena([AgentConfig; 2]),
 }
 
 /// An agent config describes the type and behavior of a particular agent.

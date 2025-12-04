@@ -97,6 +97,7 @@ impl Engine {
                 vec![self.generate_single_agent(agent_config)],
                 [0; NUM_PLAYERS],
             ),
+            // TODO: Dry these two cases, which have much overlap.
             AgentGroupConfig::QuadArena(agent_configs) => {
                 // Create four agents from the four configs
                 let agents: Vec<Box<dyn Agent>> = agent_configs
@@ -106,6 +107,22 @@ impl Engine {
 
                 // Create a randomized order mapping: [0, 1, 2, 3] shuffled
                 let mut order: [usize; NUM_PLAYERS] = [0, 1, 2, 3];
+                order.shuffle(&mut rand::rng());
+
+                // Map each player to the agent index in the randomized order
+                let player_to_agent_index: [usize; NUM_PLAYERS] = order;
+
+                (agents, player_to_agent_index)
+            }
+            AgentGroupConfig::DuoArena(agent_configs) => {
+                // Create two agents from the two configs
+                let agents: Vec<Box<dyn Agent>> = agent_configs
+                    .iter()
+                    .map(|config| self.generate_single_agent(config))
+                    .collect();
+
+                // Create a randomized order mapping: [0, 0, 1, 1] shuffled
+                let mut order: [usize; NUM_PLAYERS] = [0, 0, 1, 1];
                 order.shuffle(&mut rand::rng());
 
                 // Map each player to the agent index in the randomized order
