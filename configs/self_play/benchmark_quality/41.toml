@@ -12,26 +12,26 @@ type = "disabled"
 
 [[inference]]
 name = "default"
-model_path = "s3://alpha-blokus/full/models/04613343.onnx"
+model_path = "s3://alpha-blokus/full/models/04112973.onnx"
 batch_size = 8
 executor = { type = "tensorrt", max_batch_size = 8, pool_size = 32 }
 
 [[agents.QuadArena]]
-name = "pentobi_level_1_04613343"
+name = "pentobi_level_1_04112973"
 type = "pentobi"
 binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
 opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
 level = 1
 
 [[agents.QuadArena]]
-name = "pentobi_level_2_04613343"
+name = "pentobi_level_2_04112973"
 type = "pentobi"
 binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
 opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
 level = 2
 
 [[agents.QuadArena]]
-name = "mcts_low_temp_04613343"
+name = "mcts_low_temp_04112973"
 type = "mcts"
 inference_config_name = "default"
 fast_move_probability = 0.0
@@ -45,7 +45,7 @@ move_selection_temperature = 0.3
 default_exploitation_value = { type = "network_value" }
 
 [[agents.QuadArena]]
-name = "mcts_high_temp_04613343"
+name = "mcts_high_temp_04112973"
 type = "mcts"
 inference_config_name = "default"
 fast_move_probability = 0.0
