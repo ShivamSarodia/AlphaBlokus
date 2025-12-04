@@ -17,21 +17,21 @@ batch_size = 128
 executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
 
 [[agents.QuadArena]]
-name = "mcts_100_rollouts_46"
-type = "mcts"
-inference_config_name = "default"
-fast_move_probability = 0.0
-fast_move_num_rollouts = 100
-full_move_num_rollouts = 100
-total_dirichlet_noise_alpha = 10.83
-root_dirichlet_noise_fraction = 0
-ucb_exploration_factor = 1.05
-temperature_turn_cutoff = 100
-move_selection_temperature = 1.0
-default_exploitation_value = { type = "network_value" }
+name = "pentobi_level_1_a"
+type = "pentobi"
+binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
+opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
+level = 1
 
 [[agents.QuadArena]]
-name = "mcts_500_rollouts_46"
+name = "pentobi_level_3_a"
+type = "pentobi"
+binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
+opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
+level = 3
+
+[[agents.QuadArena]]
+name = "mcts_46_t0.3"
 type = "mcts"
 inference_config_name = "default"
 fast_move_probability = 0.0
@@ -40,31 +40,17 @@ full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
 root_dirichlet_noise_fraction = 0
 ucb_exploration_factor = 1.05
-temperature_turn_cutoff = 100
-move_selection_temperature = 1.0
+temperature_turn_cutoff = 35
+move_selection_temperature = 0.3
 default_exploitation_value = { type = "network_value" }
 
 [[agents.QuadArena]]
-name = "mcts_1000_rollouts_46"
+name = "mcts_46_t1.0"
 type = "mcts"
 inference_config_name = "default"
 fast_move_probability = 0.0
-fast_move_num_rollouts = 1000
-full_move_num_rollouts = 1000
-total_dirichlet_noise_alpha = 10.83
-root_dirichlet_noise_fraction = 0
-ucb_exploration_factor = 1.05
-temperature_turn_cutoff = 100
-move_selection_temperature = 1.0
-default_exploitation_value = { type = "network_value" }
-
-[[agents.DuoArena]]
-name = "mcts_2000_rollouts_46"
-type = "mcts"
-inference_config_name = "default"
-fast_move_probability = 0.0
-fast_move_num_rollouts = 2000
-full_move_num_rollouts = 2000
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
 root_dirichlet_noise_fraction = 0
 ucb_exploration_factor = 1.05
