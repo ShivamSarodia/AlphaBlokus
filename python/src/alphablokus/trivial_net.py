@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from configs import GameConfig
-from save_onnx import SaveOnnxMixin
+from alphablokus.configs import GameConfig
+from alphablokus.save_onnx import SaveOnnxMixin
 
 
 class TrivialNet(nn.Module, SaveOnnxMixin):

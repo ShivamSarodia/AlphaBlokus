@@ -1,6 +1,11 @@
-from train_utils import IterableGameDataset, localize_file, initialize_model, get_loss
-from files import list_files
-from configs import GameConfig, NetworkConfig, TrainingConfig
+from alphablokus.train_utils import (
+    IterableGameDataset,
+    localize_file,
+    initialize_model,
+    get_loss,
+)
+from alphablokus.files import list_files
+from alphablokus.configs import GameConfig, NetworkConfig, TrainingConfig
 import torch
 import numpy as np
 import aim
@@ -115,6 +120,7 @@ def test_model(total_samples_trained: int):
 
 
 def train_model():
+    total_samples_trained = 0
     num_epochs = round(training_config.sampling_ratio)
     for epoch in range(num_epochs):
         print("Starting epoch ", epoch + 1)
@@ -125,7 +131,6 @@ def train_model():
         print(f"Epoch {epoch + 1} of {num_epochs}")
 
         samples_trained_since_last_test = 0
-        total_samples_trained = 0
         for batch in train_dataloader:
             batch_size = batch[0].shape[0]
             samples_trained_since_last_test += batch_size

@@ -1,0 +1,8 @@
+cargo run --release --bin self-play -- --config  configs/self_play/benchmark_against_policy/model_42_100_500_1000.toml; \
+cargo run --release --bin self-play -- --config  configs/self_play/benchmark_against_policy/model_42_500_1000_2000.toml; \
+cargo run --release --bin self-play -- --config  configs/self_play/benchmark_against_policy/model_46_100_500_1000.toml; \
+cargo run --release --bin self-play -- --config  configs/self_play/benchmark_against_policy/model_46_500_1000_2000.toml;
+
+
+
+      

@@ -3,15 +3,15 @@ import time
 from dataclasses import dataclass
 import sys
 
-from configs import GameConfig, NetworkConfig, TrainingConfig, DirectoriesConfig
-from train_utils import (
+from alphablokus.configs import GameConfig, NetworkConfig, TrainingConfig, DirectoriesConfig
+from alphablokus.train_utils import (
     maybe_download_files,
     load_game_data,
     load_initial_state,
     list_game_data_files,
     train_loop,
 )
-from files import from_localized
+from alphablokus.files import from_localized
 
 
 @dataclass

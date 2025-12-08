@@ -5,10 +5,15 @@ import msgpack
 import torch
 import torch.nn as nn
 
-from configs import DirectoriesConfig, GameConfig, NetworkConfig, TrainingConfig
-from res_net import NeuralNet
-from trivial_net import TrivialNet
-from files import latest_file, localize_file, list_files
+from alphablokus.configs import (
+    DirectoriesConfig,
+    GameConfig,
+    NetworkConfig,
+    TrainingConfig,
+)
+from alphablokus.files import latest_file, localize_file, list_files
+from alphablokus.res_net import NeuralNet
+from alphablokus.trivial_net import TrivialNet
 
 
 def initialize_model(

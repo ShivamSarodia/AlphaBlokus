@@ -2,8 +2,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from configs import NetworkConfig, GameConfig
-from save_onnx import SaveOnnxMixin
+from alphablokus.configs import GameConfig, NetworkConfig
+from alphablokus.save_onnx import SaveOnnxMixin
 
 
 class ResidualBlock(nn.Module):
