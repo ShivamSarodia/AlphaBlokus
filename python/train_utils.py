@@ -132,6 +132,65 @@ def load_initial_state(
     return model, optimizer, samples
 
 
+def load_game_file(
+    game_config: GameConfig,
+    local_file_path: str,
+) -> tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+    boards = []
+    values = []
+    policies = []
+    with zstandard.open(local_file_path, "rb") as f:
+        game_data_list = f.read()
+        game_data_list = msgpack.unpackb(game_data_list)
+
+        for game_data in game_data_list:
+            board = [game_data["board"]["slices"][i]["cells"] for i in range(4)]
+            boards.append(torch.as_tensor(board, dtype=torch.float32))
+
+            values.append(torch.as_tensor(game_data["game_result"]))
+
+            policy_target = torch.zeros(
+                (
+                    game_config.num_piece_orientations,
+                    game_config.board_size,
+                    game_config.board_size,
+                ),
+                dtype=torch.float32,
+            )
+
+            valid_move_tuples = torch.as_tensor(
+                game_data["valid_move_tuples"], dtype=torch.int32
+            )
+            visit_counts = torch.as_tensor(
+                game_data["visit_counts"], dtype=torch.float32
+            )
+
+            policy_target[
+                valid_move_tuples[:, 0],
+                valid_move_tuples[:, 1],
+                valid_move_tuples[:, 2],
+            ] = visit_counts
+
+            policies.append(policy_target / policy_target.sum())
+
+    return boards, values, policies
+
+
+def load_game_files_to_tensor(
+    game_config: GameConfig,
+    local_file_paths: List[str],
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    boards = []
+    values = []
+    policies = []
+    for file_path in local_file_paths:
+        board, value, policy = load_game_file(game_config, file_path)
+        boards += board
+        values += value
+        policies += policy
+    return torch.stack(boards), torch.stack(values), torch.stack(policies)
+
+
 def load_game_data(
     game_config: GameConfig,
     batch_size: int,
@@ -146,34 +205,10 @@ def load_game_data(
     policy_targets = []
 
     for filename in local_file_paths:
-        with zstandard.open(filename, "rb") as f:
-            game_data_list = f.read()
-            game_data_list = msgpack.unpackb(game_data_list)
-
-            for game_data in game_data_list:
-                board = [game_data["board"]["slices"][i]["cells"] for i in range(4)]
-                board_inputs.append(torch.tensor(board, dtype=torch.float32))
-
-                value_targets.append(torch.tensor(game_data["game_result"]))
-
-                policy_target = torch.zeros(
-                    (
-                        game_config.num_piece_orientations,
-                        game_config.board_size,
-                        game_config.board_size,
-                    )
-                )
-
-                for valid_move_tuple, visit_count in zip(
-                    game_data["valid_move_tuples"], game_data["visit_counts"]
-                ):
-                    piece_orientation_index, center_x, center_y = valid_move_tuple
-                    policy_target[piece_orientation_index, center_x, center_y] = (
-                        visit_count
-                    )
-
-                policy_target = policy_target / policy_target.sum()
-                policy_targets.append(policy_target)
+        board, value, policy = load_game_file(game_config, filename)
+        board_inputs.append(board)
+        value_targets.append(value)
+        policy_targets.append(policy)
 
     board_inputs = torch.stack(board_inputs)
     value_targets = torch.stack(value_targets)
@@ -189,6 +224,36 @@ def load_game_data(
 
     # Return a dataloader for the dataset.
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+
+class IterableGameDataset(torch.utils.data.IterableDataset):
+    def __init__(
+        self,
+        game_config: GameConfig,
+        local_file_paths: List[str],
+        shuffle_buffer_file_count: int,
+    ):
+        self.game_config = game_config
+        self.local_file_paths = local_file_paths
+        self.shuffle_buffer_file_count = shuffle_buffer_file_count
+
+    def __iter__(self):
+        file_paths = self.local_file_paths.copy()
+        random.shuffle(file_paths)
+
+        while file_paths:
+            # Load files into the shuffle buffer
+            files_in_buffer = []
+            while len(files_in_buffer) < self.shuffle_buffer_file_count and file_paths:
+                files_in_buffer.append(file_paths.pop())
+
+            boards, values, policies = load_game_files_to_tensor(
+                self.game_config, files_in_buffer
+            )
+
+            indices = random.sample(range(boards.shape[0]), boards.shape[0])
+            for index in indices:
+                yield boards[index], values[index], policies[index]
 
 
 def get_loss(

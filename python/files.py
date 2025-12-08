@@ -42,12 +42,12 @@ def parse_s3(path: str) -> tuple[str, str, Optional[str]]:
     return bucket, key, filename
 
 
-def localize_file(path: str) -> str:
+def localize_file(path: str, into_directory: Optional[str] = None) -> str:
     """
     Given a path, download it to local if needed and return the local path.
     """
     if is_s3(path):
-        return _fetch_s3_file(path)
+        return _fetch_s3_file(path, into_directory)
     else:
         return path
 
@@ -170,13 +170,15 @@ def _list_local_files(directory: str, extension: str) -> List[str]:
 
 def _fetch_s3_file(
     path: str,
+    into_directory: Optional[str] = None,
 ) -> str:
     """
     Download a file from s3 to a given local directory.
     """
     bucket, key, filename = parse_s3(path)
-    local_path = os.path.join(temp_directory(), filename)
-    s3.download_file(bucket, key, local_path)
+    local_path = os.path.join(into_directory or temp_directory(), filename)
+    if not os.path.exists(local_path):
+        s3.download_file(bucket, key, local_path)
     return local_path
 
 
