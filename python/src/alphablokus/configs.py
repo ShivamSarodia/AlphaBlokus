@@ -90,3 +90,38 @@ class DirectoriesConfig:
         assert self.game_data_directory.endswith("/")
         assert self.model_directory.endswith("/") or self.model_directory == ""
         assert self.training_directory.endswith("/") or self.training_directory == ""
+
+
+@dataclass
+class TrainingStandaloneConfig:
+    device: str
+    learning_rate: float
+    policy_loss_weight: float
+    num_epochs: int
+    batch_size: int
+    shuffle_buffer_file_count: int
+    test_split_stride: int
+    max_total_games: int
+    num_tests_per_epoch: int
+    remote_game_dir: str
+    local_game_mirror: str
+    aim_repo_path: str
+
+    def __init__(self, config_file: str):
+        with open(config_file, "rb") as f:
+            data = tomllib.load(f)
+
+        standalone_data = data["training_standalone"]
+
+        self.device = standalone_data["device"]
+        self.learning_rate = standalone_data["learning_rate"]
+        self.policy_loss_weight = standalone_data["policy_loss_weight"]
+        self.num_epochs = standalone_data["num_epochs"]
+        self.batch_size = standalone_data["batch_size"]
+        self.shuffle_buffer_file_count = standalone_data["shuffle_buffer_file_count"]
+        self.test_split_stride = standalone_data["test_split_stride"]
+        self.max_total_games = standalone_data["max_total_games"]
+        self.num_tests_per_epoch = standalone_data["num_tests_per_epoch"]
+        self.remote_game_dir = standalone_data["remote_game_dir"]
+        self.local_game_mirror = standalone_data["local_game_mirror"]
+        self.aim_repo_path = standalone_data["aim_repo_path"]
