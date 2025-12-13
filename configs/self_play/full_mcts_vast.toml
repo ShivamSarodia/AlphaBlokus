@@ -24,7 +24,7 @@ reload = { poll_interval_seconds = 60 }
 type = "mcts"
 fast_move_probability = 0.8
 fast_move_num_rollouts = 200
-full_move_num_rollouts = 1000
+full_move_num_rollouts = 1500
 total_dirichlet_noise_alpha = 10.83
 root_dirichlet_noise_fraction = 0.25
 ucb_exploration_factor = 1.05
