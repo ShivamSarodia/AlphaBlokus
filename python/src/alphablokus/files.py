@@ -192,6 +192,7 @@ def temp_directory() -> str:
     global TEMP_DIRECTORY
     if TEMP_DIRECTORY is None:
         TEMP_DIRECTORY = tempfile.TemporaryDirectory()
+        print("Created temporary directory:", TEMP_DIRECTORY.name)
     return TEMP_DIRECTORY.name
 
 
