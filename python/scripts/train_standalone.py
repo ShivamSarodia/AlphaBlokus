@@ -8,19 +8,13 @@ import torch
 from tqdm import tqdm
 
 from alphablokus.configs import GameConfig, NetworkConfig, TrainingStandaloneConfig
-from alphablokus.files import list_files
+from alphablokus.files import list_files, parse_num_games_from_filename
 from alphablokus.train_utils import (
     IterableGameDataset,
     get_loss,
     initialize_model,
     localize_file,
 )
-
-
-def parse_num_games_from_filename(filename: str) -> int:
-    """Extracts the number of games encoded in the filename suffix."""
-    basename = filename.rsplit("/", 1)[-1]
-    return int(basename.split(".")[0].split("_")[-1])
 
 
 def select_game_files(remote_dir: str, max_total_games: int) -> List[str]:
@@ -70,73 +64,68 @@ def initialize_run(
     aim_run = aim.Run(repo=training_config.aim_repo_path)
     aim_run["network_config"] = dataclasses.asdict(network_config)
     aim_run["training_config"] = dataclasses.asdict(training_config)
+    aim_run["name"] = "baseline"
     print("Run hash: ", aim_run.hash)
     return aim_run
 
 
 def test_model(
     model,
-    game_config: GameConfig,
     training_config: TrainingStandaloneConfig,
-    test_files: List[str],
+    test_batch,
     aim_run,
     total_samples_trained: int,
 ):
-    """Evaluate model on held-out data and log metrics."""
-    print("Testing...")
+    """Evaluate model on a single test batch and log metrics."""
     model.eval()
 
-    test_dataset = IterableGameDataset(
-        game_config, test_files, training_config.shuffle_buffer_file_count
-    )
-    test_dataloader = torch.utils.data.DataLoader(
-        test_dataset, batch_size=training_config.batch_size
-    )
-
-    total_test_loss = 0.0
-    total_test_value_loss = 0.0
-    total_test_policy_loss = 0.0
-    total_test_samples = 0
-
     with torch.no_grad():
-        for batch in test_dataloader:
-            test_loss, test_value_loss, test_policy_loss = get_loss(
-                batch, training_config, model
-            )
-            batch_size = batch[0].shape[0]
-            total_test_loss += test_loss.item() * batch_size
-            total_test_value_loss += test_value_loss.item() * batch_size
-            total_test_policy_loss += test_policy_loss.item() * batch_size
-            total_test_samples += batch_size
-
-    final_test_loss = total_test_loss / total_test_samples
-    final_test_value_loss = total_test_value_loss / total_test_samples
-    final_test_policy_loss = total_test_policy_loss / total_test_samples
+        test_loss, test_value_loss, test_policy_loss = get_loss(
+            test_batch, training_config, model
+        )
 
     print(
-        f"Test loss: {final_test_loss}. (Value loss: {final_test_value_loss}, Policy loss: {final_test_policy_loss})"
+        f"Step {total_samples_trained}: Test batch loss: {test_loss.item()}. (Value loss: {test_value_loss.item()}, Policy loss: {test_policy_loss.item()})"
     )
 
     aim_run.track(
-        final_test_loss,
+        test_loss.item(),
         name="total_loss",
         step=total_samples_trained,
         context={"subset": "test"},
     )
     aim_run.track(
-        final_test_value_loss,
+        test_value_loss.item(),
         name="value_loss",
         step=total_samples_trained,
         context={"subset": "test"},
     )
     aim_run.track(
-        final_test_policy_loss,
+        test_policy_loss.item(),
         name="policy_loss",
         step=total_samples_trained,
         context={"subset": "test"},
     )
 
     model.train()
+
+
+def build_dataloader(
+    game_config: GameConfig,
+    files: List[str],
+    training_config: TrainingStandaloneConfig,
+) -> torch.utils.data.DataLoader:
+    """Helper to build a dataloader for iterable game data."""
+    dataset = IterableGameDataset(
+        game_config, files, training_config.shuffle_buffer_file_count
+    )
+    return torch.utils.data.DataLoader(
+        dataset,
+        batch_size=training_config.batch_size,
+        num_workers=training_config.num_workers,
+        persistent_workers=training_config.num_workers > 0,
+        prefetch_factor=training_config.prefetch_factor,
+    )
 
 
 def train_model(
@@ -147,27 +136,29 @@ def train_model(
     train_files: List[str],
     test_files: List[str],
     aim_run,
-    total_train_samples: int,
 ):
     """Train for a fixed number of epochs with periodic evaluation."""
     total_samples_trained = 0
     num_epochs = training_config.num_epochs
 
+    def get_test_iterator():
+        random.shuffle(test_files)
+        return iter(build_dataloader(game_config, test_files, training_config))
+
+    test_iterator = get_test_iterator()
+
     for epoch in range(num_epochs):
         print(f"Starting epoch {epoch + 1} of {num_epochs}")
 
-        train_dataset = IterableGameDataset(
-            game_config, train_files, training_config.shuffle_buffer_file_count
-        )
-        train_dataloader = torch.utils.data.DataLoader(
-            train_dataset, batch_size=training_config.batch_size
-        )
+        random.shuffle(train_files)
 
-        samples_trained_since_last_test = 0
+        train_dataloader = build_dataloader(game_config, train_files, training_config)
+
+        train_batches_since_last_test = 0
         for batch in train_dataloader:
             batch_size = batch[0].shape[0]
-            samples_trained_since_last_test += batch_size
             total_samples_trained += batch_size
+            train_batches_since_last_test += 1
 
             loss, value_loss, policy_loss = get_loss(batch, training_config, model)
 
@@ -175,55 +166,49 @@ def train_model(
             loss.backward()
             optimizer.step()
 
-            average_loss = loss.item()
-            average_value_loss = value_loss.item()
-            average_policy_loss = policy_loss.item()
+            # Report on results only for full batches.
+            if batch_size == training_config.batch_size:
+                average_loss = loss.item()
+                average_value_loss = value_loss.item()
+                average_policy_loss = policy_loss.item()
 
-            print(
-                f"Train loss: {average_loss}. (Value loss: {average_value_loss}, Policy loss: {average_policy_loss})"
-            )
+                print(
+                    f"Step: {total_samples_trained}. Train loss: {average_loss}. Value loss: {average_value_loss}. Policy loss: {average_policy_loss}."
+                )
 
-            aim_run.track(
-                average_loss,
-                name="total_loss",
-                step=total_samples_trained,
-                context={"subset": "train"},
-            )
-            aim_run.track(
-                average_value_loss,
-                name="value_loss",
-                step=total_samples_trained,
-                context={"subset": "train"},
-            )
-            aim_run.track(
-                average_policy_loss,
-                name="policy_loss",
-                step=total_samples_trained,
-                context={"subset": "train"},
-            )
+                aim_run.track(
+                    average_loss,
+                    name="total_loss",
+                    step=total_samples_trained,
+                    context={"subset": "train"},
+                )
+                aim_run.track(
+                    average_value_loss,
+                    name="value_loss",
+                    step=total_samples_trained,
+                    context={"subset": "train"},
+                )
+                aim_run.track(
+                    average_policy_loss,
+                    name="policy_loss",
+                    step=total_samples_trained,
+                    context={"subset": "train"},
+                )
 
-            if (
-                samples_trained_since_last_test
-                >= total_train_samples / training_config.num_tests_per_epoch
-            ):
-                samples_trained_since_last_test = 0
+            if train_batches_since_last_test >= training_config.train_batches_per_test:
+                train_batches_since_last_test = 0
+                try:
+                    test_batch = next(test_iterator)
+                except StopIteration:
+                    test_iterator = get_test_iterator()
+                    test_batch = next(test_iterator)
                 test_model(
                     model,
-                    game_config,
                     training_config,
-                    test_files,
+                    test_batch,
                     aim_run,
                     total_samples_trained,
                 )
-
-    test_model(
-        model,
-        game_config,
-        training_config,
-        test_files,
-        aim_run,
-        total_samples_trained,
-    )
 
 
 def load_configs(config_path: str):
@@ -267,7 +252,6 @@ def main(config_path: str):
         train_files,
         test_files,
         aim_run,
-        total_train_samples,
     )
 
 

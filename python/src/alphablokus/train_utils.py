@@ -4,6 +4,7 @@ import zstandard
 import msgpack
 import torch
 import torch.nn as nn
+import math
 
 from alphablokus.configs import (
     DirectoriesConfig,
@@ -211,9 +212,9 @@ def load_game_data(
 
     for filename in local_file_paths:
         board, value, policy = load_game_file(game_config, filename)
-        board_inputs.append(board)
-        value_targets.append(value)
-        policy_targets.append(policy)
+        board_inputs += board
+        value_targets += value
+        policy_targets += policy
 
     board_inputs = torch.stack(board_inputs)
     value_targets = torch.stack(value_targets)
@@ -243,8 +244,15 @@ class IterableGameDataset(torch.utils.data.IterableDataset):
         self.shuffle_buffer_file_count = shuffle_buffer_file_count
 
     def __iter__(self):
-        file_paths = self.local_file_paths.copy()
-        random.shuffle(file_paths)
+        worker_info = torch.utils.data.get_worker_info()
+        if worker_info is None:
+            file_paths = self.local_file_paths.copy()
+        else:
+            num_workers = worker_info.num_workers
+            per_worker = math.ceil(len(self.local_file_paths) / num_workers)
+            start = worker_info.id * per_worker
+            end = min(start + per_worker, len(self.local_file_paths))
+            file_paths = self.local_file_paths[start:end]
 
         while file_paths:
             # Load files into the shuffle buffer
@@ -252,9 +260,11 @@ class IterableGameDataset(torch.utils.data.IterableDataset):
             while len(files_in_buffer) < self.shuffle_buffer_file_count and file_paths:
                 files_in_buffer.append(file_paths.pop())
 
+            print(f"Loading files into buffer (worker id: {worker_info.id})")
             boards, values, policies = load_game_files_to_tensor(
                 self.game_config, files_in_buffer
             )
+            print(f"Loaded files into buffer (worker id: {worker_info.id})")
 
             indices = random.sample(range(boards.shape[0]), boards.shape[0])
             for index in indices:

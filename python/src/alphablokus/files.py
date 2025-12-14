@@ -193,3 +193,9 @@ def temp_directory() -> str:
     if TEMP_DIRECTORY is None:
         TEMP_DIRECTORY = tempfile.TemporaryDirectory()
     return TEMP_DIRECTORY.name
+
+
+def parse_num_games_from_filename(filename: str) -> int:
+    """Extracts the number of games encoded in the filename suffix."""
+    basename = filename.rsplit("/", 1)[-1]
+    return int(basename.split(".")[0].split("_")[-1])

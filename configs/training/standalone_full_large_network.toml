@@ -7,11 +7,11 @@ move_data_file = "static/move_data/full.bin"
 
 [network]
 model_class = "resnet"
-main_body_channels = 64
-residual_blocks = 10
-value_head_channels = 16
-value_head_flat_layer_width = 64
-policy_head_channels = 64
+main_body_channels = 128
+residual_blocks = 12
+value_head_channels = 32
+value_head_flat_layer_width = 128
+policy_head_channels = 128
 policy_convolution_kernel = 3
 
 [training_standalone]
