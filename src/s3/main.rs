@@ -16,7 +16,7 @@ impl S3Uri {
         }
 
         let without_protocol = path.split("://").nth(1).unwrap();
-        let mut split_without_protocol = without_protocol.split("/");
+        let mut split_without_protocol = without_protocol.split("/").filter(|p| !p.is_empty());
 
         // First, grab the bucket name.
         let bucket = split_without_protocol.next().unwrap();
@@ -25,6 +25,8 @@ impl S3Uri {
         let mut inner_path: Vec<String> = split_without_protocol.map(str::to_string).collect();
 
         let filename = if let Some(last) = inner_path.last() {
+            // This is fairly hacky. We identify if the s3 path represents a file based on if it
+            // contains a dot.
             if last.contains(".") {
                 inner_path.pop().map(|s| s.to_string())
             } else {
@@ -45,6 +47,13 @@ impl S3Uri {
         let mut parts = self.inner_path.clone();
         if let Some(ref filename) = self.filename {
             parts.push(filename.clone());
+        } else if !self.inner_path.is_empty() {
+            // Push an empty string so the key ends with a slash. This is important
+            // to ensure that files in a sibling directory with the same prefix, like "s3://bucket/models" and
+            // "s3://bucket/models_archived" are treated correctly. However, we only insert this condition if
+            // there is at least one component in the path, so that we don't add a trailing slash to the key
+            // for the bucket name only.
+            parts.push("".to_string());
         }
         parts.join("/")
     }
@@ -94,7 +103,7 @@ mod tests {
         let uri = S3Uri::new("s3://my-bucket/path/to/directory".to_string()).unwrap();
         assert_eq!(uri.bucket, "my-bucket");
         assert_eq!(uri.filename, None);
-        assert_eq!(uri.key(), "path/to/directory");
+        assert_eq!(uri.key(), "path/to/directory/");
     }
 
     #[test]

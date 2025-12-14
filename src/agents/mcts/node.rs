@@ -72,8 +72,8 @@ impl Node {
             array_index_to_move_index: Vec::new(),
             array_index_to_player_pov_move_index: Vec::new(),
             children: HashMap::new(),
-            children_value_sums: vec![[0.0; NUM_PLAYERS]; 0],
-            children_visit_counts: vec![0; 0],
+            children_value_sums: Vec::new(),
+            children_visit_counts: Vec::new(),
             children_visit_counts_sum: 0,
             // Initialized by initialize_inference_results
             value: [0.0; 4],

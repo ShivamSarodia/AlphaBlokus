@@ -230,7 +230,7 @@ mod tests {
         // Test that S3Uri can be created from valid S3 paths
         let uri = S3Uri::new("s3://bucket/models".to_string()).unwrap();
         assert_eq!(uri.bucket, "bucket");
-        assert_eq!(uri.key(), "models");
+        assert_eq!(uri.key(), "models/");
     }
 
     #[test]
