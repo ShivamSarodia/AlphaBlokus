@@ -122,7 +122,9 @@ def load_initial_state(
         print("Loading training state from:", initial_training_state)
         samples = int(initial_training_state.split(".")[-2].split("/")[-1])
         initial_training_path = localize_file(initial_training_state)
-        initial_training_state = torch.load(initial_training_path)
+        initial_training_state = torch.load(
+            initial_training_path, map_location=training_config.device
+        )
         model.load_state_dict(initial_training_state["model"])
         optimizer.load_state_dict(initial_training_state["optimizer"])
 
