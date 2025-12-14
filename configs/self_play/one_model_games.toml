@@ -18,7 +18,6 @@ name = "default"
 model_path = "s3://alpha-blokus/full/models"
 batch_size = 128
 executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
-reload = { poll_interval_seconds = 60 }
 
 [agents.Single]
 type = "mcts"
