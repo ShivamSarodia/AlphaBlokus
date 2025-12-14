@@ -2,8 +2,14 @@ import torch
 import time
 from dataclasses import dataclass
 import sys
+import os
 
-from alphablokus.configs import GameConfig, NetworkConfig, TrainingConfig, DirectoriesConfig
+from alphablokus.configs import (
+    GameConfig,
+    NetworkConfig,
+    TrainingConfig,
+    DirectoriesConfig,
+)
 from alphablokus.train_utils import (
     maybe_download_files,
     load_game_data,
@@ -75,6 +81,10 @@ def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
         game_config, training_config.batch_size, local_game_data_files, num_samples
     )
     train_loop(dataloader, model, optimizer, training_config)
+
+    log(f"Deleting {len(local_game_data_files)} game data files")
+    for file_name in local_game_data_files:
+        os.remove(file_name)
 
     return samples_total
 
