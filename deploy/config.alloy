@@ -1,16 +1,28 @@
+// =======================
 // For logs
+// =======================
 
 local.file_match "local_files" {
   path_targets = [
-    {"__path__" = "/tmp/log/alphablokus/*.log"},
-    {"__path__" = "/tmp/log/alphablokus/*.log.*"},
+    { "__path__" = "/tmp/log/alphablokus/*.log" },
+    { "__path__" = "/tmp/log/alphablokus/*.log.*" },
   ]
 }
 
 loki.source.file "log_scrape" {
-  targets    = local.file_match.local_files.targets
+  targets        = local.file_match.local_files.targets
+  forward_to     = [loki.relabel.augment.receiver]
+  tail_from_end  = true
+}
+
+loki.relabel "augment" {
   forward_to = [loki.write.grafana_cloud_loki.receiver]
-  tail_from_end = true
+
+  rule {
+    action       = "replace"
+    target_label = "instance"
+    replacement  = sys.env("CONTAINER_ID")
+  }
 }
 
 loki.write "grafana_cloud_loki" {
@@ -24,7 +36,10 @@ loki.write "grafana_cloud_loki" {
   }
 }
 
+
+// =======================
 // For metrics
+// =======================
 
 prometheus.remote_write "metrics_service" {
   endpoint {
@@ -37,15 +52,28 @@ prometheus.remote_write "metrics_service" {
   }
 }
 
+prometheus.relabel "augment" {
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+
+  rule {
+    action       = "replace"
+    target_label = "instance"
+    replacement  = sys.env("CONTAINER_ID")
+  }
+}
+
 prometheus.scrape "rust_app" {
   targets = [{
     // My app's /metrics
     __address__ = "127.0.0.1:9000",
   }]
-  forward_to = [prometheus.remote_write.metrics_service.receiver]
+  forward_to = [prometheus.relabel.augment.receiver]
 }
 
+
+// =======================
 // For system metrics (CPU, etc)
+// =======================
 
 // Starts an embedded node_exporter on a local port.
 prometheus.exporter.unix "host" { }
@@ -53,15 +81,17 @@ prometheus.exporter.unix "host" { }
 // Scrape and ship system metrics.
 prometheus.scrape "system" {
   targets    = prometheus.exporter.unix.host.targets
-  forward_to = [prometheus.remote_write.metrics_service.receiver]
+  forward_to = [prometheus.relabel.augment.receiver]
 }
 
+
+// =======================
 // For NVIDIA metrics
+// =======================
 
 prometheus.scrape "nvidia_smi" {
   targets = [{
-    // My app's /metrics
     __address__ = "127.0.0.1:9835",
   }]
-  forward_to = [prometheus.remote_write.metrics_service.receiver]
+  forward_to = [prometheus.relabel.augment.receiver]
 }
