@@ -100,12 +100,11 @@ class TrainingStandaloneConfig:
     num_epochs: int
     batch_size: int
     shuffle_buffer_file_count: int
-    test_split_stride: int
-    max_total_games: int
     train_batches_per_test: int
     num_workers: int
     prefetch_factor: int
-    remote_game_dir: str
+    remote_train_data_dir: str
+    remote_test_data_dir: str
     local_game_mirror: str
     aim_repo_path: str
 
@@ -121,10 +120,10 @@ class TrainingStandaloneConfig:
         self.num_epochs = standalone_data["num_epochs"]
         self.batch_size = standalone_data["batch_size"]
         self.shuffle_buffer_file_count = standalone_data["shuffle_buffer_file_count"]
-        self.test_split_stride = standalone_data["test_split_stride"]
         self.train_batches_per_test = standalone_data["train_batches_per_test"]
         self.num_workers = standalone_data["num_workers"]
         self.prefetch_factor = standalone_data["prefetch_factor"]
-        self.remote_game_dir = standalone_data["remote_game_dir"]
+        self.remote_train_data_dir = standalone_data["remote_train_data_dir"]
+        self.remote_test_data_dir = standalone_data["remote_test_data_dir"]
         self.local_game_mirror = standalone_data["local_game_mirror"]
         self.aim_repo_path = standalone_data["aim_repo_path"]

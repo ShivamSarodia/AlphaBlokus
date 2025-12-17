@@ -19,10 +19,9 @@ def search():
                 "type": "on-demand",
                 "allocated_storage": "64",
                 "reliability2": {"gt": 0.995},
-                "inet_down": {"gt": 300},
-                "inet_up": {"gt": 300},
+                "inet_down": {"gt": 100},
+                "inet_up": {"gt": 100},
                 "duration": {"gte": 1},
-                "geolocation": {"in": ["US", "CA"]},
                 "dph_total": {"lte": 0.3},
                 "gpu_name": "RTX 3070",
                 "cpu_cores": {"gte": 8},
@@ -42,6 +41,8 @@ def search():
     for offer in offers:
         augment(offer)
     offers.sort(key=lambda o: o["computed_cost"])
+
+    offers = [o for o in offers if o["available_cpu_ghz"] >= 40]
 
     return offers
 

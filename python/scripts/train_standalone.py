@@ -17,46 +17,6 @@ from alphablokus.train_utils import (
 )
 
 
-def select_game_files(remote_dir: str, max_total_games: int) -> List[str]:
-    """Return the most recent remote file paths up to max_total_games samples."""
-    gamedata_files = sorted(list_files(remote_dir, ".bin"), reverse=True)
-
-    total_games = 0
-    selected_files: List[str] = []
-
-    # Walk newest files first.
-    for gamedata_file in gamedata_files:
-        num_games = parse_num_games_from_filename(gamedata_file)
-        total_games += num_games
-        if total_games > max_total_games:
-            break
-        selected_files.append(gamedata_file)
-
-    return selected_files
-
-
-def localize_and_split_files(
-    remote_files: Iterable[str], local_dir: str, test_stride: int
-) -> Tuple[List[str], List[str]]:
-    """Download remote files to local_dir and split into train/test via stride."""
-    train_files: List[str] = []
-    test_files: List[str] = []
-
-    for idx, filename in enumerate(tqdm(list(remote_files), desc="Localizing data")):
-        local_filename = localize_file(filename, local_dir)
-        (test_files if idx % test_stride == 0 else train_files).append(local_filename)
-
-    print(f"Num train files: {len(train_files)}")
-    print(f"Num test files: {len(test_files)}")
-
-    return train_files, test_files
-
-
-def count_total_samples(files: Iterable[str]) -> int:
-    """Compute total sample count encoded in filenames."""
-    return sum(parse_num_games_from_filename(f) for f in files)
-
-
 def initialize_run(
     network_config: NetworkConfig, training_config: TrainingStandaloneConfig
 ):
@@ -223,19 +183,19 @@ def main(config_path: str):
     """Entrypoint for running a standalone training job."""
     game_config, network_config, training_config = load_configs(config_path)
 
-    random.seed(42)
+    train_remote_files = list_files(training_config.remote_train_data_dir, ".bin")
+    train_local_files = []
+    for filename in tqdm(train_remote_files, desc="Localizing data"):
+        train_local_files.append(
+            localize_file(filename, training_config.local_game_mirror)
+        )
 
-    selected_files = select_game_files(
-        training_config.remote_game_dir, training_config.max_total_games
-    )
-    train_files, test_files = localize_and_split_files(
-        selected_files,
-        training_config.local_game_mirror,
-        training_config.test_split_stride,
-    )
-
-    total_train_samples = count_total_samples(train_files)
-    print("Total train samples: ", total_train_samples)
+    test_remote_files = list_files(training_config.remote_test_data_dir, ".bin")
+    test_local_files = []
+    for filename in tqdm(test_remote_files, desc="Localizing data"):
+        test_local_files.append(
+            localize_file(filename, training_config.local_game_mirror)
+        )
 
     aim_run = initialize_run(network_config, training_config)
 
@@ -249,8 +209,8 @@ def main(config_path: str):
         optimizer,
         game_config,
         training_config,
-        train_files,
-        test_files,
+        train_local_files,
+        test_local_files,
         aim_run,
     )
 
