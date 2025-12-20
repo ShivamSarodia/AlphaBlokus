@@ -70,6 +70,14 @@ prometheus.scrape "rust_app" {
   forward_to = [prometheus.relabel.augment.receiver]
 }
 
+prometheus.scrape "python_training" {
+  targets = [{
+    // Python training /metrics
+    __address__ = "127.0.0.1:9101",
+  }]
+  forward_to = [prometheus.relabel.augment.receiver]
+}
+
 
 // =======================
 // For system metrics (CPU, etc)

@@ -17,6 +17,7 @@ dependencies = [
     "tqdm",
     "aim",
     "numpy",
+    "prometheus-client",
 ]
 
 [tool.setuptools]
