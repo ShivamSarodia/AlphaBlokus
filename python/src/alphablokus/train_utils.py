@@ -98,7 +98,10 @@ def maybe_download_files(
     )
 
     # Localize the selected files (download if needed)
-    return [localize_file(file_path) for file_path in selected_files]
+    print("Localizing files...")
+    r = [localize_file(file_path) for file_path in selected_files]
+    print("Files localized.")
+    return r
 
 
 def load_initial_state(
@@ -218,7 +221,9 @@ def load_game_data(
     policy_targets = []
 
     for filename in local_file_paths:
+        print(f"Loading game file: {filename}")
         board, value, policy = load_game_file(game_config, filename)
+        print(f"Loaded game file: {filename}")
         board_inputs += board
         value_targets += value
         policy_targets += policy
