@@ -36,7 +36,7 @@ training_config = TrainingConfig(config_path)
 directories_config = DirectoriesConfig(config_path)
 
 
-SIMULATED = True
+SIMULATED = False
 
 
 def log(message: str):
