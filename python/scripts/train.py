@@ -36,6 +36,9 @@ training_config = TrainingConfig(config_path)
 directories_config = DirectoriesConfig(config_path)
 
 
+SIMULATED = True
+
+
 def log(message: str):
     print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
 
@@ -46,7 +49,28 @@ def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
     Returns the new total number of samples after training.
     """
     # List game files to get current total
-    game_data_files = list_game_data_files(directories_config)
+    listed_game_data_files = list_game_data_files(directories_config)
+
+    # If we're loading one file at a time, then only load one additional file since
+    # the samples_last_trained.
+    if SIMULATED:
+        game_data_files = []
+        num_samples_in_game_data_files = 0
+        # Reverse the list here to load the oldest files first.
+        for filename, num_samples_in_file in reversed(listed_game_data_files):
+            game_data_files.append((filename, num_samples_in_file))
+            num_samples_in_game_data_files += num_samples_in_file
+
+            # Break as soon as game_data_files contains more samples than we
+            # trained on last time, indicating we got one more file this time.
+            if num_samples_in_game_data_files > samples_last_trained:
+                break
+        # Then reverse back, so the newest files are first.
+        game_data_files = game_data_files[::-1]
+    else:
+        # Otherwise, just load all the files.
+        game_data_files = listed_game_data_files
+
     samples_total = sum(
         num_samples_in_file for _, num_samples_in_file in game_data_files
     )
@@ -82,18 +106,27 @@ def train_on_new_samples(model, optimizer, samples_last_trained: int) -> int:
     )
     train_loop(dataloader, model, optimizer, training_config)
 
-    log(f"Deleting {len(local_game_data_files)} game data files")
-    for file_name in local_game_data_files:
-        os.remove(file_name)
+    if not SIMULATED:
+        log(f"Deleting {len(local_game_data_files)} game data files")
+        for file_name in local_game_data_files:
+            os.remove(file_name)
 
     return samples_total
 
 
 def save_model_and_state(model, optimizer, samples_total: int):
     """Saves the model and training state."""
+    if SIMULATED:
+        time_suffix = f"_{time.time():.0f}"
+    else:
+        time_suffix = ""
+
     # Save the model locally.
     if directories_config.model_directory.strip():
-        onnx_path = directories_config.model_directory + f"{samples_total:08d}.onnx"
+        onnx_path = (
+            directories_config.model_directory
+            + f"{samples_total:08d}{time_suffix}.onnx"
+        )
         log(f"Saving model to: {onnx_path}")
         with from_localized(onnx_path) as onnx_path:
             model.save_onnx(onnx_path, training_config.device)
@@ -103,7 +136,8 @@ def save_model_and_state(model, optimizer, samples_total: int):
     # Save training state so we can resume training later.
     if directories_config.training_directory.strip():
         training_state_path = (
-            directories_config.training_directory + f"{samples_total:08d}.pth"
+            directories_config.training_directory
+            + f"{samples_total:08d}{time_suffix}.pth"
         )
         log(f"Saving training state to: {training_state_path}")
         with from_localized(training_state_path) as training_state_path:
@@ -121,7 +155,11 @@ def save_model_and_state(model, optimizer, samples_total: int):
 def run():
     # Load the initial state of the model and optimizer.
     model, optimizer, samples_last_trained = load_initial_state(
-        network_config, game_config, training_config, directories_config
+        network_config,
+        game_config,
+        training_config,
+        directories_config,
+        skip_loading_from_file=SIMULATED,
     )
 
     # Initialize training state
@@ -163,11 +201,18 @@ def run():
 
         # If there were no new samples, sleep before polling again for any new data.
         if new_samples_trained == 0:
+            if SIMULATED:
+                break
+
             # Wait before polling again
             log(
                 f"Waiting {training_config.poll_interval_seconds} seconds before next poll..."
             )
             time.sleep(training_config.poll_interval_seconds)
+
+    assert SIMULATED, "Should only end while loop in SIMULATED mode."
+
+    save_model_and_state(model, optimizer, samples_total)
 
 
 run()

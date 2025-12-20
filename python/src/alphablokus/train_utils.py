@@ -106,6 +106,7 @@ def load_initial_state(
     game_config: GameConfig,
     training_config: TrainingConfig,
     directories_config: DirectoriesConfig,
+    skip_loading_from_file: bool = False,
 ) -> tuple[nn.Module, torch.optim.Optimizer, int]:
     """
     Loads the initial state of the model and optimizer from the training directory.
@@ -113,20 +114,24 @@ def load_initial_state(
     # Load the model and optimizer.
     model = initialize_model(network_config, game_config)
     optimizer = torch.optim.Adam(model.parameters(), lr=training_config.learning_rate)
+    samples = 0
 
-    initial_training_state = latest_file(directories_config.training_directory, ".pth")
-    if initial_training_state is None:
-        print("No training state found, starting from scratch.")
-        samples = 0
-    else:
-        print("Loading training state from:", initial_training_state)
-        samples = int(initial_training_state.split(".")[-2].split("/")[-1])
-        initial_training_path = localize_file(initial_training_state)
-        initial_training_state = torch.load(
-            initial_training_path, map_location=training_config.device
+    if not skip_loading_from_file:
+        initial_training_state = latest_file(
+            directories_config.training_directory, ".pth"
         )
-        model.load_state_dict(initial_training_state["model"])
-        optimizer.load_state_dict(initial_training_state["optimizer"])
+        if initial_training_state is None:
+            print("No training state found, starting from scratch.")
+
+        else:
+            print("Loading training state from:", initial_training_state)
+            samples = int(initial_training_state.split(".")[-2].split("/")[-1])
+            initial_training_path = localize_file(initial_training_state)
+            initial_training_state = torch.load(
+                initial_training_path, map_location=training_config.device
+            )
+            model.load_state_dict(initial_training_state["model"])
+            optimizer.load_state_dict(initial_training_state["optimizer"])
 
     # Move the model to the appropriate device.
     model = model.to(device=training_config.device)
