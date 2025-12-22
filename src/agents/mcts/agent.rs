@@ -133,7 +133,9 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
             node.as_deref_mut()
                 .context("expected node while backpropagating but found none")?
                 .increment_child_visit_count(move_index);
-            node = node.unwrap().get_child_mut(move_index);
+            node = node
+                .context("expected node while backpropagating but found none")?
+                .get_child_mut(move_index);
         }
 
         Ok(())
