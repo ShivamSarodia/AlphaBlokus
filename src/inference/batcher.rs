@@ -1,5 +1,6 @@
 use crate::inference;
 use crate::inference::client::RequestChannelMessage;
+use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -12,11 +13,11 @@ pub trait Executor: Send + Sync + 'static {
     ///
     /// The method may be called concurrently from multiple threads, so if locking is needed
     /// it should be done internally. The method is not async and the call can block.
-    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response>;
+    fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>>;
 }
 
 impl<T: Executor + ?Sized> Executor for Box<T> {
-    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
+    fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
         self.as_ref().execute(requests)
     }
 }
@@ -62,26 +63,66 @@ impl<T: Executor> Batcher<T> {
                 tokio::spawn(async move {
                     // move requests and response senders into here
                     let execution_result =
-                        tokio::task::spawn_blocking(move || executor.execute(requests))
-                            .await
-                            .unwrap();
+                        tokio::task::spawn_blocking(move || executor.execute(requests)).await;
 
-                    execution_result.into_iter().zip(response_senders).for_each(
-                        |(response, response_sender)| {
-                            response_sender.send(response).unwrap_or_else(|_| {
-                                if !cancel_token.is_cancelled() {
-                                    tracing::error!("Error sending inference response");
+                    let responses = match execution_result {
+                        Ok(Ok(responses)) => Ok(responses),
+                        Ok(Err(err)) => Err(err),
+                        Err(err) => Err(anyhow::anyhow!("Executor task failed: {}", err)),
+                    };
+
+                    match responses {
+                        // If we have responses, send them to the response senders.
+                        Ok(responses) => {
+                            responses.into_iter().zip(response_senders).for_each(
+                                |(response, response_sender)| {
+                                    if response_sender.send(Ok(response)).is_err()
+                                        && !cancel_token.is_cancelled()
+                                    {
+                                        tracing::error!("Error sending inference response");
+                                    }
+                                },
+                            );
+                        }
+                        // Otherwise, send the error to all the waiting senders.
+                        Err(err) => {
+                            let err = err.context("Error in inference executor");
+                            let err_msg = err.to_string();
+
+                            for response_sender in response_senders {
+                                if response_sender
+                                    .send(Err(anyhow::anyhow!(err_msg.clone())))
+                                    .is_err()
+                                {
+                                    // Receiver dropped; only log if this wasn't due to cancellation
+                                    if !cancel_token.is_cancelled() {
+                                        tracing::error!("Error sending inference response");
+                                    }
                                 }
-                            });
-                        },
-                    );
+                            }
+                        }
+                    }
                 });
 
                 // Reset the requests and response senders.
                 requests = Vec::new();
                 response_senders = Vec::new();
             } else if requests.len() > self.batch_size {
-                panic!("Batcher should never have more requests than the batch size enqueued");
+                tracing::error!(
+                    "Batcher had more requests {} than the batch size {}",
+                    requests.len(),
+                    self.batch_size
+                );
+                response_senders.into_iter().for_each(|response_sender| {
+                    let err = anyhow::anyhow!("Batcher had more requests than the batch size ");
+                    if response_sender.send(Err(err)).is_err() {
+                        tracing::error!("Error sending batch size overflow message");
+                    }
+                });
+
+                // Reset the requests and response senders.
+                requests = Vec::new();
+                response_senders = Vec::new();
             }
         }
     }

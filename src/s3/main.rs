@@ -1,3 +1,4 @@
+use anyhow::Context;
 use anyhow::Result;
 use aws_sdk_s3::Client;
 
@@ -15,11 +16,16 @@ impl S3Uri {
             return Err(anyhow::anyhow!("Path must start with s3://"));
         }
 
-        let without_protocol = path.split("://").nth(1).unwrap();
+        let without_protocol = path
+            .split_once("://")
+            .map(|(_, rest)| rest)
+            .context("Missing S3 URI protocol separator")?;
         let mut split_without_protocol = without_protocol.split("/").filter(|p| !p.is_empty());
 
         // First, grab the bucket name.
-        let bucket = split_without_protocol.next().unwrap();
+        let bucket = split_without_protocol
+            .next()
+            .context("Missing bucket name in S3 URI")?;
 
         // Combine the rest into a path.
         let mut inner_path: Vec<String> = split_without_protocol.map(str::to_string).collect();
@@ -70,12 +76,15 @@ impl S3Uri {
 }
 
 /// Creates an AWS S3 client configured with the endpoint URL from the S3_ENDPOINT_URL environment variable.
-pub async fn create_s3_client() -> Client {
+pub async fn create_s3_client() -> Result<Client> {
     let config = aws_config::from_env()
-        .endpoint_url(std::env::var("AWS_ENDPOINT_URL").unwrap())
+        .endpoint_url(
+            std::env::var("AWS_ENDPOINT_URL")
+                .context("AWS_ENDPOINT_URL is not set for S3 client")?,
+        )
         .load()
         .await;
-    Client::new(&config)
+    Ok(Client::new(&config))
 }
 
 #[cfg(test)]

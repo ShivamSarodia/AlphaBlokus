@@ -49,9 +49,9 @@ impl Recorder {
     pub fn build_and_start(
         flush_row_count: usize,
         output_directory: String,
-    ) -> (Self, tokio::task::JoinHandle<()>) {
+    ) -> Result<(Self, tokio::task::JoinHandle<()>)> {
         // To start, create the output directory if it doesn't exist.
-        std::fs::create_dir_all(&output_directory).unwrap();
+        std::fs::create_dir_all(&output_directory)?;
 
         // Start a consumer thread that flushes data to disk when there's enough data.
         let channel = mpsc::unbounded_channel();
@@ -65,23 +65,24 @@ impl Recorder {
                 if unflushed_mcts_data.len() >= flush_row_count {
                     // Flush the data.
                     let output_directory = output_directory.clone();
-                    write_mcts_data(unflushed_mcts_data, &output_directory)
-                        .await
-                        .unwrap();
+                    if let Err(err) = write_mcts_data(unflushed_mcts_data, &output_directory).await
+                    {
+                        tracing::error!("Failed to flush MCTS data to disk: {}", err);
+                    }
                     unflushed_mcts_data = Vec::new();
                 }
             }
 
             // When the channel is closed, flush the remaining data one last time.
             tracing::info!("Flushing final data to disk...");
-            write_mcts_data(unflushed_mcts_data, &output_directory)
-                .await
-                .unwrap();
+            if let Err(err) = write_mcts_data(unflushed_mcts_data, &output_directory).await {
+                tracing::error!("Failed to flush final MCTS data to disk: {}", err);
+            }
             tracing::info!("Done flushing final data to disk.");
         });
 
         // Return the recorder which contains the sender for pushing new data.
-        (Recorder { sender: channel.0 }, background_task)
+        Ok((Recorder { sender: channel.0 }, background_task))
     }
 
     /// Create a no-op recorder that discards all data (for disabled recording).
@@ -97,8 +98,9 @@ impl Recorder {
         (Recorder { sender: channel.0 }, background_task)
     }
 
-    pub fn push_mcts_data(&self, mcts_data: Vec<MCTSData>) {
-        self.sender.send(mcts_data).unwrap();
+    pub fn push_mcts_data(&self, mcts_data: Vec<MCTSData>) -> Result<()> {
+        self.sender.send(mcts_data)?;
+        Ok(())
     }
 }
 
@@ -173,7 +175,7 @@ async fn write_mcts_data_to_s3(
     let bucket = uri_with_file.bucket.clone();
     let key = uri_with_file.key();
 
-    let client = create_s3_client().await;
+    let client = create_s3_client().await?;
     client
         .put_object()
         .body(aws_sdk_s3::primitives::ByteStream::from(mcts_data))
@@ -232,7 +234,7 @@ mod tests {
     #[tokio::test]
     async fn test_full_recorder() {
         let directory = testing::create_tmp_directory();
-        let (recorder, background_task) = Recorder::build_and_start(3, directory.clone());
+        let (recorder, background_task) = Recorder::build_and_start(3, directory.clone()).unwrap();
 
         let data_1 = create_mcts_data(1);
         let data_2 = create_mcts_data(2);
@@ -241,14 +243,14 @@ mod tests {
         let data_5 = create_mcts_data(5);
 
         // Push 1 and 2. At this point, no data should be written to disk.
-        recorder.push_mcts_data(vec![data_1, data_2]);
+        recorder.push_mcts_data(vec![data_1, data_2]).unwrap();
 
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
         assert_eq!(0, std::fs::read_dir(&directory).unwrap().count());
 
         // Push 3 and 4.
-        recorder.push_mcts_data(vec![data_3, data_4]);
+        recorder.push_mcts_data(vec![data_3, data_4]).unwrap();
 
         // Wait for the file to be written.
         for _ in 0..20 {
@@ -268,7 +270,7 @@ mod tests {
         assert!(file.metadata().unwrap().len() > 0);
 
         // Push 5.
-        recorder.push_mcts_data(vec![data_5]);
+        recorder.push_mcts_data(vec![data_5]).unwrap();
 
         // Confirm it's not written right away.
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

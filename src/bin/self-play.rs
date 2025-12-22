@@ -24,13 +24,13 @@ fn main() -> Result<()> {
     // Initialize observability based on config
     // Don't drop the guard to flush logs on shutdown.
     let _guard = utils::init_logger(&config.observability.logging);
-    utils::init_metrics(&config.observability.metrics);
+    utils::init_metrics(&config.observability.metrics)?;
 
     tracing::info!("Starting self-play with config: {:?}", config);
 
     config.game.load_move_profiles()?;
 
-    run_selfplay(config);
+    run_selfplay(config)?;
 
     Ok(())
 }

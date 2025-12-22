@@ -68,20 +68,46 @@ pub enum MCTSTrace {
 }
 
 pub async fn record_mcts_trace(mcts_trace: MCTSTrace, mcts_config: &MCTSConfig) {
-    let trace_file = mcts_config.trace_file.as_ref().unwrap();
+    let trace_file = match mcts_config.trace_file.as_ref() {
+        Some(path) => path,
+        None => {
+            tracing::error!("MCTS tracing enabled without a trace file configured");
+            return;
+        }
+    };
 
     // TODO: Don't re-open the file for each trace.
-    let mut file = OpenOptions::new()
+    let mut file = match OpenOptions::new()
         .create(true)
         .write(true)
         .append(true)
         .open(trace_file)
         .await
-        .unwrap();
+    {
+        Ok(file) => file,
+        Err(err) => {
+            tracing::error!("Failed to open MCTS trace file {:?}: {}", trace_file, err);
+            return;
+        }
+    };
 
-    file.write_all(serde_json::to_string(&mcts_trace).unwrap().as_bytes())
-        .await
-        .unwrap();
-    file.write_all("\n".as_bytes()).await.unwrap();
-    file.flush().await.unwrap();
+    let payload = match serde_json::to_string(&mcts_trace) {
+        Ok(data) => data,
+        Err(err) => {
+            tracing::error!("Failed to serialize MCTS trace: {}", err);
+            return;
+        }
+    };
+
+    if let Err(err) = file.write_all(payload.as_bytes()).await {
+        tracing::error!("Failed to write MCTS trace: {}", err);
+        return;
+    }
+    if let Err(err) = file.write_all("\n".as_bytes()).await {
+        tracing::error!("Failed to write MCTS trace newline: {}", err);
+        return;
+    }
+    if let Err(err) = file.flush().await {
+        tracing::error!("Failed to flush MCTS trace file: {}", err);
+    }
 }

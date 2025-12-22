@@ -4,6 +4,7 @@ use crate::{
     config::SelfPlayConfig, gameplay::Engine, inference::DefaultClient, recorder::Recorder,
 };
 use ahash::AHashMap as HashMap;
+use anyhow::{Context, Result};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -11,7 +12,7 @@ pub async fn build_inference_clients(
     inference_configs: &'static [InferenceConfig],
     game_config: &'static GameConfig,
     cancel_token: CancellationToken,
-) -> HashMap<String, Arc<DefaultClient>> {
+) -> Result<HashMap<String, Arc<DefaultClient>>> {
     let mut clients = HashMap::<String, Arc<DefaultClient>>::new();
 
     for inference_config in inference_configs {
@@ -20,26 +21,33 @@ pub async fn build_inference_clients(
             game_config,
             cancel_token.clone(),
         )
-        .await;
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to create inference client with name {}",
+                inference_config.name
+            )
+        })?;
         clients.insert(inference_config.name.clone(), Arc::new(client));
     }
-    clients
+    Ok(clients)
 }
 
-pub fn run_selfplay(config: &'static SelfPlayConfig) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+pub fn run_selfplay(config: &'static SelfPlayConfig) -> Result<()> {
+    let rt =
+        tokio::runtime::Runtime::new().context("Failed to create Tokio runtime for self-play")?;
     rt.block_on(async move {
         let cancel_token = utils::setup_cancel_token();
 
         let inference_clients =
-            build_inference_clients(&config.inference, &config.game, cancel_token.clone()).await;
+            build_inference_clients(&config.inference, &config.game, cancel_token.clone()).await?;
 
         let (recorder, recorder_background_task) = match &config.mcts_recorder {
             crate::config::MCTSRecorderConfig::Disabled => Recorder::disabled(),
             crate::config::MCTSRecorderConfig::Directory {
                 data_directory,
                 flush_row_count,
-            } => Recorder::build_and_start(*flush_row_count, data_directory.clone()),
+            } => Recorder::build_and_start(*flush_row_count, data_directory.clone())?,
         };
 
         let mut engine = Engine::new(
@@ -74,9 +82,12 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) {
         // background task can finish writing remaining data.
         drop(engine);
 
-        recorder_background_task.await.unwrap();
+        recorder_background_task
+            .await
+            .context("Recorder background task failed")?;
 
         tracing::info!("Self-play complete.");
+        Ok(())
     })
 }
 
@@ -124,7 +135,7 @@ mod tests {
         let config: &'static mut SelfPlayConfig = Box::leak(Box::new(config));
         config.game.load_move_profiles().unwrap();
 
-        run_selfplay(config);
+        run_selfplay(config).unwrap();
     }
 
     #[test]
@@ -163,7 +174,7 @@ mod tests {
         config.game.load_move_profiles().unwrap();
 
         let start = std::time::Instant::now();
-        run_selfplay(config);
+        run_selfplay(config).unwrap();
         let elapsed = start.elapsed();
 
         // Verify it took approximately 2 seconds (within a reasonable margin)

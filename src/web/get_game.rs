@@ -162,7 +162,7 @@ fn build_piece_response(
     let mut orientation_shapes: Vec<Option<OrientationShape>> =
         vec![None; game_config.num_piece_orientations];
 
-    for profile in game_config.move_profiles().iter() {
+    for profile in game_config.move_profiles().unwrap().iter() {
         let orientation_idx = profile.piece_orientation_index;
         if orientation_shapes[orientation_idx].is_none() {
             orientation_shapes[orientation_idx] = Some(OrientationShape::from_profile(
@@ -187,7 +187,7 @@ fn compute_valid_orientations(state: &BlokusState, game_config: &'static GameCon
     let mut validity = vec![false; game_config.num_piece_orientations];
 
     for move_index in state.valid_moves() {
-        let profile = game_config.move_profiles().get(move_index);
+        let profile = game_config.move_profiles().unwrap().get(move_index);
         validity[profile.piece_orientation_index] = true;
     }
 

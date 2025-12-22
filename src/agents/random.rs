@@ -1,6 +1,7 @@
 use crate::agents::Agent;
 use crate::config::{GameConfig, RandomConfig};
 use crate::game::State;
+use anyhow::Result;
 use async_trait::async_trait;
 use rand::prelude::IteratorRandom;
 
@@ -26,20 +27,20 @@ impl Agent for RandomAgent {
         &self.name
     }
 
-    async fn choose_move(&mut self, state: &State) -> usize {
+    async fn choose_move(&mut self, state: &State) -> Result<usize> {
         if !self.from_largest {
-            return state.valid_moves().choose(&mut rand::rng()).unwrap();
+            return state
+                .valid_moves()
+                .choose(&mut rand::rng())
+                .ok_or_else(|| anyhow::anyhow!("No valid moves available for random agent"));
         }
+
+        let move_profiles = self.game_config.move_profiles()?;
 
         let mut largest_moves = Vec::new();
         let mut max_cells = 0usize;
         for move_index in state.valid_moves() {
-            let count = self
-                .game_config
-                .move_profiles()
-                .get(move_index)
-                .occupied_cells
-                .count();
+            let count = move_profiles.get(move_index).occupied_cells.count();
             if count > max_cells {
                 max_cells = count;
                 largest_moves.clear();
@@ -49,7 +50,10 @@ impl Agent for RandomAgent {
             }
         }
 
-        largest_moves.into_iter().choose(&mut rand::rng()).unwrap()
+        largest_moves
+            .into_iter()
+            .choose(&mut rand::rng())
+            .ok_or_else(|| anyhow::anyhow!("No valid moves available for random agent"))
     }
 }
 
@@ -69,8 +73,8 @@ mod tests {
             from_largest: false,
         };
         let mut agent = RandomAgent::new(&random_config, config);
-        let state = State::new(&config);
-        let move_index = agent.choose_move(&state).await;
+        let state = State::new(&config).unwrap();
+        let move_index = agent.choose_move(&state).await.unwrap();
         assert!(state.valid_moves().contains(&move_index));
     }
 
@@ -82,18 +86,26 @@ mod tests {
             from_largest: true,
         };
         let mut agent = RandomAgent::new(&random_config, config);
-        let state = State::new(&config);
+        let state = State::new(&config).unwrap();
 
-        let chosen_move = agent.choose_move(&state).await;
+        let chosen_move = agent.choose_move(&state).await.unwrap();
         let chosen_count = config
             .move_profiles()
+            .unwrap()
             .get(chosen_move)
             .occupied_cells
             .count();
 
         let max_count = state
             .valid_moves()
-            .map(|idx| config.move_profiles().get(idx).occupied_cells.count())
+            .map(|idx| {
+                config
+                    .move_profiles()
+                    .unwrap()
+                    .get(idx)
+                    .occupied_cells
+                    .count()
+            })
             .max()
             .unwrap();
         assert_eq!(chosen_count, max_count);

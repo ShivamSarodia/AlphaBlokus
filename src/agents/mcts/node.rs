@@ -1,4 +1,5 @@
 use ahash::AHashMap as HashMap;
+use anyhow::{Result, anyhow};
 use rand::Rng;
 use rand_distr::Distribution;
 use rand_distr::weighted::WeightedIndex;
@@ -58,7 +59,7 @@ impl Node {
         mcts_config: &'static MCTSConfig,
         game_config: &'static GameConfig,
         add_noise: bool,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut result = Self {
             // Initialized here.
             id: rand::rng().random::<u64>(),
@@ -79,7 +80,7 @@ impl Node {
             value: [0.0; 4],
             children_prior_probabilities: Vec::new(),
         };
-        result.initialize_move_mappings(state);
+        result.initialize_move_mappings(state)?;
         result.initialize_children();
 
         if mcts_config.tracing_enabled() {
@@ -101,21 +102,22 @@ impl Node {
 
         result
             .initialize_inference_results(state, inference_client)
-            .await;
+            .await?;
 
         if add_noise {
-            result.add_noise();
+            result.add_noise()?;
         }
-        result
+        Ok(result)
     }
 
-    fn add_noise(&mut self) {
+    fn add_noise(&mut self) -> Result<()> {
         // Adds Dirichlet noise to the prior probabilities. The noise is computing using a Gamma
         // distribution because the Dirichlet distribution provided by rand_distr requires a compile
         // time constant distribution size.
         let per_move_alpha =
             self.mcts_config.total_dirichlet_noise_alpha / (self.num_valid_moves as f32);
-        let gamma_dist = rand_distr::Gamma::<f32>::new(per_move_alpha, 1.0).unwrap();
+        let gamma_dist = rand_distr::Gamma::<f32>::new(per_move_alpha, 1.0)
+            .map_err(|err| anyhow!("Failed to create Dirichlet noise distribution: {}", err))?;
 
         let unnormalized_dirichlet = (0..self.num_valid_moves)
             .map(|_| gamma_dist.sample(&mut rand::rng()))
@@ -130,17 +132,18 @@ impl Node {
                 *x = *x * (1.0 - self.mcts_config.root_dirichlet_noise_fraction)
                     + noise * self.mcts_config.root_dirichlet_noise_fraction;
             });
+        Ok(())
     }
 
-    fn initialize_move_mappings(&mut self, state: &State) {
+    fn initialize_move_mappings(&mut self, state: &State) -> Result<()> {
         self.array_index_to_move_index =
             state.valid_moves().map(|x| x as u16).collect::<Vec<u16>>();
+        let move_profiles = self.game_config.move_profiles()?;
         self.array_index_to_player_pov_move_index = self
             .array_index_to_move_index
             .iter()
             .map(|&move_index| {
-                move_index_to_player_pov(move_index, self.player, self.game_config.move_profiles())
-                    as u16
+                move_index_to_player_pov(move_index, self.player, move_profiles) as u16
             })
             .collect::<Vec<u16>>();
         self.move_index_to_array_index = HashMap::from_iter(
@@ -150,6 +153,7 @@ impl Node {
                 .map(|(array_index, &move_index)| (move_index, array_index as u16)),
         );
         self.num_valid_moves = self.array_index_to_move_index.len();
+        Ok(())
     }
 
     fn initialize_children(&mut self) {
@@ -162,7 +166,7 @@ impl Node {
         &mut self,
         state: &State,
         inference_client: &T,
-    ) {
+    ) -> Result<()> {
         // Pass the board and player POV move indexes to the network from the player's
         // own perspective.
 
@@ -176,11 +180,11 @@ impl Node {
                     .map(|&x| x.into())
                     .collect(),
             })
-            .await;
+            .await?;
 
         // Store the results back into the node.
         self.set_value_from_player_pov(inference_result.value);
-        self.set_prior_probabilities(inference_result.policy);
+        self.set_prior_probabilities(inference_result.policy)?;
 
         if self.mcts_config.tracing_enabled() {
             record_mcts_trace(
@@ -194,6 +198,7 @@ impl Node {
             )
             .await;
         }
+        Ok(())
     }
 
     pub fn get_value_as_universal_pov(&self) -> [f32; NUM_PLAYERS] {
@@ -223,15 +228,16 @@ impl Node {
 
     /// Sets the prior probabilities for the child nodes. Expects `policy` to be provided
     /// in the same order as the move indexes in `self.array_index_to_move_index`.
-    fn set_prior_probabilities(&mut self, policy: Vec<f32>) {
+    fn set_prior_probabilities(&mut self, policy: Vec<f32>) -> Result<()> {
         if policy.len() != self.num_valid_moves {
-            panic!(
+            return Err(anyhow!(
                 "Policy length {} does not match number of valid moves {}",
                 policy.len(),
                 self.num_valid_moves
-            );
+            ));
         }
         self.children_prior_probabilities = policy;
+        Ok(())
     }
 
     /// Returns the move index (in universal perspective) with the highest UCB score at
@@ -310,7 +316,7 @@ impl Node {
         result
     }
 
-    pub async fn select_move_to_play(&self, state: &State) -> usize {
+    pub async fn select_move_to_play(&self, state: &State) -> Result<usize> {
         let temperature = if state.turn() < self.mcts_config.temperature_turn_cutoff {
             self.mcts_config.move_selection_temperature
         } else {
@@ -323,8 +329,8 @@ impl Node {
                 .iter()
                 .enumerate()
                 .max_by_key(|&(_, x)| x)
-                .unwrap()
-                .0
+                .map(|(idx, _)| idx)
+                .ok_or_else(|| anyhow!("No visit counts available for move selection"))?
         } else {
             // Otherwise, remotely sample.
             let unnormalized_weights = self
@@ -339,7 +345,9 @@ impl Node {
                 .map(|x| x / normalization_factor)
                 .collect::<Vec<f32>>();
 
-            let dist = WeightedIndex::new(&weights).unwrap();
+            let dist = WeightedIndex::new(&weights).map_err(|err| {
+                anyhow!("Failed to create weighted index for move sampling: {}", err)
+            })?;
             dist.sample(&mut rand::rng())
         };
 
@@ -363,11 +371,12 @@ impl Node {
             .await;
         }
 
-        result
+        Ok(result)
     }
 
-    pub fn generate_mcts_data(&self, game_id: u64, state: &State) -> MCTSData {
-        MCTSData {
+    pub fn generate_mcts_data(&self, game_id: u64, state: &State) -> Result<MCTSData> {
+        let move_profiles = self.game_config.move_profiles()?;
+        Ok(MCTSData {
             player: self.player,
             turn: state.turn(),
             game_id,
@@ -381,7 +390,7 @@ impl Node {
                 .array_index_to_player_pov_move_index
                 .iter()
                 .map(|&index| {
-                    let move_profile = self.game_config.move_profiles().get(index);
+                    let move_profile = move_profiles.get(index);
                     (
                         move_profile.piece_orientation_index,
                         move_profile.center.0,
@@ -396,7 +405,7 @@ impl Node {
                 .collect(),
             // This will be populated externally when the game is over.
             game_result: [0.0; NUM_PLAYERS],
-        }
+        })
     }
 
     #[inline]

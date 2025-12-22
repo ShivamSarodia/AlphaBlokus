@@ -14,7 +14,7 @@ pub async fn get_move_cells(
     State(state): State<AppState>,
     Path(move_index): Path<usize>,
 ) -> ApiResult<Json<GetMoveCellsResponse>> {
-    let move_profile = state.config.game.move_profiles().get(move_index);
+    let move_profile = state.config.game.move_profiles().unwrap().get(move_index);
     Ok(Json(GetMoveCellsResponse {
         cells: move_profile.occupied_cells.to_cells(),
     }))

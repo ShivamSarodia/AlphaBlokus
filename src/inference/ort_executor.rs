@@ -45,7 +45,7 @@ impl OrtExecutor {
 }
 
 impl Executor for OrtExecutor {
-    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
+    fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
         let mut input_array = ndarray::Array4::<f32>::zeros((
             requests.len(),
             NUM_PLAYERS,
@@ -64,14 +64,25 @@ impl Executor for OrtExecutor {
                 }
             }
         }
-        let ort_inputs = ort::inputs!["board" => Tensor::from_array(input_array).unwrap()];
-        let mut session = self.session.lock().unwrap();
-        let outputs = session.run(ort_inputs).unwrap();
+        let ort_inputs = ort::inputs!["board" => Tensor::from_array(input_array)
+            .context("Failed to create ORT input tensor")?];
+        let mut session = self
+            .session
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to lock ORT session (poisoned): {e}"))?;
+        let outputs = session
+            .run(ort_inputs)
+            .context("Failed to run ORT session")?;
 
-        let values = outputs["value"].try_extract_array().unwrap();
-        let policies = outputs["policy"].try_extract_array().unwrap();
+        let values = outputs["value"]
+            .try_extract_array::<f32>()
+            .context("Failed to extract value output")?;
+        let policies = outputs["policy"]
+            .try_extract_array::<f32>()
+            .context("Failed to extract policy output")?;
 
-        values
+        let move_profiles = self.game_config.move_profiles()?;
+        let responses = values
             .axis_iter(Axis(0))
             .zip(policies.axis_iter(Axis(0)))
             .zip(
@@ -80,29 +91,34 @@ impl Executor for OrtExecutor {
                     .map(|request| request.valid_move_indexes),
             )
             .map(|((value, policy), valid_move_indexes)| {
-                let value_slice = value.as_slice().unwrap();
+                let value_slice = value.as_slice().context("Value output is not contiguous")?;
                 let mut value =
-                    <[f32; 4]>::try_from(value_slice).expect("value must have length 4");
+                    <[f32; 4]>::try_from(value_slice).context("Value output must have length 4")?;
                 softmax_inplace(&mut value);
 
                 let mut policy = valid_move_indexes
                     .iter()
                     .map(|&index| {
-                        let move_profile = self.game_config.move_profiles().get(index);
+                        let move_profile = move_profiles.get(index);
                         *policy
                             .get([
                                 move_profile.piece_orientation_index,
                                 move_profile.center.0,
                                 move_profile.center.1,
                             ])
+                            // Slightly dangerous, because this'll panic the executor if the index
+                            // is out of bounds. Should never happen if the executor is being called
+                            // correctly.
                             .unwrap()
                     })
                     .collect::<Vec<f32>>();
                 softmax_inplace(&mut policy);
 
-                inference::Response { value, policy }
+                Ok(inference::Response { value, policy })
             })
-            .collect()
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(responses)
     }
 }
 
@@ -142,7 +158,9 @@ mod tests {
             valid_move_indexes: vec![0, 1, 2],
         };
 
-        let results = executor.execute(vec![request_1, request_1_copy, request_2]);
+        let results = executor
+            .execute(vec![request_1, request_1_copy, request_2])
+            .unwrap();
 
         assert_eq!(results.len(), 3);
 

@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use anyhow::{Context, Result, anyhow};
 use log::trace;
 use rand::Rng;
 
@@ -40,7 +41,7 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
         }
     }
 
-    async fn rollout_once(&self, state: &State, search_root: &mut Node) {
+    async fn rollout_once(&self, state: &State, search_root: &mut Node) -> Result<()> {
         trace!("Rolling out once from state: {}", state);
 
         let mut moves_played = Vec::new();
@@ -61,7 +62,9 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
                 let move_index = current_node.select_move_by_ucb().await;
 
                 // Play and record the selected move.
-                let game_status = current_state.apply_move(move_index);
+                let game_status = current_state
+                    .apply_move(move_index)
+                    .map_err(|err| anyhow!("Failed to apply move during rollout: {}", err))?;
                 moves_played.push(move_index);
 
                 // If the game is now over, we just assign values based on the final state.
@@ -79,7 +82,12 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
                         "Proceeding to next iteration: found existing child node for move index: {}",
                         move_index
                     );
-                    current_node = current_node.get_child_mut(move_index).unwrap();
+                    current_node = current_node.get_child_mut(move_index).ok_or_else(|| {
+                        anyhow!(
+                            "Expected child node for move {}, but none found",
+                            move_index
+                        )
+                    })?;
                 } else {
                     trace!(
                         "Expanding new node: no existing child node for move index: {}",
@@ -93,7 +101,7 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
                         self.game_config,
                         false,
                     )
-                    .await;
+                    .await?;
                     let new_node_id = new_node.id;
                     let value = new_node.get_value_as_universal_pov();
                     current_node.add_child(move_index, new_node);
@@ -120,13 +128,15 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
         let mut node: Option<&mut Node> = Some(&mut *search_root);
         for &move_index in moves_played.iter() {
             node.as_deref_mut()
-                .unwrap()
+                .context("expected node while backpropagating but found none")?
                 .increment_child_value_sum(move_index, value);
             node.as_deref_mut()
-                .unwrap()
+                .context("expected node while backpropagating but found none")?
                 .increment_child_visit_count(move_index);
             node = node.unwrap().get_child_mut(move_index);
         }
+
+        Ok(())
     }
 }
 
@@ -136,12 +146,12 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
         &self.name
     }
 
-    async fn choose_move(&mut self, state: &State) -> usize {
+    async fn choose_move(&mut self, state: &State) -> anyhow::Result<usize> {
         let search_id: u64 = chrono::Utc::now()
             .timestamp_nanos_opt()
-            .unwrap()
+            .ok_or_else(|| anyhow!("Failed to generate search id: timestamp unavailable"))?
             .try_into()
-            .unwrap();
+            .map_err(|_| anyhow!("Failed to generate search id: out of range"))?;
         let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
         let num_rollouts = if is_fast_move {
             self.mcts_config.fast_move_num_rollouts
@@ -160,7 +170,7 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
             // Add noise only on full moves, not on fast moves.
             !is_fast_move,
         )
-        .await;
+        .await?;
 
         if self.mcts_config.tracing_enabled() {
             record_mcts_trace(
@@ -178,17 +188,17 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
 
         // Run the rollouts, which formulates the search tree.
         for _ in 0..num_rollouts {
-            self.rollout_once(state, &mut search_root).await;
+            self.rollout_once(state, &mut search_root).await?;
         }
 
-        let move_index = search_root.select_move_to_play(state).await;
+        let move_index = search_root.select_move_to_play(state).await?;
 
         if !is_fast_move {
             self.mcts_data
-                .push(search_root.generate_mcts_data(self.game_id, state));
+                .push(search_root.generate_mcts_data(self.game_id, state)?);
         }
 
-        move_index
+        Ok(move_index)
     }
 
     fn flush_mcts_data(&mut self) -> Vec<MCTSData> {
@@ -211,7 +221,10 @@ mod tests {
     }
 
     impl inference::Client for MockInferenceClient {
-        async fn evaluate(&self, request: inference::Request) -> inference::Response {
+        async fn evaluate(
+            &self,
+            request: inference::Request,
+        ) -> anyhow::Result<inference::Response> {
             // Push the requests onto the vector.
             self.requests.lock().unwrap().push(request.clone());
 
@@ -227,7 +240,7 @@ mod tests {
                     policy[index_to_prefer] = 1.0;
                 });
 
-            inference::Response { value, policy }
+            Ok(inference::Response { value, policy })
         }
     }
 
@@ -254,8 +267,8 @@ mod tests {
         });
         let mut fast_agent =
             MCTSAgent::new(fast_mcts_config, game_config, Arc::clone(&fast_client));
-        let fast_state = State::new(game_config);
-        fast_agent.choose_move(&fast_state).await;
+        let fast_state = State::new(game_config).unwrap();
+        fast_agent.choose_move(&fast_state).await.unwrap();
         let fast_requests = fast_client.requests.lock().unwrap().len();
         assert!(fast_agent.flush_mcts_data().is_empty());
 
@@ -278,9 +291,9 @@ mod tests {
 
         let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
 
-        let mut state = State::new(&game_config);
-        let move_index_0 = agent.choose_move(&state).await;
-        let move_profile_0 = game_config.move_profiles().get(move_index_0);
+        let mut state = State::new(&game_config).unwrap();
+        let move_index_0 = agent.choose_move(&state).await.unwrap();
+        let move_profile_0 = game_config.move_profiles().unwrap().get(move_index_0);
 
         // For the player 0 state, the move that's played should match the one preferred by the
         // policy.
@@ -302,9 +315,9 @@ mod tests {
 
         // Now, apply the move and run a second rollout on the new state.
         mock_client.requests.lock().unwrap().clear();
-        state.apply_move(move_index_0);
-        let move_index_1 = agent.choose_move(&state).await;
-        let move_profile_1 = game_config.move_profiles().get(move_index_1);
+        state.apply_move(move_index_0).unwrap();
+        let move_index_1 = agent.choose_move(&state).await.unwrap();
+        let move_profile_1 = game_config.move_profiles().unwrap().get(move_index_1);
 
         // On the second request, the valid move indexes should match the first request
         // because from the player's own perspective, the legal moves are the same in both
@@ -337,9 +350,9 @@ mod tests {
         assert_eq!(move_profile_0.piece_index, move_profile_1.piece_index);
 
         mock_client.requests.lock().unwrap().clear();
-        state.apply_move(move_index_1);
-        let move_index_2 = agent.choose_move(&state).await;
-        let move_profile_2 = game_config.move_profiles().get(move_index_2);
+        state.apply_move(move_index_1).unwrap();
+        let move_index_2 = agent.choose_move(&state).await.unwrap();
+        let move_profile_2 = game_config.move_profiles().unwrap().get(move_index_2);
 
         let request_2 = mock_client.requests.lock().unwrap()[0].clone();
         assert_eq!(
@@ -369,10 +382,10 @@ mod tests {
 
         // Now apply the move to get to player 3.
         mock_client.requests.lock().unwrap().clear();
-        state.apply_move(move_index_2);
+        state.apply_move(move_index_2).unwrap();
 
-        let move_index_3 = agent.choose_move(&state).await;
-        let move_profile_3 = game_config.move_profiles().get(move_index_3);
+        let move_index_3 = agent.choose_move(&state).await.unwrap();
+        let move_profile_3 = game_config.move_profiles().unwrap().get(move_index_3);
 
         let request_3 = mock_client.requests.lock().unwrap()[0].clone();
         assert_eq!(
@@ -401,7 +414,7 @@ mod tests {
 
         assert_eq!(move_profile_0.piece_index, move_profile_3.piece_index);
 
-        state.apply_move(move_index_3);
+        state.apply_move(move_index_3).unwrap();
         assert_eq!(state.player(), 0);
         assert_eq!(state.board().slice(0).get((0, 0)), true);
         assert_eq!(state.board().slice(1).count(), 5);
@@ -425,9 +438,9 @@ mod tests {
         });
 
         for player in 0..NUM_PLAYERS {
-            let mut state = State::new(&game_config);
+            let mut state = State::new(&game_config).unwrap();
             for _ in 0..player {
-                state.apply_move(state.first_valid_move().unwrap());
+                state.apply_move(state.first_valid_move().unwrap()).unwrap();
             }
 
             let search_root = Node::build_and_expand(
@@ -438,7 +451,8 @@ mod tests {
                 &game_config,
                 true,
             )
-            .await;
+            .await
+            .unwrap();
 
             let universal_value = search_root.get_value_as_universal_pov();
             for i in 0..NUM_PLAYERS {
@@ -453,7 +467,10 @@ mod tests {
 
     struct ValuesInferenceClient {}
     impl inference::Client for ValuesInferenceClient {
-        async fn evaluate(&self, request: inference::Request) -> inference::Response {
+        async fn evaluate(
+            &self,
+            request: inference::Request,
+        ) -> anyhow::Result<inference::Response> {
             // Define "value" to prefer players with fewer pieces on the board, so that
             // if MCTS is working correctly all four players will play the single piece
             // move.
@@ -467,7 +484,7 @@ mod tests {
             ];
             softmax_inplace(&mut value);
 
-            inference::Response { value, policy }
+            Ok(inference::Response { value, policy })
         }
     }
 
@@ -480,15 +497,15 @@ mod tests {
         let mock_client = Arc::new(ValuesInferenceClient {});
 
         let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
-        let mut state = State::new(&game_config);
+        let mut state = State::new(&game_config).unwrap();
 
         for player in 0..4 {
             assert_eq!(state.player(), player);
-            let move_index = agent.choose_move(&state).await;
-            let move_profile = game_config.move_profiles().get(move_index);
+            let move_index = agent.choose_move(&state).await.unwrap();
+            let move_profile = game_config.move_profiles().unwrap().get(move_index);
             assert_eq!(move_profile.occupied_cells.count(), 1);
 
-            state.apply_move(move_index);
+            state.apply_move(move_index).unwrap();
         }
     }
 
@@ -505,11 +522,11 @@ mod tests {
 
         let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&mock_client));
 
-        let state = State::new(&game_config);
+        let state = State::new(&game_config).unwrap();
 
         // Run the test multiple times to make sure it consistently works
         for _ in 0..5 {
-            let move_index = agent.choose_move(&state).await;
+            let move_index = agent.choose_move(&state).await.unwrap();
             assert!(state.is_valid_move(move_index));
         }
     }

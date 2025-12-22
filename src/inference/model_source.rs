@@ -38,7 +38,8 @@ impl LocalModelSource {
             }
         }
 
-        candidates.sort_by(|a, b| a.file_name().unwrap().cmp(b.file_name().unwrap()));
+        candidates.retain(|path| path.file_name().is_some());
+        candidates.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
 
         let path = candidates.pop().ok_or_else(|| {
             anyhow::anyhow!(

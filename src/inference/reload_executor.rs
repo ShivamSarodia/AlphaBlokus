@@ -8,6 +8,7 @@ use tokio::time::sleep;
 use crate::inference;
 use crate::inference::batcher::Executor;
 use crate::inference::model_source::ModelSource;
+use anyhow::{Context, Result};
 
 /// Generic wrapper that hot-reloads an executor whenever a newer model file
 /// appears from a model source.
@@ -23,9 +24,9 @@ impl<E> ReloadExecutor<E>
 where
     E: Executor,
 {
-    pub async fn build<F, M>(model_source: M, poll_interval: Duration, builder: F) -> Self
+    pub async fn build<F, M>(model_source: M, poll_interval: Duration, builder: F) -> Result<Self>
     where
-        F: Fn(&Path) -> E + Send + Sync + 'static,
+        F: Fn(&Path) -> Result<E> + Send + Sync + 'static,
         M: ModelSource + 'static,
     {
         let executor_builder = Arc::new(builder);
@@ -34,8 +35,13 @@ where
         let initial_model_path = model_source
             .get_latest_model()
             .await
-            .expect("Failed to get initial model");
-        let initial_executor = executor_builder(&initial_model_path);
+            .context("Failed to get initial model")?;
+        let initial_executor = executor_builder(&initial_model_path).with_context(|| {
+            format!(
+                "Failed to build executor for {}",
+                initial_model_path.display()
+            )
+        })?;
 
         let executor = Arc::new(RwLock::new(initial_executor));
         let current_model_path = Arc::new(RwLock::new(initial_model_path));
@@ -58,10 +64,10 @@ where
             }
         });
 
-        Self {
+        Ok(Self {
             executor,
             current_model_path,
-        }
+        })
     }
 
     async fn reload_loop<F, M>(
@@ -71,7 +77,7 @@ where
         executor: Arc<RwLock<E>>,
         current_model_path: Arc<RwLock<PathBuf>>,
     ) where
-        F: Fn(&Path) -> E + Send + Sync + 'static,
+        F: Fn(&Path) -> Result<E> + Send + Sync + 'static,
         M: ModelSource,
     {
         loop {
@@ -93,9 +99,22 @@ where
             }
 
             tracing::info!("Reloading executor with model {}", latest_model.display());
+
             {
                 let mut guard = executor.write().await;
-                *guard = builder(&latest_model);
+                let next_executor = match builder(&latest_model) {
+                    Ok(executor) => executor,
+                    Err(err) => {
+                        // If the executor fails to build, log the error but continue the loop.
+                        tracing::error!(
+                            "Failed to build executor for {}: {}",
+                            latest_model.display(),
+                            err
+                        );
+                        continue;
+                    }
+                };
+                *guard = next_executor;
             }
 
             tracing::info!("Successfully loaded new model: {}", latest_model.display());
@@ -118,7 +137,7 @@ impl<E> Executor for ReloadExecutor<E>
 where
     E: Executor,
 {
-    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
+    fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
         self.executor.blocking_read().execute(requests)
     }
 }
@@ -140,14 +159,15 @@ mod tests {
     }
 
     impl Executor for MockSubExecutor {
-        fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
-            requests
+        fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
+            let responses = requests
                 .into_iter()
                 .map(|_| inference::Response {
                     value: [self.id as f32; NUM_PLAYERS],
                     policy: vec![],
                 })
-                .collect()
+                .collect();
+            Ok(responses)
         }
     }
 
@@ -169,11 +189,15 @@ mod tests {
         let model_source = LocalModelSource::new(&directory);
         let executor = Arc::new(
             ReloadExecutor::build(model_source, Duration::from_millis(25), move |path| {
-                let file_name = path.file_stem().unwrap().to_str().unwrap();
-                let id = file_name.parse::<usize>().unwrap();
-                MockSubExecutor { id }
+                let file_name = path
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| anyhow::anyhow!("Invalid model filename"))?;
+                let id = file_name.parse::<usize>().map_err(anyhow::Error::new)?;
+                Ok(MockSubExecutor { id })
             })
-            .await,
+            .await
+            .unwrap(),
         );
 
         let game_config = testing::create_game_config();
@@ -185,6 +209,7 @@ mod tests {
             executor_clone.execute(vec![make_request(game_config)])
         })
         .await
+        .unwrap()
         .unwrap();
         assert_eq!(initial_response[0].value[0], 1.0);
 
@@ -199,6 +224,7 @@ mod tests {
             executor_clone.execute(vec![make_request(game_config)])
         })
         .await
+        .unwrap()
         .unwrap();
         assert_eq!(updated_response[0].value[0], 2.0);
     }

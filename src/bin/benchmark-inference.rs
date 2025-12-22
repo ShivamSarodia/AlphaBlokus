@@ -32,13 +32,13 @@ fn main() -> Result<()> {
 
     println!("Starting inference benchmark with config:\n\n{:#?}", config,);
 
-    run_benchmark_inference(config);
+    run_benchmark_inference(config)?;
 
     Ok(())
 }
 
-fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
-    let rt = tokio::runtime::Runtime::new().unwrap();
+fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) -> Result<()> {
+    let rt = tokio::runtime::Runtime::new().context("Failed to create Tokio runtime")?;
     rt.block_on(async move {
         let cancel_token = utils::setup_cancel_token();
 
@@ -48,7 +48,8 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
                 &config.game,
                 cancel_token.clone(),
             )
-            .await,
+            .await
+            .context("Failed to create inference client")?,
         );
 
         println!("Starting benchmark...");
@@ -79,7 +80,11 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
                             _ = cancel_token.cancelled() => {
                                 break;
                             }
-                            _ = client.evaluate(request) => {
+                            result = client.evaluate(request) => {
+                                if let Err(err) = result {
+                                    tracing::error!("Inference request failed: {}", err);
+                                    continue;
+                                }
                                 num_evaluations += 1;
                             }
                         }
@@ -92,13 +97,17 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) {
         let start_time = std::time::Instant::now();
         let mut total_num_evaluations = 0;
         while let Some(num_evaluations) = set.join_next().await {
-            total_num_evaluations += num_evaluations.unwrap();
+            match num_evaluations {
+                Ok(count) => total_num_evaluations += count,
+                Err(err) => tracing::error!("Benchmark task failed: {}", err),
+            }
         }
         println!(
             "Number of evaluations per second: {}",
             total_num_evaluations as f64 / start_time.elapsed().as_secs_f64()
         );
-    });
+        Ok(())
+    })
 }
 
 fn random_board(config: &'static GameConfig) -> Board {

@@ -2,7 +2,7 @@ use std::pin::Pin;
 use std::slice;
 use std::sync::{Arc, Mutex};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use cxx::let_cxx_string;
 
 use crate::{
@@ -55,13 +55,15 @@ impl TensorRtExecutor {
         pool_size: usize,
     ) -> Result<Self> {
         if max_batch_size == 0 {
-            panic!("max_batch_size must be greater than zero");
+            bail!("max_batch_size must be greater than zero");
         }
         if pool_size == 0 {
-            panic!("pool_size must be greater than zero");
+            bail!("pool_size must be greater than zero");
         }
 
-        let model_path_str = model_path.to_str().unwrap();
+        let model_path_str = model_path
+            .to_str()
+            .context("TensorRT model path cannot convert to string")?;
 
         let engine_unique = {
             let_cxx_string!(model_path_cxx = model_path_str);
@@ -101,13 +103,13 @@ impl TensorRtExecutor {
 }
 
 impl Executor for TensorRtExecutor {
-    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
+    fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
         if requests.is_empty() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
         if requests.len() > self.max_batch_size {
-            panic!(
+            bail!(
                 "Batch size {} exceeds configured TensorRT max batch size {}",
                 requests.len(),
                 self.max_batch_size
@@ -115,7 +117,7 @@ impl Executor for TensorRtExecutor {
         }
 
         let batch_size = requests.len();
-        let block_handle = self.memory_pool.acquire();
+        let block_handle = self.memory_pool.acquire()?;
         let block = block_handle.block();
 
         let input_elements = self.sizes.input_elements_per_item;
@@ -154,9 +156,9 @@ impl Executor for TensorRtExecutor {
         let value_bytes = batch_size * value_elements * std::mem::size_of::<f32>();
         let policy_bytes = batch_size * policy_elements * std::mem::size_of::<f32>();
 
-        let h2d_event = CudaEvent::new(false).expect("Failed to create H2D event");
-        let compute_event = CudaEvent::new(false).expect("Failed to create compute event");
-        let d2h_event = CudaEvent::new(true).expect("Failed to create D2H event");
+        let h2d_event = CudaEvent::new(false).context("Failed to create H2D event")?;
+        let compute_event = CudaEvent::new(false).context("Failed to create compute event")?;
+        let d2h_event = CudaEvent::new(true).context("Failed to create D2H event")?;
 
         unsafe {
             ffi::memcpy_h2d_async(
@@ -165,41 +167,44 @@ impl Executor for TensorRtExecutor {
                 input_bytes,
                 self.streams.h2d_handle(),
             )
-            .expect("cudaMemcpyAsync H2D failed");
+            .context("cudaMemcpyAsync H2D failed")?;
         }
         ffi::event_record(h2d_event.handle(), self.streams.h2d_handle())
-            .expect("Failed to record H2D event");
+            .context("Failed to record H2D event")?;
 
         {
-            let mut engine_guard = self.engine.lock().unwrap();
+            let mut engine_guard = self
+                .engine
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Failed to lock TensorRT engine"))?;
             let mut engine = engine_guard.pin_mut();
 
             ffi::stream_wait_event(self.streams.compute_handle(), h2d_event.handle())
-                .expect("Failed to wait for H2D event on compute stream");
+                .context("Failed to wait for H2D event on compute stream")?;
 
             ffi::set_input_shape(engine.as_mut(), batch_size)
-                .expect("Failed to set input shape on TensorRT context");
+                .context("Failed to set input shape on TensorRT context")?;
 
             let_cxx_string!(board_name = BOARD_INPUT_NAME);
             let_cxx_string!(value_name = VALUE_OUTPUT_NAME);
             let_cxx_string!(policy_name = POLICY_OUTPUT_NAME);
 
             ffi::set_tensor_address(engine.as_mut(), &board_name, block.input_device.ptr())
-                .expect("Failed to set board tensor address");
+                .context("Failed to set board tensor address")?;
             ffi::set_tensor_address(engine.as_mut(), &value_name, block.value_device.ptr())
-                .expect("Failed to set value tensor address");
+                .context("Failed to set value tensor address")?;
             ffi::set_tensor_address(engine.as_mut(), &policy_name, block.policy_device.ptr())
-                .expect("Failed to set policy tensor address");
+                .context("Failed to set policy tensor address")?;
 
             ffi::enqueue(engine.as_mut(), self.streams.compute_handle())
-                .expect("Failed to enqueue TensorRT inference");
+                .context("Failed to enqueue TensorRT inference")?;
 
             ffi::event_record(compute_event.handle(), self.streams.compute_handle())
-                .expect("Failed to record compute event");
+                .context("Failed to record compute event")?;
         }
 
         ffi::stream_wait_event(self.streams.d2h_handle(), compute_event.handle())
-            .expect("Failed to wait for compute event on D2H stream");
+            .context("Failed to wait for compute event on D2H stream")?;
 
         unsafe {
             ffi::memcpy_d2h_async(
@@ -208,20 +213,20 @@ impl Executor for TensorRtExecutor {
                 value_bytes,
                 self.streams.d2h_handle(),
             )
-            .expect("cudaMemcpyAsync value D2H failed");
+            .context("cudaMemcpyAsync value D2H failed")?;
             ffi::memcpy_d2h_async(
                 block.policy_host.as_mut_ptr(),
                 block.policy_device.ptr(),
                 policy_bytes,
                 self.streams.d2h_handle(),
             )
-            .expect("cudaMemcpyAsync policy D2H failed");
+            .context("cudaMemcpyAsync policy D2H failed")?;
         }
 
         ffi::event_record(d2h_event.handle(), self.streams.d2h_handle())
-            .expect("Failed to record D2H event");
+            .context("Failed to record D2H event")?;
 
-        ffi::event_synchronize(d2h_event.handle()).expect("Failed to synchronize on D2H event");
+        ffi::event_synchronize(d2h_event.handle()).context("Failed to synchronize on D2H event")?;
 
         let values = unsafe {
             slice::from_raw_parts(
@@ -241,6 +246,7 @@ impl Executor for TensorRtExecutor {
         let policy_orientation_stride = policy_dims[1] * policy_dims[2];
         let policy_row_stride = policy_dims[2];
 
+        let move_profiles = self.game_config.move_profiles()?;
         for (batch_index, request) in requests.into_iter().enumerate() {
             let value_offset = batch_index * value_elements;
             let mut value = [0.0f32; NUM_PLAYERS];
@@ -253,13 +259,15 @@ impl Executor for TensorRtExecutor {
                 .valid_move_indexes
                 .iter()
                 .map(|&move_index| {
-                    let profile = self.game_config.move_profiles().get(move_index);
+                    let profile = move_profiles.get(move_index);
                     let orientation = profile.piece_orientation_index;
                     let row = profile.center.0;
                     let col = profile.center.1;
                     let index =
                         orientation * policy_orientation_stride + row * policy_row_stride + col;
-                    *policy_slice.get(index).expect("Policy index out of bounds")
+                    // Bit dangerous, because this'll panic if the executor gets an index out of bounds
+                    // which will halt execution.
+                    *policy_slice.get(index).unwrap()
                 })
                 .collect::<Vec<f32>>();
             softmax_inplace(&mut policy_values);
@@ -270,7 +278,7 @@ impl Executor for TensorRtExecutor {
             });
         }
 
-        responses
+        Ok(responses)
     }
 }
 
@@ -320,8 +328,8 @@ mod tests {
         let requests: Vec<inference::Request> =
             (0..4).map(|_| random_request(&game_config)).collect();
 
-        let ort_responses = ort.execute(requests.clone());
-        let trt_responses = tensorrt.execute(requests.clone());
+        let ort_responses = ort.execute(requests.clone()).unwrap();
+        let trt_responses = tensorrt.execute(requests.clone()).unwrap();
 
         let value_tolerance = 1e-4;
         let policy_tolerance = 1e-4;

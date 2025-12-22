@@ -31,15 +31,15 @@ impl<T: Clone> MovesArray<T> {
 }
 
 impl<T> MovesArray<T> {
-    pub fn new_from_vec(values: Vec<T>, game_config: &GameConfig) -> Self {
+    pub fn new_from_vec(values: Vec<T>, game_config: &GameConfig) -> Result<Self> {
         if values.len() != game_config.num_moves {
-            panic!(
+            return Err(anyhow::anyhow!(
                 "Number of values ({}) does not match num_moves ({})",
                 values.len(),
                 game_config.num_moves
-            );
+            ));
         }
-        MovesArray { values }
+        Ok(MovesArray { values })
     }
 
     pub fn get<U: Into<usize>>(&self, index: U) -> &T {

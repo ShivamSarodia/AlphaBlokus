@@ -1,4 +1,6 @@
+use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
+use tracing::error;
 
 use crate::config::{GameConfig, NUM_PLAYERS};
 use crate::game::MovesBitSet;
@@ -35,24 +37,24 @@ pub struct SerializableState {
 }
 
 impl State {
-    pub fn new(game_config: &'static GameConfig) -> Self {
-        State {
+    pub fn new(game_config: &'static GameConfig) -> Result<Self> {
+        Ok(State {
             board: Board::new(game_config),
             player: 0,
             turn: 0,
             last_move_played: None,
-            moves_enabled: game_config.cloned_initial_moves_enabled(),
+            moves_enabled: game_config.cloned_initial_moves_enabled()?,
             moves_ruled_out: std::array::from_fn(|_| MovesBitSet::new(game_config.num_moves)),
             game_config,
-        }
+        })
     }
 
-    pub fn apply_move(&mut self, move_index: usize) -> GameStatus {
+    pub fn apply_move(&mut self, move_index: usize) -> Result<GameStatus> {
         if !self.is_valid_move(move_index) {
-            panic!("Invalid move: {}", move_index);
+            bail!("Invalid move: {}", move_index);
         }
 
-        let move_profile = self.game_config.move_profiles().get(move_index);
+        let move_profile = self.game_config.move_profiles()?.get(move_index);
 
         // Update the board occupancies with the newly occupied cells of the
         // selected move.
@@ -83,10 +85,10 @@ impl State {
         for _ in 0..NUM_PLAYERS {
             self.player = (self.player + 1) % NUM_PLAYERS;
             if self.any_valid_moves() {
-                return GameStatus::InProgress;
+                return Ok(GameStatus::InProgress);
             }
         }
-        GameStatus::GameOver
+        Ok(GameStatus::GameOver)
     }
 
     pub fn valid_moves(&self) -> impl Iterator<Item = usize> {
@@ -181,13 +183,20 @@ impl fmt::Display for State {
         let mut latest_move_slice = BoardSlice::new(self.game_config.board_size);
 
         if let Some((move_index, player)) = self.last_move_played {
-            let move_profile = self.game_config.move_profiles().get(move_index);
-            latest_move_slice.add(&move_profile.occupied_cells);
-            layers.push(BoardDisplayLayer {
-                color: BoardDisplay::player_to_color(player),
-                shape: BoardDisplayShape::Secondary,
-                board_slice: &latest_move_slice,
-            });
+            match self.game_config.move_profiles() {
+                Ok(move_profiles) => {
+                    let move_profile = move_profiles.get(move_index);
+                    latest_move_slice.add(&move_profile.occupied_cells);
+                    layers.push(BoardDisplayLayer {
+                        color: BoardDisplay::player_to_color(player),
+                        shape: BoardDisplayShape::Secondary,
+                        board_slice: &latest_move_slice,
+                    });
+                }
+                Err(err) => {
+                    error!("Failed to load move profiles for display: {}", err);
+                }
+            }
         }
 
         for player in 0..NUM_PLAYERS {
@@ -217,7 +226,7 @@ mod tests {
     #[test]
     fn test_state_new_initialization() {
         let config = create_game_config();
-        let state = State::new(&config);
+        let state = State::new(&config).unwrap();
 
         assert_eq!(state.player(), 0);
         assert_eq!(state.turn(), 0);
@@ -227,10 +236,10 @@ mod tests {
     #[test]
     fn test_apply_move_updates_state() {
         let config = create_game_config();
-        let mut state = State::new(&config);
+        let mut state = State::new(&config).unwrap();
 
         let move_index = state.first_valid_move().expect("Should have valid moves");
-        let status = state.apply_move(move_index);
+        let status = state.apply_move(move_index).unwrap();
 
         // Should still be in progress after first move
         assert_eq!(status, GameStatus::InProgress);
@@ -245,11 +254,11 @@ mod tests {
     #[test]
     fn test_apply_multiple_moves() {
         let config = create_game_config();
-        let mut state = State::new(&config);
+        let mut state = State::new(&config).unwrap();
 
         loop {
             let move_index = state.first_valid_move().expect("Should have valid moves");
-            let game_state = state.apply_move(move_index);
+            let game_state = state.apply_move(move_index).unwrap();
             if game_state == GameStatus::GameOver {
                 break;
             }
@@ -262,14 +271,14 @@ mod tests {
     #[test]
     fn test_display_implementation() {
         let config = create_game_config();
-        let mut state = State::new(&config);
+        let mut state = State::new(&config).unwrap();
 
         let display_string = format!("{}", state);
         assert!(!display_string.is_empty());
 
         let move_index = state.first_valid_move().expect("Should have valid moves");
 
-        state.apply_move(move_index);
+        state.apply_move(move_index).unwrap();
 
         let display_string = format!("{}", state);
         assert!(!display_string.is_empty());
@@ -278,7 +287,7 @@ mod tests {
     #[test]
     fn test_first_valid_move_same() {
         let config = create_game_config();
-        let state = State::new(&config);
+        let state = State::new(&config).unwrap();
 
         let move_index_1 = state.first_valid_move().expect("Should have valid moves");
         let move_index_2 = state.first_valid_move().expect("Should have valid moves");
@@ -289,7 +298,7 @@ mod tests {
     #[test]
     fn test_is_valid_move() {
         let config = create_game_config();
-        let state = State::new(&config);
+        let state = State::new(&config).unwrap();
 
         for move_index in 0..config.num_moves {
             assert_eq!(
@@ -300,27 +309,27 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Invalid move:")]
-    fn test_apply_invalid_move_panics() {
+    fn test_apply_invalid_move_returns_error() {
         let config = create_game_config();
-        let mut state = State::new(&config);
+        let mut state = State::new(&config).unwrap();
 
         // Try to apply an invalid move (using a move index that's out of bounds)
         let invalid_move_index = config.num_moves + 100;
-        state.apply_move(invalid_move_index);
+        let result = state.apply_move(invalid_move_index);
+        assert!(result.is_err());
     }
 
     #[test]
     fn test_result() {
         let config = create_game_config();
-        let mut state = State::new(&config);
+        let mut state = State::new(&config).unwrap();
 
         // Initially, all players should be tied.
         assert_eq!(state.result(), [0.25f32, 0.25f32, 0.25f32, 0.25f32]);
 
         // After the first player moves, they should be the only player
         // with a good score.
-        state.apply_move(state.first_valid_move().unwrap());
+        state.apply_move(state.first_valid_move().unwrap()).unwrap();
         assert_eq!(state.result(), [1f32, 0.0f32, 0.0f32, 0.0f32]);
     }
 }

@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use rand::prelude::IteratorRandom;
 use std::path::PathBuf;
 
@@ -18,11 +18,13 @@ fn main() -> Result<()> {
 
     game_config.load_move_profiles()?;
 
-    let mut state = State::new(game_config);
+    let mut state = State::new(game_config)?;
     loop {
         let valid_moves = state.valid_moves();
-        let random_move = valid_moves.choose(&mut rand::rng()).unwrap();
-        let game_state = state.apply_move(random_move);
+        let random_move = valid_moves
+            .choose(&mut rand::rng())
+            .context("No valid moves available")?;
+        let game_state = state.apply_move(random_move)?;
         println!("{}\n", state);
         if game_state == GameStatus::GameOver {
             break;

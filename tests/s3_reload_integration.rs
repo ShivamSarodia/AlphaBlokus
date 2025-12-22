@@ -123,7 +123,7 @@ async fn upload_test_models_to_s3(
 ) -> Result<(), anyhow::Error> {
     use alpha_blokus::s3::create_s3_client;
 
-    let client = create_s3_client().await;
+    let client = create_s3_client().await.unwrap();
 
     for (name, path) in models {
         let data = fs::read(path).await?;
@@ -150,7 +150,7 @@ async fn cleanup_test_models_from_s3(
 ) -> Result<(), anyhow::Error> {
     use alpha_blokus::s3::create_s3_client;
 
-    let client = create_s3_client().await;
+    let client = create_s3_client().await.unwrap();
 
     for name in models {
         let key = format!("{}/{}", prefix, name);

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use alpha_blokus::agents::Agent;
 use alpha_blokus::inference::OrtExecutor;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use log::debug;
 use std::path::{Path, PathBuf};
 
@@ -41,32 +41,34 @@ fn main() -> Result<()> {
         default_exploitation_value: DefaultExploitationValue::NetworkValue,
     }));
 
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let cancel_token = utils::setup_cancel_token();
+    tokio::runtime::Runtime::new()
+        .context("Failed to create Tokio runtime")?
+        .block_on(async {
+            let cancel_token = utils::setup_cancel_token();
 
-        let executor = OrtExecutor::build(
-            Path::new("static/networks/trivial_net_half.onnx"),
-            game_config,
-        )?;
+            let executor = OrtExecutor::build(
+                Path::new("static/networks/trivial_net_half.onnx"),
+                game_config,
+            )?;
 
-        let inference_client = Arc::new(inference::DefaultClient::build_and_start(
-            executor,
-            1,
-            cancel_token,
-        ));
+            let inference_client = Arc::new(inference::DefaultClient::build_and_start(
+                executor,
+                1,
+                cancel_token,
+            ));
 
-        let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&inference_client));
-        let mut state = State::new(game_config);
-        loop {
-            let move_index = agent.choose_move(&state).await;
-            let status = state.apply_move(move_index);
-            println!("{}", state);
-            if status == GameStatus::GameOver {
-                break;
+            let mut agent = MCTSAgent::new(mcts_config, game_config, Arc::clone(&inference_client));
+            let mut state = State::new(game_config)?;
+            loop {
+                let move_index = agent.choose_move(&state).await?;
+                let status = state.apply_move(move_index)?;
+                println!("{}", state);
+                if status == GameStatus::GameOver {
+                    break;
+                }
             }
-        }
-        Ok::<(), anyhow::Error>(())
-    })?;
+            Ok::<(), anyhow::Error>(())
+        })?;
 
     Ok(())
 }

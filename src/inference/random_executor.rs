@@ -1,6 +1,7 @@
 use crate::{inference, inference::batcher::Executor};
 use std::time::Duration;
 
+use anyhow::Result;
 use rand::Rng;
 
 /// The random executor just returns random values and policies.
@@ -15,9 +16,9 @@ impl RandomExecutor {
 }
 
 impl Executor for RandomExecutor {
-    fn execute(&self, requests: Vec<inference::Request>) -> Vec<inference::Response> {
+    fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
         std::thread::sleep(self.sleep_duration);
-        requests
+        let responses = requests
             .into_iter()
             .map(|request| {
                 let unnormalized_value = std::array::from_fn(|_| rand::rng().random::<f32>());
@@ -36,7 +37,8 @@ impl Executor for RandomExecutor {
                         .collect(),
                 }
             })
-            .collect()
+            .collect();
+        Ok(responses)
     }
 }
 
@@ -49,10 +51,12 @@ mod tests {
     #[test]
     fn test_execute() {
         let executor = RandomExecutor::build(Duration::from_millis(1));
-        let results = executor.execute(vec![inference::Request {
-            board: Board::new(&testing::create_game_config()),
-            valid_move_indexes: vec![0, 1, 2],
-        }]);
+        let results = executor
+            .execute(vec![inference::Request {
+                board: Board::new(&testing::create_game_config()),
+                valid_move_indexes: vec![0, 1, 2],
+            }])
+            .unwrap();
 
         assert_eq!(results.len(), 1);
         assert!((results[0].value.iter().sum::<f32>() - 1.0).abs() < 1e-5);

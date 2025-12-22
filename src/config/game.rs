@@ -29,16 +29,18 @@ impl GameConfig {
         self.board_size * self.board_size
     }
 
-    pub fn move_profiles(&self) -> &MovesArray<MoveProfile> {
-        &self.move_data.as_ref().unwrap().profiles
-    }
-
-    pub fn cloned_initial_moves_enabled(&self) -> [MovesBitSet; NUM_PLAYERS] {
+    pub fn move_profiles(&self) -> Result<&MovesArray<MoveProfile>> {
         self.move_data
             .as_ref()
-            .unwrap()
-            .initial_moves_enabled
-            .clone()
+            .map(|data| &data.profiles)
+            .context("Move data is not loaded")
+    }
+
+    pub fn cloned_initial_moves_enabled(&self) -> Result<[MovesBitSet; NUM_PLAYERS]> {
+        self.move_data
+            .as_ref()
+            .map(|data| data.initial_moves_enabled.clone())
+            .context("Move data is not loaded")
     }
 
     pub fn load_move_profiles(&mut self) -> Result<()> {

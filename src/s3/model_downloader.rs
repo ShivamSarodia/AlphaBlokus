@@ -23,7 +23,7 @@ impl S3ModelDownloader {
     /// * `cache_size` - Maximum number of models to keep in cache
     pub async fn new(s3_path: String, cache_size: usize) -> Result<Self> {
         let s3_uri = S3Uri::new(s3_path)?;
-        let client = create_s3_client().await;
+        let client = create_s3_client().await?;
 
         // Create a temporary cache directory with random suffix to avoid conflicts
         let random_suffix: u32 = rand::rng().random();
@@ -221,7 +221,7 @@ mod tests {
             s3_uri: S3Uri::new("s3://test-bucket/models".to_string()).unwrap(),
             cache_dir,
             cache_size,
-            client: create_s3_client().await,
+            client: create_s3_client().await.unwrap(),
         }
     }
 

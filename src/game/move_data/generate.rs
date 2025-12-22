@@ -47,7 +47,7 @@ pub fn generate(config: &GameConfig) -> Result<MoveData> {
         })
         .collect::<Vec<MoveProfile>>();
 
-    let move_profiles = MovesArray::new_from_vec(move_profile_vec, config);
+    let move_profiles = MovesArray::new_from_vec(move_profile_vec, config)?;
 
     let initial_moves_enabled =
         compute_initial_moves_enabled(&move_profiles, config.num_moves, config.board_size);

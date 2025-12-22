@@ -43,7 +43,7 @@ impl AppState {
             // TODO: We can probably implement some better synchronization here to ensure
             // that multiple agents / resets / etc can't conflict.
             session: Arc::new(Mutex::new(GameSession {
-                blokus_states: vec![BlokusState::new(&config.game)],
+                blokus_states: vec![BlokusState::new(&config.game).unwrap()],
                 pending_agent: None,
             })),
         }
@@ -52,7 +52,7 @@ impl AppState {
     pub async fn reset(&self) {
         // TODO: Consider resetting the agent registry here as well.
         *self.session.lock().await = GameSession {
-            blokus_states: vec![BlokusState::new(&self.config.game)],
+            blokus_states: vec![BlokusState::new(&self.config.game).unwrap()],
             pending_agent: None,
         };
     }
@@ -94,7 +94,7 @@ impl AppState {
         // Initiate a separate task to run that agent.
         tokio::spawn(async move {
             // Run the agent to chose a move.
-            let move_index = agent.lock().await.choose_move(&state).await;
+            let move_index = agent.lock().await.choose_move(&state).await.unwrap();
 
             // Apply the move to the state.
             let mut session = session.lock().await;
@@ -106,10 +106,11 @@ impl AppState {
                     .lock()
                     .await
                     .report_move(&state, move_index)
-                    .await;
+                    .await
+                    .unwrap();
             }
 
-            cloned_state.apply_move(move_index);
+            cloned_state.apply_move(move_index).unwrap();
             session.blokus_states.push(cloned_state);
             session.pending_agent = None;
         });
@@ -124,7 +125,12 @@ impl AppState {
         };
 
         for agent in self.agents.iter() {
-            agent.lock().await.report_move(&state, move_index).await;
+            agent
+                .lock()
+                .await
+                .report_move(&state, move_index)
+                .await
+                .unwrap();
         }
 
         Ok(())
@@ -145,7 +151,7 @@ impl GameSession {
         }
 
         let mut cloned_state = self.blokus_states.last().unwrap().clone();
-        cloned_state.apply_move(move_index);
+        cloned_state.apply_move(move_index).unwrap();
         self.blokus_states.push(cloned_state);
 
         Ok(())
@@ -159,14 +165,15 @@ impl AgentRegistry {
             &config.game,
             CancellationToken::new(),
         )
-        .await;
+        .await
+        .unwrap();
 
         let agents = HashMap::from_iter(
             config
                 .agents
                 .iter()
                 .map(|agent_config| {
-                    gameplay::build_agent(agent_config, &config.game, &inference_clients)
+                    gameplay::build_agent(agent_config, &config.game, &inference_clients).unwrap()
                 })
                 .map(|agent| (agent.name().to_string(), Arc::new(Mutex::new(agent)))),
         );

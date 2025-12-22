@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use cxx::let_cxx_string;
 
 use crate::tensorrt::bridge::ffi;
@@ -31,18 +31,18 @@ impl TensorShapes {
         ensure_float_tensor(engine, &value_name)?;
         ensure_float_tensor(engine, &policy_name)?;
 
-        let policy_shape_without_batch = shape_without_batch(&policy_shape);
+        let policy_shape_without_batch = shape_without_batch(&policy_shape)?;
         if policy_shape_without_batch.len() != 3 {
-            panic!(
+            bail!(
                 "Expected policy tensor to have 3 dimensions (excluding batch), got {}",
                 policy_shape_without_batch.len()
             );
         }
 
         Ok(Self {
-            input_elements_per_item: product_without_batch(&board_shape),
-            value_elements_per_item: product_without_batch(&value_shape),
-            policy_elements_per_item: product_without_batch(&policy_shape),
+            input_elements_per_item: product_without_batch(&board_shape)?,
+            value_elements_per_item: product_without_batch(&value_shape)?,
+            policy_elements_per_item: product_without_batch(&policy_shape)?,
             policy_shape_without_batch,
         })
     }
@@ -59,7 +59,7 @@ fn ensure_float_tensor(
         )
     })?;
     if dtype != TENSORRT_FLOAT_DATATYPE {
-        panic!(
+        bail!(
             "Expected tensor {} to have float dtype, got {}",
             tensor_name.to_string_lossy(),
             dtype
@@ -68,36 +68,36 @@ fn ensure_float_tensor(
     Ok(())
 }
 
-fn product_without_batch(shape: &[i32]) -> usize {
+fn product_without_batch(shape: &[i32]) -> Result<usize> {
     if shape.is_empty() {
-        panic!("Tensor shape must include batch dimension");
+        bail!("Tensor shape must include batch dimension");
     }
     if shape[0] != -1 && shape[0] != 1 {
-        panic!("Tensor batch dimension must be dynamic (-1) or 1");
+        bail!("Tensor batch dimension must be dynamic (-1) or 1");
     }
     shape[1..]
         .iter()
         .map(|&d| {
             if d <= 0 {
-                panic!("Tensor dimensions must be positive");
+                bail!("Tensor dimensions must be positive");
             }
-            d as usize
+            Ok(d as usize)
         })
-        .product()
+        .try_fold(1usize, |acc, value| Ok(acc * value?))
 }
 
-fn shape_without_batch(shape: &[i32]) -> Vec<usize> {
+fn shape_without_batch(shape: &[i32]) -> Result<Vec<usize>> {
     if shape.is_empty() {
-        panic!("Tensor shape must include batch dimension");
+        bail!("Tensor shape must include batch dimension");
     }
     shape
         .iter()
         .skip(1)
         .map(|&d| {
             if d <= 0 {
-                panic!("Tensor dimensions must be positive");
+                bail!("Tensor dimensions must be positive");
             }
-            d as usize
+            Ok(d as usize)
         })
-        .collect()
+        .collect::<Result<Vec<_>>>()
 }

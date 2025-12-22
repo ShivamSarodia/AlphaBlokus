@@ -1,6 +1,7 @@
 use ahash::AHashMap as HashMap;
 use std::sync::Arc;
 
+use anyhow::{Context, Result};
 use rand::seq::SliceRandom;
 use tokio::task::JoinSet;
 
@@ -14,25 +15,33 @@ pub fn build_agent(
     agent_config: &'static AgentConfig,
     game_config: &'static GameConfig,
     inference_clients: &HashMap<String, Arc<DefaultClient>>,
-) -> Box<dyn Agent> {
-    match agent_config {
-        AgentConfig::MCTS(mcts_config) => Box::new(MCTSAgent::new(
-            mcts_config,
-            game_config,
-            Arc::clone(&inference_clients[&mcts_config.inference_config_name]),
-        )),
-        AgentConfig::PolicySampling(policy_sampling_config) => Box::new(PolicySamplingAgent::new(
-            policy_sampling_config,
-            game_config,
-            Arc::clone(&inference_clients[&policy_sampling_config.inference_config_name]),
-        )),
-        AgentConfig::Pentobi(pentobi_config) => {
-            Box::new(PentobiAgent::build(pentobi_config, game_config))
+) -> Result<Box<dyn Agent>> {
+    let agent: Box<dyn Agent> = match agent_config {
+        AgentConfig::MCTS(mcts_config) => {
+            let client = inference_clients
+                .get(&mcts_config.inference_config_name)
+                .context("Missing inference client for MCTS config")?;
+            Box::new(MCTSAgent::new(mcts_config, game_config, Arc::clone(client)))
         }
+        AgentConfig::PolicySampling(policy_sampling_config) => {
+            let client = inference_clients
+                .get(&policy_sampling_config.inference_config_name)
+                .context("Missing inference client for policy sampling config")?;
+            Box::new(PolicySamplingAgent::new(
+                policy_sampling_config,
+                game_config,
+                Arc::clone(client),
+            ))
+        }
+        AgentConfig::Pentobi(pentobi_config) => Box::new(
+            PentobiAgent::build(pentobi_config, game_config)
+                .with_context(|| "Failed to build Pentobi agent")?,
+        ),
         AgentConfig::Random(random_config) => {
             Box::new(RandomAgent::new(random_config, game_config))
         }
-    }
+    };
+    Ok(agent)
 }
 
 pub struct Engine {
@@ -73,37 +82,49 @@ impl Engine {
         if self.num_total_games > 0 && self.num_started_games >= self.num_total_games {
             return;
         }
+
         self.num_started_games += 1;
 
         join_set.spawn({
             metrics::counter!("games_started_total").increment(1);
             let game_config = self.game_config;
-            let (agent_vector, player_to_agent_index) = self.generate_agents();
+            let (agent_vector, player_to_agent_index) = match self.generate_agents() {
+                Ok(result) => result,
+                Err(err) => {
+                    tracing::error!("Failed to generate agents: {}", err);
+                    return;
+                }
+            };
 
             // The recorder itself is quite lightweight (just a MPSC channel), so it's fine to
             // clone here.
             let recorder = self.recorder.clone();
             async move {
-                play_one_game(game_config, agent_vector, player_to_agent_index, recorder).await;
+                if let Err(err) =
+                    play_one_game(game_config, agent_vector, player_to_agent_index, recorder).await
+                {
+                    tracing::error!("Game failed: {}", err);
+                }
             }
         });
     }
 
     /// Return a vector of agents and an array mapping each player to the index of its
     /// agent in the vector.
-    fn generate_agents(&self) -> (Vec<Box<dyn Agent>>, [usize; NUM_PLAYERS]) {
+    #[allow(clippy::type_complexity)]
+    fn generate_agents(&self) -> Result<(Vec<Box<dyn Agent>>, [usize; NUM_PLAYERS])> {
         match self.agent_group_config {
-            AgentGroupConfig::Single(agent_config) => (
-                vec![self.generate_single_agent(agent_config)],
+            AgentGroupConfig::Single(agent_config) => Ok((
+                vec![self.generate_single_agent(agent_config)?],
                 [0; NUM_PLAYERS],
-            ),
+            )),
             // TODO: Dry these two cases, which have much overlap.
             AgentGroupConfig::QuadArena(agent_configs) => {
                 // Create four agents from the four configs
                 let agents: Vec<Box<dyn Agent>> = agent_configs
                     .iter()
                     .map(|config| self.generate_single_agent(config))
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
 
                 // Create a randomized order mapping: [0, 1, 2, 3] shuffled
                 let mut order: [usize; NUM_PLAYERS] = [0, 1, 2, 3];
@@ -112,14 +133,14 @@ impl Engine {
                 // Map each player to the agent index in the randomized order
                 let player_to_agent_index: [usize; NUM_PLAYERS] = order;
 
-                (agents, player_to_agent_index)
+                Ok((agents, player_to_agent_index))
             }
             AgentGroupConfig::DuoArena(agent_configs) => {
                 // Create two agents from the two configs
                 let agents: Vec<Box<dyn Agent>> = agent_configs
                     .iter()
                     .map(|config| self.generate_single_agent(config))
-                    .collect();
+                    .collect::<Result<Vec<_>>>()?;
 
                 // Create a randomized order mapping: [0, 0, 1, 1] shuffled
                 let mut order: [usize; NUM_PLAYERS] = [0, 0, 1, 1];
@@ -128,12 +149,12 @@ impl Engine {
                 // Map each player to the agent index in the randomized order
                 let player_to_agent_index: [usize; NUM_PLAYERS] = order;
 
-                (agents, player_to_agent_index)
+                Ok((agents, player_to_agent_index))
             }
         }
     }
 
-    fn generate_single_agent(&self, agent_config: &'static AgentConfig) -> Box<dyn Agent> {
+    fn generate_single_agent(&self, agent_config: &'static AgentConfig) -> Result<Box<dyn Agent>> {
         build_agent(agent_config, self.game_config, &self.inference_clients)
     }
 
@@ -148,7 +169,9 @@ impl Engine {
             self.num_finished_games += 1;
 
             // Raise any error from the join_next.
-            result.unwrap();
+            if let Err(err) = result {
+                tracing::error!("Game task failed: {}", err);
+            }
 
             metrics::counter!("games_finished_total").increment(1);
             self.maybe_spawn_game_on_join_set(&mut join_set);
@@ -163,23 +186,23 @@ pub async fn play_one_game(
     mut agents: Vec<Box<dyn Agent>>,
     player_to_agent_index: [usize; NUM_PLAYERS],
     recorder: Recorder,
-) {
-    let mut state = State::new(game_config);
+) -> anyhow::Result<()> {
+    let mut state = State::new(game_config)?;
     loop {
         // Select the move for the current player using the playing agent.
         let playing_agent_index = player_to_agent_index[state.player()];
         let playing_agent = &mut agents[playing_agent_index];
-        let move_index = playing_agent.choose_move(&state).await;
+        let move_index = playing_agent.choose_move(&state).await?;
 
         // Report the selected move to the other agents to update their state.
         for (i, agent) in agents.iter_mut().enumerate() {
             if i == playing_agent_index {
                 continue;
             }
-            agent.report_move(&state, move_index).await;
+            agent.report_move(&state, move_index).await?;
         }
 
-        let game_state = state.apply_move(move_index);
+        let game_state = state.apply_move(move_index)?;
         metrics::counter!("moves_made_total").increment(1);
         if game_state == GameStatus::GameOver {
             break;
@@ -208,7 +231,7 @@ pub async fn play_one_game(
     }
 
     // Queue up the game data for recording.
-    recorder.push_mcts_data(mcts_data);
+    recorder.push_mcts_data(mcts_data)?;
 
     for player in 0..NUM_PLAYERS {
         // The counter doesn't support floating point values, so we increment
@@ -221,6 +244,7 @@ pub async fn play_one_game(
             .increment(1);
         }
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -239,7 +263,7 @@ mod tests {
         let expected_num_finished_games = 50;
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
-        let (recorder, _) = Recorder::build_and_start(1, directory);
+        let (recorder, _) = Recorder::build_and_start(1, directory).unwrap();
         let agent_group_config: &'static AgentGroupConfig = Box::leak(Box::new(
             AgentGroupConfig::Single(AgentConfig::Random(RandomConfig {
                 name: "test_random".to_string(),
@@ -274,7 +298,7 @@ mod tests {
             1,
             CancellationToken::new(),
         ));
-        let (recorder, _) = Recorder::build_and_start(1, directory.clone());
+        let (recorder, _) = Recorder::build_and_start(1, directory.clone()).unwrap();
         let agent_group_config = AgentGroupConfig::Single(AgentConfig::MCTS(MCTSConfig {
             name: "test_mcts_data".to_string(),
             fast_move_probability: 0.0,
@@ -343,6 +367,7 @@ mod tests {
             .initial_moves_enabled[0];
         let one_cell_move_index = game_config
             .move_profiles()
+            .unwrap()
             .iter()
             .find(|mp| mp.occupied_cells.count() == 1 && initial_moves_enabled.contains(mp.index))
             .unwrap()
@@ -367,7 +392,7 @@ mod tests {
     async fn test_infinite_games_when_num_total_games_is_zero() {
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
-        let (recorder, _) = Recorder::build_and_start(1, directory);
+        let (recorder, _) = Recorder::build_and_start(1, directory).unwrap();
 
         // Set num_total_games to 0 to enable infinite games
         let agent_group_config = Box::leak(Box::new(AgentGroupConfig::Single(

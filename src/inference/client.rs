@@ -14,6 +14,7 @@ use crate::{
     },
     s3::S3ModelDownloader,
 };
+use anyhow::{Context, Result};
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
@@ -31,7 +32,7 @@ pub struct Response {
 
 pub struct RequestChannelMessage {
     pub request: Request,
-    pub response_sender: oneshot::Sender<Response>,
+    pub response_sender: oneshot::Sender<Result<Response>>,
 }
 
 pub struct DefaultClient {
@@ -39,7 +40,10 @@ pub struct DefaultClient {
 }
 
 pub trait Client {
-    fn evaluate(&self, request: Request) -> impl std::future::Future<Output = Response> + Send;
+    fn evaluate(
+        &self,
+        request: Request,
+    ) -> impl std::future::Future<Output = Result<Response>> + Send;
 }
 
 /// DefaultClient is the only production implementation of the Client trait. We separate the
@@ -67,14 +71,15 @@ impl DefaultClient {
         inference_config: &InferenceConfig,
         game_config: &'static GameConfig,
         cancel_token: CancellationToken,
-    ) -> Self {
-        match &inference_config.reload {
+    ) -> Result<Self> {
+        let client = match &inference_config.reload {
             Some(reload_config) => {
                 Self::build_with_reload(inference_config, reload_config, game_config, cancel_token)
                     .await
             }
             None => Self::build_without_reload(inference_config, game_config, cancel_token).await,
-        }
+        }?;
+        Ok(client)
     }
 
     async fn build_with_reload(
@@ -82,7 +87,7 @@ impl DefaultClient {
         reload_config: &crate::config::ReloadConfig,
         game_config: &'static GameConfig,
         cancel_token: CancellationToken,
-    ) -> Self {
+    ) -> Result<Self> {
         let base_executor_config = inference_config.executor.clone();
         let poll_interval = Duration::from_secs(reload_config.poll_interval_seconds);
 
@@ -91,7 +96,7 @@ impl DefaultClient {
                 &inference_config.model_path,
                 reload_config.s3_cache_size,
             )
-            .await;
+            .await?;
             ReloadExecutor::build(model_source, poll_interval, move |path| {
                 build_executor(&base_executor_config, game_config, path)
             })
@@ -104,43 +109,51 @@ impl DefaultClient {
             .await
         };
 
-        Self::build_and_start(executor, inference_config.batch_size, cancel_token)
+        Ok(Self::build_and_start(
+            executor?,
+            inference_config.batch_size,
+            cancel_token,
+        ))
     }
 
     async fn build_without_reload(
         inference_config: &InferenceConfig,
         game_config: &'static GameConfig,
         cancel_token: CancellationToken,
-    ) -> Self {
+    ) -> Result<Self> {
         let model_path = if Self::is_s3_path(&inference_config.model_path) {
-            Self::download_model_from_s3(&inference_config.model_path).await
+            Self::download_model_from_s3(&inference_config.model_path).await?
         } else {
             PathBuf::from(&inference_config.model_path)
         };
 
-        let executor = build_executor(&inference_config.executor, game_config, &model_path);
-        Self::build_and_start(executor, inference_config.batch_size, cancel_token)
+        let executor = build_executor(&inference_config.executor, game_config, &model_path)?;
+        Ok(Self::build_and_start(
+            executor,
+            inference_config.batch_size,
+            cancel_token,
+        ))
     }
 
     fn is_s3_path(path: &str) -> bool {
         path.starts_with("s3://")
     }
 
-    async fn create_s3_model_source(s3_uri: &str, cache_size: usize) -> S3ModelSource {
+    async fn create_s3_model_source(s3_uri: &str, cache_size: usize) -> Result<S3ModelSource> {
         let downloader = S3ModelDownloader::new(s3_uri.to_string(), cache_size)
             .await
-            .expect("Failed to create S3ModelDownloader");
-        S3ModelSource::new(downloader)
+            .with_context(|| format!("Failed to create S3ModelDownloader for {}", s3_uri))?;
+        Ok(S3ModelSource::new(downloader))
     }
 
-    async fn download_model_from_s3(s3_uri: &str) -> std::path::PathBuf {
+    async fn download_model_from_s3(s3_uri: &str) -> Result<std::path::PathBuf> {
         let downloader = S3ModelDownloader::new(s3_uri.to_string(), 1)
             .await
-            .expect("Failed to create S3ModelDownloader");
+            .with_context(|| format!("Failed to create S3ModelDownloader for {}", s3_uri))?;
         downloader
             .sync_latest_model()
             .await
-            .expect("Failed to download model from S3")
+            .with_context(|| format!("Failed to download model from S3 {}", s3_uri))
     }
 }
 
@@ -148,9 +161,9 @@ fn build_executor(
     executor_config: &ExecutorConfig,
     game_config: &'static GameConfig,
     model_path: &Path,
-) -> Box<dyn Executor> {
-    match executor_config {
-        ExecutorConfig::Ort => Box::new(OrtExecutor::build(model_path, game_config).unwrap()),
+) -> Result<Box<dyn Executor>> {
+    let executor: Box<dyn Executor> = match executor_config {
+        ExecutorConfig::Ort => Box::new(OrtExecutor::build(model_path, game_config)?),
         ExecutorConfig::Random { sleep_duration_ms } => Box::new(RandomExecutor::build(
             Duration::from_millis(*sleep_duration_ms),
         )),
@@ -158,18 +171,22 @@ fn build_executor(
         ExecutorConfig::Tensorrt {
             max_batch_size,
             pool_size,
-        } => Box::new(
-            TensorRtExecutor::build(model_path, game_config, *max_batch_size, *pool_size).unwrap(),
-        ),
+        } => Box::new(TensorRtExecutor::build(
+            model_path,
+            game_config,
+            *max_batch_size,
+            *pool_size,
+        )?),
         #[cfg(not(cuda))]
         ExecutorConfig::Tensorrt { .. } => {
             panic!("TensorRT executor is only available when built with CUDA support.")
         }
-    }
+    };
+    Ok(executor)
 }
 
 impl Client for DefaultClient {
-    async fn evaluate(&self, request: Request) -> Response {
+    async fn evaluate(&self, request: Request) -> Result<Response> {
         // Generate a sender/receiver pair for the oneshot channel
         // used to pass back a response.
         let (response_sender, response_receiver) = oneshot::channel();
@@ -180,10 +197,12 @@ impl Client for DefaultClient {
                 request,
                 response_sender,
             })
-            .unwrap();
+            .context("Failed to send inference request")?;
 
         // Wait for a response on the generated channel.
-        response_receiver.await.unwrap()
+        response_receiver
+            .await
+            .context("Inference response channel closed")?
     }
 }
 
@@ -199,14 +218,14 @@ mod tests {
         pub game_config: &'static GameConfig,
     }
     impl Executor for MockExecutor {
-        fn execute(&self, requests: Vec<Request>) -> Vec<Response> {
+        fn execute(&self, requests: Vec<Request>) -> Result<Vec<Response>> {
             if requests.len() != 3 {
                 panic!(
                     "MockExecutor should only receive 3 requests, got {}",
                     requests.len()
                 );
             }
-            requests
+            let responses = requests
                 .into_iter()
                 .map(|request| Response {
                     value: [
@@ -217,7 +236,8 @@ mod tests {
                     ],
                     policy: vec![1.0; self.game_config.num_moves],
                 })
-                .collect()
+                .collect();
+            Ok(responses)
         }
     }
 
@@ -250,7 +270,7 @@ mod tests {
             let client = Arc::clone(&client);
             let request = requests[0].clone();
             async move {
-                let response = client.evaluate(request).await;
+                let response = client.evaluate(request).await.unwrap();
                 response
             }
         });
@@ -258,7 +278,7 @@ mod tests {
             let client = Arc::clone(&client);
             let request = requests[1].clone();
             async move {
-                let response = client.evaluate(request).await;
+                let response = client.evaluate(request).await.unwrap();
                 response
             }
         });
@@ -275,7 +295,7 @@ mod tests {
             let client = Arc::clone(&client);
             let request = requests[2].clone();
             async move {
-                let response = client.evaluate(request).await;
+                let response = client.evaluate(request).await.unwrap();
                 response
             }
         });
@@ -283,7 +303,7 @@ mod tests {
             let client = Arc::clone(&client);
             let request = requests[3].clone();
             async move {
-                let response = client.evaluate(request).await;
+                let response = client.evaluate(request).await.unwrap();
                 response
             }
         });

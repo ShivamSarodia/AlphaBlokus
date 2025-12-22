@@ -27,6 +27,7 @@ pub async fn post_move_index(
         .config
         .game
         .move_profiles()
+        .unwrap()
         .iter()
         .position(|profile| profile.occupied_cells == slice)
         .ok_or_else(|| ApiError::UnknownMove("No matching move found for provided cells".into()))?;

@@ -8,6 +8,7 @@ use crate::config::{GameConfig, PolicySamplingConfig};
 use crate::game::State;
 use crate::game::move_data::move_index_to_player_pov;
 use crate::inference;
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 
 pub struct PolicySamplingAgent<T: inference::Client + Send + Sync> {
@@ -38,14 +39,13 @@ impl<T: inference::Client + Send + Sync> Agent for PolicySamplingAgent<T> {
         &self.name
     }
 
-    async fn choose_move(&mut self, state: &State) -> usize {
+    async fn choose_move(&mut self, state: &State) -> Result<usize> {
         let player = state.player();
         let valid_moves: Vec<usize> = state.valid_moves().collect();
+        let move_profiles = self.game_config.move_profiles()?;
         let player_pov_move_indexes: Vec<usize> = valid_moves
             .iter()
-            .map(|&move_index| {
-                move_index_to_player_pov(move_index, player, self.game_config.move_profiles())
-            })
+            .map(|&move_index| move_index_to_player_pov(move_index, player, move_profiles))
             .collect();
 
         let inference_result = self
@@ -54,7 +54,7 @@ impl<T: inference::Client + Send + Sync> Agent for PolicySamplingAgent<T> {
                 board: state.board().clone_with_player_pov(player as i32),
                 valid_move_indexes: player_pov_move_indexes,
             })
-            .await;
+            .await?;
 
         let array_index = if self.temperature.abs() < f32::EPSILON {
             inference_result
@@ -63,7 +63,7 @@ impl<T: inference::Client + Send + Sync> Agent for PolicySamplingAgent<T> {
                 .enumerate()
                 .max_by(|a, b| a.1.total_cmp(b.1))
                 .map(|(idx, _)| idx)
-                .unwrap()
+                .ok_or_else(|| anyhow!("Policy sampling had no policy values"))?
         } else {
             let unnormalized_weights: Vec<f32> = inference_result
                 .policy
@@ -77,11 +77,15 @@ impl<T: inference::Client + Send + Sync> Agent for PolicySamplingAgent<T> {
                 .map(|x| x / normalization_factor)
                 .collect();
 
-            let dist = WeightedIndex::new(&weights).unwrap();
+            let dist = WeightedIndex::new(&weights)
+                .map_err(|err| anyhow!("Failed to create weighted index: {}", err))?;
             dist.sample(&mut rand::rng())
         };
 
-        valid_moves[array_index]
+        valid_moves
+            .get(array_index)
+            .copied()
+            .ok_or_else(|| anyhow!("Selected policy index out of bounds"))
     }
 }
 
@@ -99,13 +103,16 @@ mod tests {
     }
 
     impl inference::Client for MockInferenceClient {
-        async fn evaluate(&self, request: inference::Request) -> inference::Response {
+        async fn evaluate(
+            &self,
+            request: inference::Request,
+        ) -> anyhow::Result<inference::Response> {
             self.requests.lock().unwrap().push(request);
 
-            inference::Response {
+            Ok(inference::Response {
                 value: [0.0; 4],
                 policy: self.policy.clone(),
-            }
+            })
         }
     }
 
@@ -119,8 +126,8 @@ mod tests {
                 temperature: 0.0,
             }));
 
-        let mut state = State::new(game_config);
-        state.apply_move(state.first_valid_move().unwrap());
+        let mut state = State::new(game_config).unwrap();
+        state.apply_move(state.first_valid_move().unwrap()).unwrap();
 
         let valid_move_count = state.valid_moves().count();
         let preferred_index = 1;
@@ -138,7 +145,7 @@ mod tests {
             Arc::clone(&mock_client),
         );
 
-        let move_index = agent.choose_move(&state).await;
+        let move_index = agent.choose_move(&state).await.unwrap();
         assert!(state.is_valid_move(move_index));
 
         // With temperature 0, the agent should pick the move with highest probability.
@@ -150,7 +157,11 @@ mod tests {
         let expected_valid_moves: Vec<usize> = state
             .valid_moves()
             .map(|move_index| {
-                move_index_to_player_pov(move_index, state.player(), game_config.move_profiles())
+                move_index_to_player_pov(
+                    move_index,
+                    state.player(),
+                    game_config.move_profiles().unwrap(),
+                )
             })
             .collect();
         assert_eq!(request.valid_move_indexes, expected_valid_moves);
@@ -166,7 +177,7 @@ mod tests {
                 temperature: 1.5,
             }));
 
-        let state = State::new(game_config);
+        let state = State::new(game_config).unwrap();
         let valid_move_count = state.valid_moves().count();
         let mut policy = vec![1.0 / valid_move_count as f32; valid_move_count];
         policy[0] = 0.4;
@@ -185,7 +196,7 @@ mod tests {
         );
 
         for _ in 0..5 {
-            let move_index = agent.choose_move(&state).await;
+            let move_index = agent.choose_move(&state).await.unwrap();
             assert!(state.is_valid_move(move_index));
         }
     }

@@ -73,19 +73,27 @@ impl MemoryPool {
         })
     }
 
-    pub fn acquire(&self) -> MemoryBlockItem {
-        let mut available = self.inner.available.lock().unwrap();
+    pub fn acquire(&self) -> Result<MemoryBlockItem> {
+        let mut available = self
+            .inner
+            .available
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Failed to lock memory pool available"))?;
         loop {
             if let Some(index) = available.pop() {
                 let block = Arc::clone(&self.inner.blocks[index]);
-                return MemoryBlockItem {
+                return Ok(MemoryBlockItem {
                     pool: Arc::clone(&self.inner),
                     index,
                     block,
-                };
+                });
             }
             tracing::warn!("Memory block from pool was not immediately available");
-            available = self.inner.condvar.wait(available).unwrap();
+            available = self
+                .inner
+                .condvar
+                .wait(available)
+                .map_err(|err| anyhow::anyhow!("Memory pool condvar wait failed: {}", err))?;
         }
     }
 }
@@ -98,9 +106,15 @@ impl MemoryBlockItem {
 
 impl Drop for MemoryBlockItem {
     fn drop(&mut self) {
-        let mut available = self.pool.available.lock().unwrap();
-        available.push(self.index);
-        self.pool.condvar.notify_one();
+        match self.pool.available.lock() {
+            Ok(mut available) => {
+                available.push(self.index);
+                self.pool.condvar.notify_one();
+            }
+            Err(err) => {
+                tracing::error!("Failed to lock memory pool available: {}", err);
+            }
+        };
     }
 }
 
