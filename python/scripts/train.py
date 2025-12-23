@@ -216,6 +216,7 @@ def save_model_and_state(model, optimizer, samples_total: int):
         log(f"Saving model to: {onnx_path}")
         with from_localized(onnx_path) as onnx_path:
             model.save_onnx(onnx_path, training_config.device)
+            model.train()
     else:
         log("No model directory set, skipping model save.")
 
