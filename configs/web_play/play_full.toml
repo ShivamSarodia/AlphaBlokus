@@ -6,14 +6,14 @@ num_piece_orientations = 91
 move_data_file = "static/move_data/full.bin"
 
 [[inference]]
-name = "smart"
+name = "new"
 model_path = "s3://alpha-blokus/full/models/04213034.onnx"
 batch_size = 1
 executor = { type = "ort" }
 
 [[inference]]
-name = "dumb"
-model_path = "s3://alpha-blokus/full/models/02501775.onnx"
+name = "legacy"
+model_path = "/Users/shivamsarodia/Downloads/legacy.onnx"
 batch_size = 1
 executor = { type = "ort" }
 
@@ -24,7 +24,7 @@ from_largest = true
 
 [[agents]]
 type = "mcts"
-name = "mcts_smart"
+name = "mcts_new"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
@@ -35,12 +35,12 @@ ucb_exploration_factor = 1.05
 temperature_turn_cutoff = 0
 # Play with temperature 0 to select the best move always
 move_selection_temperature = 0.0
-inference_config_name = "smart"
+inference_config_name = "new"
 # trace_file = "/tmp/alphablokus_trace"
 
 [[agents]]
 type = "mcts"
-name = "mcts_dumb"
+name = "mcts_legacy"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
@@ -51,7 +51,8 @@ ucb_exploration_factor = 1.05
 temperature_turn_cutoff = 0
 # Play with temperature 0 to select the best move always
 move_selection_temperature = 0.0
-inference_config_name = "dumb"
+inference_config_name = "legacy"
+# trace_file = "/tmp/alphablokus_trace"
 
 [[agents]]
 type = "pentobi"
