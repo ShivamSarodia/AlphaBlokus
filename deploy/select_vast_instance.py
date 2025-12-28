@@ -216,7 +216,7 @@ print(f"\nCreated instance: {instance_id}. Waiting for ports...")
 while True:
     instance = get_instance(instance_id)
     if not instance.get("ports", {}).get("22/tcp"):
-        time.sleep(1)
+        time.sleep(10)
         continue
 
     ip_address = instance["public_ipaddr"]
