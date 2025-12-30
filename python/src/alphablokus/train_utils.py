@@ -333,9 +333,8 @@ def get_loss(
     # Calculate policy loss.
     pred_policy = pred_policy.view(pred_policy.shape[0], -1)
     expected_policy = expected_policy.view(expected_policy.shape[0], -1)
-    if training_config.ignore_invalid_moves:
-        valid_policy_mask = valid_policy_mask.view(valid_policy_mask.shape[0], -1)
-        pred_policy[~valid_policy_mask] = -1e6
+    valid_policy_mask = valid_policy_mask.view(valid_policy_mask.shape[0], -1)
+    pred_policy[~valid_policy_mask] = -1e6
 
     policy_loss = training_config.policy_loss_weight * nn.CrossEntropyLoss()(
         pred_policy, expected_policy
