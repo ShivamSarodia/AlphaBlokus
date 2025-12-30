@@ -18,6 +18,7 @@ policy_convolution_kernel = 3
 device = "mps"
 learning_rate = 1e-3
 policy_loss_weight = 0.158
+ignore_invalid_moves = true
 num_epochs = 1
 batch_size = 128
 shuffle_buffer_file_count = 2

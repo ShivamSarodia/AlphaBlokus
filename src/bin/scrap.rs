@@ -1,7 +1,7 @@
 use alpha_blokus::{
     config::{self, GameConfig},
-    game::{State, move_data::move_index_to_player_pov},
     inference::{Client, DefaultClient, Request},
+    recorder::read_mcts_data_from_disk,
     utils,
 };
 use anyhow::{Context, Result};
@@ -62,79 +62,25 @@ fn run(config: &'static ScrapConfig) -> Result<()> {
             .context("Failed to create inference client")?,
         );
 
-        let mut state = State::new(&config.game).unwrap();
+        let mcts_data_path = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full/games/2025-12-14_14-56-12-305253677-44479286_10006.bin";
+        let mcts_data = read_mcts_data_from_disk(mcts_data_path).context("Failed to read MCTS data from disk")?;
+        let first_mcts_data = &mcts_data[0];
 
-        // Apply a move that does NOT point towards player 1 start.
-        let valid_move_index = state.valid_moves().nth(1).unwrap();
-        println!("move index: {:?}", valid_move_index);
-        let profile = config.game.move_profiles().unwrap().get(valid_move_index);
-        println!(
-            "Piece orientation index: {:?}",
-            profile.piece_orientation_index
-        );
-        println!("Center: {:?}", profile.center);
-
-        state.apply_move(valid_move_index).unwrap();
-        let board = state.board().clone();
-
-        println!("Board after Player 0 move: {}", board);
-
-        let pov_board = board.clone_with_player_pov(1);
-
-        // This one points towards player 0 start
-        let mut state_2 = state.clone();
-        let valid_move_index_point_towards_player_0_start = state_2.valid_moves().next().unwrap();
-        state_2
-            .apply_move(valid_move_index_point_towards_player_0_start)
-            .unwrap();
-        println!(
-            "Board after Player 1 move index {}: {}",
-            valid_move_index_point_towards_player_0_start,
-            state_2.board()
-        );
-
-        // This one does NOT point towards player 0 start.
-        let mut state_3 = state.clone();
-        let valid_move_index_not_point_towards_player_0_start =
-            state_3.valid_moves().nth(1).unwrap();
-        state_3
-            .apply_move(valid_move_index_not_point_towards_player_0_start)
-            .unwrap();
-        println!(
-            "Board after Player 1 move index {}: {}",
-            valid_move_index_not_point_towards_player_0_start,
-            state_3.board()
-        );
-
-        let player_pov_valid_move_indexes = state
-            .valid_moves()
-            .map(|move_index| {
-                move_index_to_player_pov(
-                    move_index,
-                    state.player(),
-                    config.game.move_profiles().unwrap(),
-                )
-            })
-            .collect();
+        println!("Board sum: {}", first_mcts_data.board.slices().iter().map(|slice| slice.count()).sum::<usize>());
 
         let response = client
             .evaluate(Request {
-                board: pov_board,
-                valid_move_indexes: player_pov_valid_move_indexes,
+                board: first_mcts_data.board.clone(),
+                valid_move_indexes: first_mcts_data.valid_moves.clone(),
             })
             .await
             .unwrap();
         println!("Response: {:?}", response);
 
-        println!(
-            "Policy of move index {} towards player 0 start: {:?}",
-            valid_move_index_point_towards_player_0_start, response.policy[0],
-        );
-        println!(
-            "Policy of move index {} not towards player 0 start: {:?}",
-            valid_move_index_not_point_towards_player_0_start, response.policy[1],
-        );
-
+        response.policy.iter().enumerate().for_each(|(i, response_policy)| {
+            let children_visit_count = first_mcts_data.visit_counts[i];
+            println!("({}\t) {}\t{}", i, response_policy, children_visit_count);
+        });
         Ok(())
     })
 }

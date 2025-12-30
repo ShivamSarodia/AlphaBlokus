@@ -48,7 +48,6 @@ training_config = TrainingConfig(config_path)
 directories_config = DirectoriesConfig(config_path)
 
 
-SIMULATED = False
 METRICS_PORT = int(os.getenv("TRAINING_METRICS_PORT", "9101"))
 
 # Prometheus metrics for monitoring training progress.
@@ -129,7 +128,7 @@ def train_on_new_samples(
 
     # If we're loading one file at a time, then only load one additional file since
     # the samples_last_trained.
-    if SIMULATED:
+    if training_config.simulated:
         game_data_files = []
         num_samples_in_game_data_files = 0
         # Reverse the list here to load the oldest files first.
@@ -164,19 +163,40 @@ def train_on_new_samples(
 
     log(f"Number of new samples available since last trained: {new_samples}")
 
+    # Now, compute the window size and sampling ratio.
+
+    # If there's more samples than twice the configured window size, use the configured
+    # parameters.
+    if samples_total > training_config.window_size * 2:
+        window_size = training_config.window_size
+    else:
+        # Otherwise, use half the total samples, but at least 50,000 as the window size.
+        # This means the window is smaller while the gameplay is rapidly improving. Similarly,
+        # use a sampling ratio of 1.0 to avoid oversampling early on.
+        window_size = max(samples_total / 2, 50000)
+
+    # The sampling ratio should not exceed the ratio of total samples to window size, to avoid
+    # oversampling early on, but also not ever go less than 1.0.
+    sampling_ratio = max(
+        min(samples_total / window_size, training_config.sampling_ratio), 1.0
+    )
+
     # Compute the number of samples to train on.
-    num_samples = int(new_samples * training_config.sampling_ratio)
-    log(f"Number of samples to train on: {num_samples}")
+    num_samples = int(new_samples * sampling_ratio)
 
     if num_samples == 0:
         log("Number of samples to train on is 0, skipping training.")
         return poll_stats
+    else:
+        log(f"Number of samples to train on: {num_samples}")
+
+    log(f"Using window size: {window_size} and sampling ratio: {sampling_ratio}")
 
     # Fetch game files.
     local_game_data_files = maybe_download_files(
         game_data_files,
         num_samples,
-        training_config.window_size,
+        window_size,
     )
     if not local_game_data_files:
         log("No game data files found, skipping training.")
@@ -192,17 +212,20 @@ def train_on_new_samples(
     )
     train_loop(dataloader, model, optimizer, training_config)
 
-    if not SIMULATED:
+    if not training_config.simulated:
         log(f"Deleting {len(local_game_data_files)} game data files")
         for file_name in local_game_data_files:
-            os.remove(file_name)
+            if file_name not in game_data_files:
+                os.remove(file_name)
+            else:
+                log(f"Skipping deletion of {file_name} because it is a local file.")
 
     return poll_stats
 
 
 def save_model_and_state(model, optimizer, samples_total: int):
     """Saves the model and training state."""
-    if SIMULATED:
+    if training_config.simulated:
         time_suffix = f"_{time.time():.0f}"
     else:
         time_suffix = ""
@@ -246,7 +269,7 @@ def run():
         game_config,
         training_config,
         directories_config,
-        skip_loading_from_file=SIMULATED,
+        skip_loading_from_file=training_config.simulated,
     )
 
     # Initialize training state
@@ -296,7 +319,7 @@ def run():
 
         # If there were no new samples, sleep before polling again for any new data.
         if new_samples_trained == 0:
-            if SIMULATED:
+            if training_config.simulated:
                 break
 
             # Wait before polling again
@@ -305,7 +328,7 @@ def run():
             )
             time.sleep(training_config.poll_interval_seconds)
 
-    assert SIMULATED, "Should only end while loop in SIMULATED mode."
+    assert training_config.simulated, "Should only end while loop in simulated mode."
 
     save_model_and_state(model, optimizer, state.samples_last_trained)
 

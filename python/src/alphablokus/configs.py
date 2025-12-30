@@ -51,9 +51,11 @@ class TrainingConfig:
     learning_rate: float
     batch_size: int
     policy_loss_weight: float
+    ignore_invalid_moves: bool
     sampling_ratio: float
     window_size: int
     device: str
+    simulated: bool
     min_samples_for_save: int
     poll_interval_seconds: int
 
@@ -66,9 +68,11 @@ class TrainingConfig:
         self.learning_rate = training_data["learning_rate"]
         self.batch_size = training_data["batch_size"]
         self.policy_loss_weight = training_data["policy_loss_weight"]
+        self.ignore_invalid_moves = training_data["ignore_invalid_moves"]
         self.sampling_ratio = training_data["sampling_ratio"]
         self.window_size = training_data["window_size"]
         self.device = training_data["device"]
+        self.simulated = training_data["simulated"]
         self.min_samples_for_save = training_data.get("min_samples_for_save", 10000)
         self.poll_interval_seconds = training_data.get("poll_interval_seconds", 60)
 
@@ -97,6 +101,7 @@ class TrainingStandaloneConfig:
     device: str
     learning_rate: float
     policy_loss_weight: float
+    ignore_invalid_moves: bool
     num_epochs: int
     batch_size: int
     shuffle_buffer_file_count: int
@@ -117,6 +122,7 @@ class TrainingStandaloneConfig:
         self.device = standalone_data["device"]
         self.learning_rate = standalone_data["learning_rate"]
         self.policy_loss_weight = standalone_data["policy_loss_weight"]
+        self.ignore_invalid_moves = standalone_data["ignore_invalid_moves"]
         self.num_epochs = standalone_data["num_epochs"]
         self.batch_size = standalone_data["batch_size"]
         self.shuffle_buffer_file_count = standalone_data["shuffle_buffer_file_count"]

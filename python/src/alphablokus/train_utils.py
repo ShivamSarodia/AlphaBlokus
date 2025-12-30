@@ -151,10 +151,13 @@ def load_initial_state(
 def load_game_file(
     game_config: GameConfig,
     local_file_path: str,
-) -> tuple[List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]]:
+) -> tuple[
+    List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]
+]:
     boards = []
     values = []
     policies = []
+    valid_masks = []
     with zstandard.open(local_file_path, "rb") as f:
         game_data_list = f.read()
         game_data_list = msgpack.unpackb(game_data_list)
@@ -181,6 +184,15 @@ def load_game_file(
                 game_data["visit_counts"], dtype=torch.float32
             )
 
+            valid_mask = torch.zeros(
+                (
+                    game_config.num_piece_orientations,
+                    game_config.board_size,
+                    game_config.board_size,
+                ),
+                dtype=torch.bool,
+            )
+
             policy_target[
                 valid_move_tuples[:, 0],
                 valid_move_tuples[:, 1],
@@ -188,23 +200,36 @@ def load_game_file(
             ] = visit_counts
 
             policies.append(policy_target / policy_target.sum())
+            valid_mask[
+                valid_move_tuples[:, 0],
+                valid_move_tuples[:, 1],
+                valid_move_tuples[:, 2],
+            ] = True
+            valid_masks.append(valid_mask)
 
-    return boards, values, policies
+    return boards, values, policies, valid_masks
 
 
 def load_game_files_to_tensor(
     game_config: GameConfig,
     local_file_paths: List[str],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     boards = []
     values = []
     policies = []
+    valid_masks = []
     for file_path in local_file_paths:
-        board, value, policy = load_game_file(game_config, file_path)
+        board, value, policy, valid_mask = load_game_file(game_config, file_path)
         boards += board
         values += value
         policies += policy
-    return torch.stack(boards), torch.stack(values), torch.stack(policies)
+        valid_masks += valid_mask
+    return (
+        torch.stack(boards),
+        torch.stack(values),
+        torch.stack(policies),
+        torch.stack(valid_masks),
+    )
 
 
 def load_game_data(
@@ -219,22 +244,25 @@ def load_game_data(
     board_inputs = []
     value_targets = []
     policy_targets = []
+    valid_policy_masks = []
 
     for filename in local_file_paths:
         print(f"Loading game file: {filename}")
-        board, value, policy = load_game_file(game_config, filename)
+        board, value, policy, valid_mask = load_game_file(game_config, filename)
         print(f"Loaded game file: {filename}")
         board_inputs += board
         value_targets += value
         policy_targets += policy
+        valid_policy_masks += valid_mask
 
     board_inputs = torch.stack(board_inputs)
     value_targets = torch.stack(value_targets)
     policy_targets = torch.stack(policy_targets)
+    valid_policy_masks = torch.stack(valid_policy_masks)
 
     # Load the dataset and truncate to the number of samples requested.
     dataset = torch.utils.data.TensorDataset(
-        board_inputs, value_targets, policy_targets
+        board_inputs, value_targets, policy_targets, valid_policy_masks
     )
     dataset = torch.utils.data.random_split(
         dataset, [num_samples, len(dataset) - num_samples]
@@ -273,24 +301,30 @@ class IterableGameDataset(torch.utils.data.IterableDataset):
                 files_in_buffer.append(file_paths.pop())
 
             print(f"Loading files into buffer (worker id: {worker_info.id})")
-            boards, values, policies = load_game_files_to_tensor(
+            boards, values, policies, valid_masks = load_game_files_to_tensor(
                 self.game_config, files_in_buffer
             )
             print(f"Loaded files into buffer (worker id: {worker_info.id})")
 
             indices = random.sample(range(boards.shape[0]), boards.shape[0])
             for index in indices:
-                yield boards[index], values[index], policies[index]
+                yield (
+                    boards[index],
+                    values[index],
+                    policies[index],
+                    valid_masks[index],
+                )
 
 
 def get_loss(
     batch, training_config: TrainingConfig, model: nn.Module
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Forward pass
-    board, expected_value, expected_policy = batch
+    board, expected_value, expected_policy, valid_policy_mask = batch
     board = board.to(training_config.device)
     expected_value = expected_value.to(training_config.device)
     expected_policy = expected_policy.to(training_config.device)
+    valid_policy_mask = valid_policy_mask.to(training_config.device)
     pred_value, pred_policy = model(board)
 
     # Calculate value loss.
@@ -299,6 +333,10 @@ def get_loss(
     # Calculate policy loss.
     pred_policy = pred_policy.view(pred_policy.shape[0], -1)
     expected_policy = expected_policy.view(expected_policy.shape[0], -1)
+    if training_config.ignore_invalid_moves:
+        valid_policy_mask = valid_policy_mask.view(valid_policy_mask.shape[0], -1)
+        pred_policy[~valid_policy_mask] = -1e6
+
     policy_loss = training_config.policy_loss_weight * nn.CrossEntropyLoss()(
         pred_policy, expected_policy
     )
