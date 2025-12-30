@@ -23,11 +23,11 @@ policy_loss_weight = 0.158
 ignore_invalid_moves = true
 simulated = false
 sampling_ratio = 2.0
-window_size = 300000
-min_samples_for_save = 30000
+window_size = 200000
+min_samples_for_save = 20000
 poll_interval_seconds = 10
 
 [directories]
-game_data_directory = "s3://alpha-blokus/full/games/"
-model_directory = "s3://alpha-blokus/full/models/"
-training_directory = "s3://alpha-blokus/full/training/"
+game_data_directory = "s3://alpha-blokus/full_v2/games/"
+model_directory = "s3://alpha-blokus/full_v2/models/"
+training_directory = "s3://alpha-blokus/full_v2/training/"
