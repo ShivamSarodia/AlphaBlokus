@@ -14,7 +14,7 @@ class SaveOnnxMixin:
                 self.game_config.board_size,
             ).to(device),
         )
-        batch_size = Dim("batch_size")
+        batch_size = Dim("batch_size", max=1024)
         torch.onnx.export(
             self,
             dummy_input,
