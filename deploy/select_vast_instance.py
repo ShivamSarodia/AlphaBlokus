@@ -25,7 +25,7 @@ def search():
                 "dph_total": {"lte": 0.3},
                 "gpu_name": "RTX 3070",
                 "cpu_cores": {"gte": 8},
-                "cpu_ram": {"gte": 16},
+                "cpu_ram": {"gte": 22},
                 "cuda_max_good": {"gte": 12.0},
             }
         }
