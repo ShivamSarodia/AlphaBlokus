@@ -7,32 +7,35 @@ exclude_machines = {}
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 
 
-def search():
-    url = "https://console.vast.ai/api/v0/search/asks/"
+def search(instance_type, purpose):
+    assert instance_type in ["on-demand", "bid"]
+    assert purpose in ["training", "self-play"]
 
-    payload = json.dumps(
-        {
-            "q": {
-                "order": [["dph_total", "asc"]],
-                "verified": {"eq": True},
-                "rentable": {"eq": True},
-                "type": "on-demand",
-                "allocated_storage": "64",
-                "reliability2": {"gt": 0.995},
-                "inet_down": {"gt": 100},
-                "inet_up": {"gt": 100},
-                "duration": {"gte": 1},
-                "dph_total": {"lte": 0.3},
-                "gpu_name": "RTX 3070",
-                "cpu_cores": {"gte": 8},
-                "cpu_ram": {"gte": 22},
-                "cuda_max_good": {"gte": 12.0},
-            }
+    url = "https://console.vast.ai/api/v0/search/asks/"
+    payload = {
+        "q": {
+            "order": [["dph_total", "asc"]],
+            "verified": {"eq": True},
+            "rentable": {"eq": True},
+            "type": instance_type,
+            "allocated_storage": "64",
+            "reliability2": {"gt": 0.995},
+            "inet_down": {"gt": 100},
+            "inet_up": {"gt": 100},
+            "duration": {"gte": 1},
+            "dph_total": {"lte": 0.3},
+            "cpu_cores": {"gte": 8},
+            "cpu_ram": {"gte": 22},
+            "cuda_max_good": {"gte": 12.0},
         }
-    )
+    }
+
+    if purpose == "self-play":
+        payload["q"]["gpu_name"] = "RTX 3070"
+
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
-    response = requests.request("PUT", url, headers=headers, data=payload)
+    response = requests.request("PUT", url, headers=headers, data=json.dumps(payload))
     response.raise_for_status()
     offers = response.json()["offers"]
 
@@ -43,6 +46,8 @@ def search():
     offers.sort(key=lambda o: o["computed_cost"])
 
     offers = [o for o in offers if o["available_cpu_ghz"] >= 40]
+
+    print(offers[0])
 
     return offers
 
@@ -98,6 +103,10 @@ def print_table(offers):
             "extractor": lambda _, offer: str(round(offer["gpu_frac"], 2)),
         },
         {
+            "name": "GPU flops",
+            "extractor": lambda _, offer: str(round(offer["total_flops"])),
+        },
+        {
             "name": "Location",
             "extractor": lambda _, offer: offer["geolocation"],
         },
@@ -149,40 +158,41 @@ def select_instance(offers):
             return None
 
 
-def create_from_template(offer_id):
+def create_from_template(offer_id, min_bid=None):
     url = f"https://console.vast.ai/api/v0/asks/{offer_id}/"
-    payload = json.dumps(
-        {
-            # "template_id": 302220,
-            "template_hash_id": "9fb234bb5f8d095c3f8c23f026894b6a",
-            "image": "vastai/base-image:@vastai-automatic-tag",
-            "env": {
-                "-p 1111:1111": "1",
-                "-p 6006:6006": "1",
-                "-p 8080:8080": "1",
-                "-p 8384:8384": "1",
-                "-p 72299:72299": "1",
-                "-p 12345:12345": "1",
-                "OPEN_BUTTON_PORT": "1111",
-                "OPEN_BUTTON_TOKEN": "1",
-                "JUPYTER_DIR": "/",
-                "DATA_DIRECTORY": "/workspace/",
-                "PORTAL_CONFIG": "localhost:1111:11111:/:Instance Portal|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal|localhost:8384:18384:/:Syncthing|localhost:6006:16006:/:Tensorboard",
-            },
-            "args_str": "",
-            "onstart": "initial_dir=$(pwd); mkdir -p /workspace; cd /workspace; git clone https://github.com/ShivamSarodia/AlphaBlokus; cd $initial_dir; entrypoint.sh",
-            "runtype": "jupyter_direc ssh_direc ssh_proxy",
-            "use_jupyter_lab": False,
-            "disk": 64,
-        }
-    )
+    payload = {
+        # "template_id": 302220,
+        "template_hash_id": "9fb234bb5f8d095c3f8c23f026894b6a",
+        "image": "vastai/base-image:@vastai-automatic-tag",
+        "env": {
+            "-p 1111:1111": "1",
+            "-p 6006:6006": "1",
+            "-p 8080:8080": "1",
+            "-p 8384:8384": "1",
+            "-p 72299:72299": "1",
+            "-p 12345:12345": "1",
+            "OPEN_BUTTON_PORT": "1111",
+            "OPEN_BUTTON_TOKEN": "1",
+            "JUPYTER_DIR": "/",
+            "DATA_DIRECTORY": "/workspace/",
+            "PORTAL_CONFIG": "localhost:1111:11111:/:Instance Portal|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal|localhost:8384:18384:/:Syncthing|localhost:6006:16006:/:Tensorboard",
+        },
+        "args_str": "",
+        "onstart": "initial_dir=$(pwd); mkdir -p /workspace; cd /workspace; git clone https://github.com/ShivamSarodia/AlphaBlokus; cd $initial_dir; entrypoint.sh",
+        "runtype": "jupyter_direc ssh_direc ssh_proxy",
+        "use_jupyter_lab": False,
+        "disk": 64,
+    }
+    if min_bid is not None:
+        payload["price"] = min_bid * 1.1
+        payload["last_known_min_bid"] = min_bid
 
     headers = {
         "Authorization": f"Bearer {VASTAI_API_KEY}",
         "Accept": "application/json",
         "Content-Type": "application/json",
     }
-    response = requests.request("PUT", url, headers=headers, data=payload)
+    response = requests.request("PUT", url, headers=headers, data=json.dumps(payload))
     response.raise_for_status()
     return response.json()
 
@@ -202,13 +212,24 @@ def get_instance(instance_id):
     return response.json()["instances"]
 
 
-offers = search()
+instance_type = input("Select instance type (on-demand/bid): ").strip()
+assert instance_type in ["on-demand", "bid"]
+
+purpose = input("Select purpose (training/self-play): ").strip()
+assert purpose in ["training", "self-play"]
+
+offers = search(instance_type, purpose)
 selected = select_instance(offers[:8])
 if not selected:
     exit(1)
 
 print(f"\nSelected offer ID: {selected['id']}")
-created = create_from_template(selected["id"])
+if instance_type == "bid":
+    min_bid = selected["min_bid"]
+else:
+    min_bid = None
+
+created = create_from_template(selected["id"], min_bid)
 
 instance_id = created["new_contract"]
 print(f"\nCreated instance: {instance_id}. Waiting for ports...")
