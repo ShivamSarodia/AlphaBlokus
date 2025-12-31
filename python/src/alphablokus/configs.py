@@ -57,6 +57,7 @@ class TrainingConfig:
     simulated: bool
     min_samples_for_save: int
     poll_interval_seconds: int
+    output_name: str
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
@@ -73,6 +74,7 @@ class TrainingConfig:
         self.simulated = training_data["simulated"]
         self.min_samples_for_save = training_data.get("min_samples_for_save", 10000)
         self.poll_interval_seconds = training_data.get("poll_interval_seconds", 60)
+        self.output_name = training_data.get("output_name", "")
 
 
 @dataclass

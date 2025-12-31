@@ -6,16 +6,16 @@ num_piece_orientations = 91
 move_data_file = "static/move_data/full.bin"
 
 [network]
-model_class = "resnet_conv_value"
+model_class = "resnet"
 main_body_channels = 64
 residual_blocks = 10
-value_head_channels = 64
+value_head_channels = 16
 value_head_flat_layer_width = 64
 policy_head_channels = 64
 policy_convolution_kernel = 3
 
 [training]
-output_name = "conv_value"
+output_name = "standard"
 device = "mps"
 num_epochs = 1
 learning_rate = 1e-3

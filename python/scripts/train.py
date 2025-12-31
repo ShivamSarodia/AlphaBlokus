@@ -223,18 +223,21 @@ def train_on_new_samples(
     return poll_stats
 
 
-def save_model_and_state(model, optimizer, samples_total: int):
+def save_model_and_state(model, optimizer, samples_total: int, output_name: str):
     """Saves the model and training state."""
-    if training_config.simulated:
-        time_suffix = f"_{time.time():.0f}"
+
+    if output_name:
+        suffix = f"_{output_name}"
     else:
-        time_suffix = ""
+        suffix = ""
+
+    if training_config.simulated:
+        suffix += f"_{time.time():.0f}"
 
     # Save the model locally.
     if directories_config.model_directory.strip():
         onnx_path = (
-            directories_config.model_directory
-            + f"{samples_total:08d}{time_suffix}.onnx"
+            directories_config.model_directory + f"{samples_total:08d}{suffix}.onnx"
         )
         log(f"Saving model to: {onnx_path}")
         with from_localized(onnx_path) as onnx_path:
@@ -246,8 +249,7 @@ def save_model_and_state(model, optimizer, samples_total: int):
     # Save training state so we can resume training later.
     if directories_config.training_directory.strip():
         training_state_path = (
-            directories_config.training_directory
-            + f"{samples_total:08d}{time_suffix}.pth"
+            directories_config.training_directory + f"{samples_total:08d}{suffix}.pth"
         )
         log(f"Saving training state to: {training_state_path}")
         with from_localized(training_state_path) as training_state_path:
@@ -275,7 +277,7 @@ def run():
     # Initialize training state
     state = TrainingState(samples_last_trained=samples_last_trained)
 
-    start_metrics_server()
+    # start_metrics_server()
     SAMPLES_TRAINED_GAUGE.set(state.samples_last_trained)
     SAMPLES_SINCE_SAVE_GAUGE.set(state.samples_since_last_save)
 
@@ -307,7 +309,12 @@ def run():
             log(
                 f"\nAccumulated {state.samples_since_last_save} new samples since last save. Saving model..."
             )
-            save_model_and_state(model, optimizer, poll_stats.samples_total_available)
+            save_model_and_state(
+                model,
+                optimizer,
+                poll_stats.samples_total_available,
+                training_config.output_name,
+            )
             state.samples_since_last_save = 0
             log("Save complete!\n")
         else:
@@ -330,7 +337,12 @@ def run():
 
     assert training_config.simulated, "Should only end while loop in simulated mode."
 
-    save_model_and_state(model, optimizer, state.samples_last_trained)
+    save_model_and_state(
+        model,
+        optimizer,
+        state.samples_last_trained,
+        training_config.output_name,
+    )
 
 
 run()

@@ -14,6 +14,7 @@ from alphablokus.configs import (
 )
 from alphablokus.files import latest_file, localize_file, list_files
 from alphablokus.res_net import NeuralNet
+from alphablokus.res_net_conv_value import NeuralNet as ResNetConvValueNet
 from alphablokus.trivial_net import TrivialNet
 
 
@@ -25,6 +26,8 @@ def initialize_model(
         return TrivialNet(game_config)
     elif network_config.model_class == "resnet":
         return NeuralNet(network_config, game_config)
+    elif network_config.model_class == "resnet_conv_value":
+        return ResNetConvValueNet(network_config, game_config)
     else:
         raise ValueError(f"Invalid model class: {network_config.model_class}")
 
