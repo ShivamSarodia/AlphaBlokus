@@ -1,0 +1,45 @@
+num_concurrent_games = 64
+duration_seconds = 1200
+
+[observability.metrics]
+type = "prometheus"
+
+[observability.logging]
+type = "console"
+
+[mcts_recorder]
+type = "disabled"
+
+[[inference]]
+name = "default"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_conv_value_1767482124.onnx"
+batch_size = 16
+executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
+
+[[agents.DuoArena]]
+name = "1_pentobi_level_4"
+type = "pentobi"
+binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
+opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
+level = 4
+
+[[agents.DuoArena]]
+name = "1_mcts"
+type = "mcts"
+inference_config_name = "default"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
+default_exploitation_value = { type = "network_value" }
+
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"

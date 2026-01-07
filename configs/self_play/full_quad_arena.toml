@@ -11,64 +11,79 @@ type = "disabled"
 
 [[inference]]
 name = "mcts_1"
-model_path = "s3://alpha-blokus/full/models/01501053.onnx"
-batch_size = 128
-executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
+model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_conv_value_1767482124.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
 
 [[inference]]
 name = "mcts_2"
-model_path = "s3://alpha-blokus/full/models/03032222.onnx"
-batch_size = 128
-executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
+model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_conv_value_1767545968.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
 
 [[inference]]
 name = "mcts_3"
-model_path = "s3://alpha-blokus/full/models/04613343.onnx"
-batch_size = 128
-executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
+model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_standard_1767525434.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+
+[[inference]]
+name = "mcts_4"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_standard_1767627029.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
 
 [[agents.QuadArena]]
-name = "random"
-type = "random"
-
-[[agents.QuadArena]]
-name = "mcts_1"
 type = "mcts"
+name = "mcts_1"
 inference_config_name = "mcts_1"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
-root_dirichlet_noise_fraction = 0
+root_dirichlet_noise_fraction = 0.0
 ucb_exploration_factor = 1.05
-temperature_turn_cutoff = 100
-move_selection_temperature = 0.3
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
 
 [[agents.QuadArena]]
-name = "mcts_2"
 type = "mcts"
+name = "mcts_2"
 inference_config_name = "mcts_2"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
-root_dirichlet_noise_fraction = 0
+root_dirichlet_noise_fraction = 0.0
 ucb_exploration_factor = 1.05
-temperature_turn_cutoff = 100
-move_selection_temperature = 0.3
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
 
 [[agents.QuadArena]]
-name = "mcts_3"
 type = "mcts"
+name = "mcts_3"
 inference_config_name = "mcts_3"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
 total_dirichlet_noise_alpha = 10.83
-root_dirichlet_noise_fraction = 0
+root_dirichlet_noise_fraction = 0.0
 ucb_exploration_factor = 1.05
-temperature_turn_cutoff = 100
-move_selection_temperature = 0.3
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
+
+[[agents.QuadArena]]
+type = "mcts"
+name = "mcts_4"
+inference_config_name = "mcts_4"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
 
 [game]
 board_size = 20

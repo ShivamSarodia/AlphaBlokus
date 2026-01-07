@@ -12,19 +12,19 @@ type = "disabled"
 
 [[inference]]
 name = "default"
-model_path = "s3://alpha-blokus/full/models_simulated/04413189_1766157580.onnx"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_standard_1767525434.onnx"
 batch_size = 16
 executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
 
 [[agents.DuoArena]]
-name = "v3_pentobi_level_1"
+name = "3_pentobi_level_4"
 type = "pentobi"
 binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
 opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
-level = 1
+level = 4
 
 [[agents.DuoArena]]
-name = "v3_mcts"
+name = "3_mcts"
 type = "mcts"
 inference_config_name = "default"
 fast_move_probability = 0.0
