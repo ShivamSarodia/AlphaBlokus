@@ -5,4 +5,7 @@ cargo run --release --bin self-play -- --config  configs/self_play/benchmark_aga
 
 
 
-      
+cargo run --release --bin self-play -- --config  configs/self_play/new_v_pentobi.toml
+cargo run --release --bin self-play -- --config  configs/self_play/full_mcts_vast.toml
+
+alloy run --server.http.listen-addr=0.0.0.0:12345 deploy/config.alloy --storage.path /workspace/data-alloy

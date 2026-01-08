@@ -15,6 +15,9 @@ from alphablokus.configs import (
 from alphablokus.files import latest_file, localize_file, list_files
 from alphablokus.res_net import NeuralNet
 from alphablokus.res_net_conv_value import NeuralNet as ResNetConvValueNet
+from alphablokus.res_net_conv_value_position import (
+    NeuralNet as ResNetConvValueNetPosition,
+)
 from alphablokus.trivial_net import TrivialNet
 
 
@@ -28,6 +31,8 @@ def initialize_model(
         return NeuralNet(network_config, game_config)
     elif network_config.model_class == "resnet_conv_value":
         return ResNetConvValueNet(network_config, game_config)
+    elif network_config.model_class == "resnet_conv_value_position":
+        return ResNetConvValueNetPosition(network_config, game_config)
     else:
         raise ValueError(f"Invalid model class: {network_config.model_class}")
 
@@ -202,7 +207,11 @@ def load_game_file(
                 valid_move_tuples[:, 2],
             ] = visit_counts
 
-            policies.append(policy_target / policy_target.sum())
+            policy_sum = policy_target.sum().item()
+            assert policy_sum > 0.0, (
+                f"Policy target sum is 0 in file: {local_file_path}"
+            )
+            policies.append(policy_target / policy_sum)
             valid_mask[
                 valid_move_tuples[:, 0],
                 valid_move_tuples[:, 1],
@@ -346,6 +355,10 @@ def get_loss(
     return value_loss + policy_loss, value_loss, policy_loss
 
 
+class TrainingError(Exception):
+    pass
+
+
 def train_loop(
     dataloader: torch.utils.data.DataLoader,
     model: nn.Module,
@@ -358,6 +371,9 @@ def train_loop(
 
         for batch in dataloader:
             loss, value_loss, policy_loss = get_loss(batch, training_config, model)
+
+            if loss.isnan().any():
+                raise TrainingError("Loss is NaN")
 
             optimizer.zero_grad()
             loss.backward()
