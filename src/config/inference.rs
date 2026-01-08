@@ -13,7 +13,9 @@ pub struct InferenceConfig {
 #[derive(Deserialize, Debug, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExecutorConfig {
-    Ort,
+    Ort {
+        execution_provider: OrtExecutionProvider,
+    },
     Random {
         sleep_duration_ms: u64,
     },
@@ -28,6 +30,14 @@ pub struct ReloadConfig {
     pub poll_interval_seconds: u64,
     #[serde(default = "default_s3_cache_size")]
     pub s3_cache_size: usize,
+}
+
+#[derive(Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrtExecutionProvider {
+    Cpu,
+    #[serde(alias = "core_ml")]
+    Coreml,
 }
 
 fn default_s3_cache_size() -> usize {

@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use alpha_blokus::agents::MCTSAgent;
 use alpha_blokus::config::MCTSConfig;
-use alpha_blokus::config::{DefaultExploitationValue, GameConfig};
+use alpha_blokus::config::{DefaultExploitationValue, GameConfig, OrtExecutionProvider};
 use alpha_blokus::game::{GameStatus, State};
 use alpha_blokus::inference;
 use alpha_blokus::utils;
@@ -49,6 +49,7 @@ fn main() -> Result<()> {
             let executor = OrtExecutor::build(
                 Path::new("static/networks/trivial_net_half.onnx"),
                 game_config,
+                OrtExecutionProvider::Cpu,
             )?;
 
             let inference_client = Arc::new(inference::DefaultClient::build_and_start(

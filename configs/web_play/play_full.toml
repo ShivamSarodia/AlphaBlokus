@@ -9,13 +9,13 @@ move_data_file = "static/move_data/full.bin"
 name = "new"
 model_path = "s3://alpha-blokus/full/models/04213034.onnx"
 batch_size = 1
-executor = { type = "ort" }
+executor = { type = "ort", execution_provider = "cpu" }
 
 [[inference]]
 name = "legacy"
 model_path = "/Users/shivamsarodia/Downloads/legacy.onnx"
 batch_size = 1
-executor = { type = "ort" }
+executor = { type = "ort", execution_provider = "cpu" }
 
 [[agents]]
 type = "random"

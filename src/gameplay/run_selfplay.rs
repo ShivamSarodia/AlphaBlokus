@@ -119,7 +119,9 @@ mod tests {
                 name: "default".to_string(),
                 batch_size: 2,
                 model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
-                executor: ExecutorConfig::Ort,
+                executor: ExecutorConfig::Ort {
+                    execution_provider: crate::config::OrtExecutionProvider::Cpu,
+                },
                 reload: None,
             }],
             num_concurrent_games: 10,
@@ -157,7 +159,9 @@ mod tests {
                 name: "default".to_string(),
                 batch_size: 2,
                 model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
-                executor: ExecutorConfig::Ort,
+                executor: ExecutorConfig::Ort {
+                    execution_provider: crate::config::OrtExecutionProvider::Cpu,
+                },
                 reload: None,
             }],
             num_concurrent_games: 10,

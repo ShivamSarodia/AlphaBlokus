@@ -320,8 +320,12 @@ mod tests {
         let game_config = testing::create_game_config();
         let model_path = Path::new("static/networks/trivial_net_tiny.onnx");
 
-        let ort =
-            OrtExecutor::build(model_path, &game_config).expect("failed to build ORT executor");
+        let ort = OrtExecutor::build(
+            model_path,
+            &game_config,
+            crate::config::OrtExecutionProvider::Cpu,
+        )
+        .expect("failed to build ORT executor");
         let tensorrt = TensorRtExecutor::build(model_path, &game_config, 4, 4)
             .expect("failed to build TensorRT executor");
 

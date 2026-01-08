@@ -293,6 +293,7 @@ mod tests {
             OrtExecutor::build(
                 Path::new("static/networks/trivial_net_tiny.onnx"),
                 game_config,
+                crate::config::OrtExecutionProvider::Cpu,
             )
             .unwrap(),
             1,

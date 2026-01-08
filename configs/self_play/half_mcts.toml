@@ -9,7 +9,7 @@ flush_row_count = 50
 name = "default"
 model_path = "data/scrap/models/"
 batch_size = 32
-executor = { type = "ort" }
+executor = { type = "ort", execution_provider = "cpu" }
 reload = { poll_interval_seconds = 5 }
 
 [agents.Single]

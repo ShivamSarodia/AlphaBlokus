@@ -9,7 +9,7 @@ move_data_file = "static/move_data/half.bin"
 name = "default"
 model_path = "s3://alpha-blokus/half/models"
 batch_size = 1
-executor = { type = "ort" }
+executor = { type = "ort", execution_provider = "cpu" }
 
 [[agents]]
 type = "random"

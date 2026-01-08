@@ -12,4 +12,4 @@ move_data_file = "static/move_data/full.bin"
 name = "default"
 model_path = "static/networks/res_net_full.onnx"
 batch_size = 128
-executor = { type = "ort", execution_provider = "cpu" }
+executor = { type = "ort", execution_provider = "coreml" }

@@ -2,13 +2,14 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use ndarray::Axis;
+use ort::execution_providers::CoreMLExecutionProvider;
 use ort::session::{Session, builder::GraphOptimizationLevel};
 use ort::value::Tensor;
 
 use anyhow::{Context, Result};
 
 use crate::{
-    config::{GameConfig, NUM_PLAYERS},
+    config::{GameConfig, NUM_PLAYERS, OrtExecutionProvider},
     inference,
     inference::batcher::Executor,
     inference::softmax::softmax_inplace,
@@ -23,19 +24,28 @@ pub struct OrtExecutor {
 }
 
 impl OrtExecutor {
-    pub fn build(model_path: &Path, game_config: &'static GameConfig) -> Result<Self> {
+    pub fn build(
+        model_path: &Path,
+        game_config: &'static GameConfig,
+        execution_provider: OrtExecutionProvider,
+    ) -> Result<Self> {
         tracing::info!(
-            "Building ORT executor with model path: {}",
-            model_path.display()
+            "Building ORT executor with model path: {} (execution_provider={:?})",
+            model_path.display(),
+            execution_provider
         );
-        let session = Session::builder()
+        let mut builder = Session::builder()
             .context("Failed to create ORT session builder")?
             .with_optimization_level(GraphOptimizationLevel::Level3)
-            .context("Failed to set ORT optimization level")?
-            .commit_from_file(model_path)
-            .with_context(|| {
-                format!("Failed to commit ORT session from {}", model_path.display())
-            })?;
+            .context("Failed to set ORT optimization level")?;
+        if execution_provider == OrtExecutionProvider::Coreml {
+            builder = builder
+                .with_execution_providers([CoreMLExecutionProvider::default().build()])
+                .context("Failed to register CoreML execution provider")?;
+        }
+        let session = builder.commit_from_file(model_path).with_context(|| {
+            format!("Failed to commit ORT session from {}", model_path.display())
+        })?;
 
         Ok(Self {
             session: Arc::new(Mutex::new(session)),
@@ -125,6 +135,7 @@ impl Executor for OrtExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::OrtExecutionProvider;
     use crate::game::Board;
     use crate::testing;
     use std::path::Path;
@@ -134,6 +145,7 @@ mod tests {
         let executor = OrtExecutor::build(
             Path::new("static/networks/trivial_net_tiny.onnx"),
             testing::create_game_config(),
+            OrtExecutionProvider::Cpu,
         )
         .unwrap();
 

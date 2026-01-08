@@ -9,7 +9,7 @@ flush_row_count = 10
 name = "default"
 model_path = "static/networks/trivial_net_tiny.onnx"
 batch_size = 2
-executor = { type = "ort" }
+executor = { type = "ort", execution_provider = "cpu" }
 
 [agents]
 Single = { type = "random" }

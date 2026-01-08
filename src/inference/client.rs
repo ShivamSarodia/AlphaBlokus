@@ -163,7 +163,11 @@ fn build_executor(
     model_path: &Path,
 ) -> Result<Box<dyn Executor>> {
     let executor: Box<dyn Executor> = match executor_config {
-        ExecutorConfig::Ort => Box::new(OrtExecutor::build(model_path, game_config)?),
+        ExecutorConfig::Ort { execution_provider } => Box::new(OrtExecutor::build(
+            model_path,
+            game_config,
+            *execution_provider,
+        )?),
         ExecutorConfig::Random { sleep_duration_ms } => Box::new(RandomExecutor::build(
             Duration::from_millis(*sleep_duration_ms),
         )),
