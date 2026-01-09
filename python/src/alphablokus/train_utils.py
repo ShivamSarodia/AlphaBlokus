@@ -22,10 +22,10 @@ from alphablokus.files import (
     list_files,
 )
 from alphablokus.res_net import NeuralNet
-from alphablokus.res_net_conv_value import NeuralNet as ResNetConvValueNet
-from alphablokus.res_net_conv_value_position import (
-    NeuralNet as ResNetConvValueNetPosition,
-)
+from alphablokus.res_net_bottleneck import NeuralNet as ResNetBottleneckNet
+from alphablokus.res_net_se import NeuralNet as ResNetSENet
+from alphablokus.res_net_global_pool import NeuralNet as ResNetGlobalPoolNet
+from alphablokus.res_net_preact import NeuralNet as ResNetPreactNet
 from alphablokus.trivial_net import TrivialNet
 
 
@@ -37,10 +37,14 @@ def initialize_model(
         return TrivialNet(game_config)
     elif network_config.model_class == "resnet":
         return NeuralNet(network_config, game_config)
-    elif network_config.model_class == "resnet_conv_value":
-        return ResNetConvValueNet(network_config, game_config)
-    elif network_config.model_class == "resnet_conv_value_position":
-        return ResNetConvValueNetPosition(network_config, game_config)
+    elif network_config.model_class == "resnet_bottleneck":
+        return ResNetBottleneckNet(network_config, game_config)
+    elif network_config.model_class == "resnet_se":
+        return ResNetSENet(network_config, game_config)
+    elif network_config.model_class == "resnet_global_pool":
+        return ResNetGlobalPoolNet(network_config, game_config)
+    elif network_config.model_class == "resnet_preact":
+        return ResNetPreactNet(network_config, game_config)
     else:
         raise ValueError(f"Invalid model class: {network_config.model_class}")
 

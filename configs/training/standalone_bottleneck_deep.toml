@@ -6,16 +6,16 @@ num_piece_orientations = 91
 move_data_file = "static/move_data/full.bin"
 
 [network]
-model_class = "resnet_conv_value"
+model_class = "resnet_bottleneck"
 main_body_channels = 64
-residual_blocks = 10
+residual_blocks = 19
 value_head_channels = 64
 value_head_flat_layer_width = 64
 policy_head_channels = 64
 policy_convolution_kernel = 3
 
 [training_standalone]
-output_name = "conv_value"
+output_name = "resnet_bottleneck_deep"
 device = "mps"
 learning_rate = 1e-3
 policy_loss_weight = 0.158

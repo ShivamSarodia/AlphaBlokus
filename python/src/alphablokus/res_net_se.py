@@ -6,6 +6,22 @@ from alphablokus.configs import GameConfig, NetworkConfig
 from alphablokus.save_onnx import SaveOnnxMixin
 
 
+class SEBlock(nn.Module):
+    def __init__(self, channels: int, reduction: int = 16):
+        super().__init__()
+        reduced = max(1, channels // reduction)
+        self.layers = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(channels, reduced, kernel_size=1),
+            nn.ReLU(),
+            nn.Conv2d(reduced, channels, kernel_size=1),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return x * self.layers(x)
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, net_config: NetworkConfig):
         super().__init__()
@@ -31,9 +47,10 @@ class ResidualBlock(nn.Module):
             ),
             nn.BatchNorm2d(net_config.main_body_channels),
         )
+        self.se_block = SEBlock(net_config.main_body_channels)
 
     def forward(self, x):
-        return F.relu(x + self.convolutional_block(x))
+        return F.relu(x + self.se_block(self.convolutional_block(x)))
 
 
 class ValueHead(nn.Module):
@@ -148,9 +165,7 @@ if __name__ == "__main__":
     from alphablokus.files import from_localized
 
     config_path = "configs/training/full_vast_simulated_position.toml"
-    output_path = (
-        "s3://alpha-blokus/full_v2/models_untrained/res_net_conv_value_position.onnx"
-    )
+    output_path = "s3://alpha-blokus/full_v2/models_untrained/res_net_conv_value_position_se.onnx"
     device = "cpu"
 
     model = NeuralNet(NetworkConfig(config_path), GameConfig(config_path))
