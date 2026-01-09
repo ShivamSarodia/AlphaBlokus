@@ -111,6 +111,10 @@ class TrainingStandaloneConfig:
     remote_test_data_dir: str
     local_game_mirror: str
     aim_repo_path: str
+    max_train_files: int
+    model_directory: str
+    training_directory: str
+    output_name: str
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
@@ -124,10 +128,14 @@ class TrainingStandaloneConfig:
         self.num_epochs = standalone_data["num_epochs"]
         self.batch_size = standalone_data["batch_size"]
         self.shuffle_buffer_file_count = standalone_data["shuffle_buffer_file_count"]
-        self.train_batches_per_test = standalone_data["train_batches_per_test"]
+        self.train_batches_per_test = standalone_data.get("train_batches_per_test", 0)
         self.num_workers = standalone_data["num_workers"]
         self.prefetch_factor = standalone_data["prefetch_factor"]
         self.remote_train_data_dir = standalone_data["remote_train_data_dir"]
-        self.remote_test_data_dir = standalone_data["remote_test_data_dir"]
+        self.remote_test_data_dir = standalone_data.get("remote_test_data_dir", "")
         self.local_game_mirror = standalone_data["local_game_mirror"]
         self.aim_repo_path = standalone_data["aim_repo_path"]
+        self.max_train_files = standalone_data.get("max_train_files", 0)
+        self.model_directory = standalone_data["model_directory"]
+        self.training_directory = standalone_data["training_directory"]
+        self.output_name = standalone_data["output_name"]

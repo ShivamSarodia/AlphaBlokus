@@ -9,3 +9,16 @@ cargo run --release --bin self-play -- --config  configs/self_play/new_v_pentobi
 cargo run --release --bin self-play -- --config  configs/self_play/full_mcts_vast.toml
 
 alloy run --server.http.listen-addr=0.0.0.0:12345 deploy/config.alloy --storage.path /workspace/data-alloy
+
+python python/scripts/train_standalone.py configs/training/standalone_resnet.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value_position.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_resnet.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value_position.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_resnet.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value_position.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_resnet.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_conv_value_position.toml ;

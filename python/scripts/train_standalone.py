@@ -1,7 +1,8 @@
 import dataclasses
 import random
 import sys
-from typing import Iterable, List, Tuple
+from typing import List, Optional
+import time
 
 import aim
 import torch
@@ -14,7 +15,12 @@ from alphablokus.train_utils import (
     get_loss,
     initialize_model,
     localize_file,
+    save_model_and_state,
 )
+
+
+def log(message: str):
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
 
 
 def initialize_run(
@@ -25,7 +31,7 @@ def initialize_run(
     aim_run["network_config"] = dataclasses.asdict(network_config)
     aim_run["training_config"] = dataclasses.asdict(training_config)
     aim_run["name"] = "baseline"
-    print("Run hash: ", aim_run.hash)
+    log(f"Run hash: {aim_run.hash}")
     return aim_run
 
 
@@ -44,7 +50,7 @@ def test_model(
             test_batch, training_config, model
         )
 
-    print(
+    log(
         f"Step {total_samples_trained}: Test batch loss: {test_loss.item()}. (Value loss: {test_value_loss.item()}, Policy loss: {test_policy_loss.item()})"
     )
 
@@ -94,21 +100,18 @@ def train_model(
     game_config: GameConfig,
     training_config: TrainingStandaloneConfig,
     train_files: List[str],
-    test_files: List[str],
+    test_files: Optional[List[str]],
     aim_run,
 ):
     """Train for a fixed number of epochs with periodic evaluation."""
     total_samples_trained = 0
     num_epochs = training_config.num_epochs
 
-    def get_test_iterator():
-        random.shuffle(test_files)
-        return iter(build_dataloader(game_config, test_files, training_config))
-
-    test_iterator = get_test_iterator()
+    should_test = bool(test_files) and training_config.train_batches_per_test > 0
+    test_iterator = None
 
     for epoch in range(num_epochs):
-        print(f"Starting epoch {epoch + 1} of {num_epochs}")
+        log(f"Starting epoch {epoch + 1} of {num_epochs}")
 
         random.shuffle(train_files)
 
@@ -118,9 +121,11 @@ def train_model(
         for batch in train_dataloader:
             batch_size = batch[0].shape[0]
             total_samples_trained += batch_size
-            train_batches_since_last_test += 1
 
             loss, value_loss, policy_loss = get_loss(batch, training_config, model)
+
+            if loss.isnan().any():
+                raise Exception("Loss is NaN")
 
             optimizer.zero_grad()
             loss.backward()
@@ -132,9 +137,10 @@ def train_model(
                 average_value_loss = value_loss.item()
                 average_policy_loss = policy_loss.item()
 
-                print(
-                    f"Step: {total_samples_trained}. Train loss: {average_loss}. Value loss: {average_value_loss}. Policy loss: {average_policy_loss}."
-                )
+                if total_samples_trained % 200000 <= batch_size:
+                    log(
+                        f"Step: {total_samples_trained}. Train loss: {average_loss}. Value loss: {average_value_loss}. Policy loss: {average_policy_loss}."
+                    )
 
                 aim_run.track(
                     average_loss,
@@ -155,20 +161,45 @@ def train_model(
                     context={"subset": "train"},
                 )
 
-            if train_batches_since_last_test >= training_config.train_batches_per_test:
-                train_batches_since_last_test = 0
-                try:
-                    test_batch = next(test_iterator)
-                except StopIteration:
-                    test_iterator = get_test_iterator()
-                    test_batch = next(test_iterator)
-                test_model(
-                    model,
-                    training_config,
-                    test_batch,
-                    aim_run,
-                    total_samples_trained,
-                )
+            if should_test:
+                train_batches_since_last_test += 1
+                if (
+                    train_batches_since_last_test
+                    >= training_config.train_batches_per_test
+                ):
+                    train_batches_since_last_test = 0
+                    if test_iterator is None:
+                        random.shuffle(test_files)
+                        test_iterator = iter(
+                            build_dataloader(game_config, test_files, training_config)
+                        )
+                    test_batch = next(test_iterator, None)
+                    if test_batch is None:
+                        random.shuffle(test_files)
+                        test_iterator = iter(
+                            build_dataloader(game_config, test_files, training_config)
+                        )
+                        test_batch = next(test_iterator, None)
+                    if test_batch is None:
+                        continue
+                    test_model(
+                        model,
+                        training_config,
+                        test_batch,
+                        aim_run,
+                        total_samples_trained,
+                    )
+
+    save_model_and_state(
+        model,
+        optimizer,
+        "standalone",
+        training_config.output_name,
+        training_config.model_directory,
+        training_config.training_directory,
+        training_config.device,
+        add_timestamp=True,
+    )
 
 
 def load_configs(config_path: str):
@@ -184,18 +215,30 @@ def main(config_path: str):
     game_config, network_config, training_config = load_configs(config_path)
 
     train_remote_files = list_files(training_config.remote_train_data_dir, ".bin")
+
+    # Grab the latest samples.
+    train_remote_files = sorted(train_remote_files, reverse=True)
+    if training_config.max_train_files > 0:
+        train_remote_files = train_remote_files[: training_config.max_train_files]
+    num_samples = sum(
+        parse_num_games_from_filename(filename) for filename in train_remote_files
+    )
+    log(f"Number of samples: {num_samples}")
+
     train_local_files = []
     for filename in tqdm(train_remote_files, desc="Localizing data"):
         train_local_files.append(
             localize_file(filename, training_config.local_game_mirror)
         )
 
-    test_remote_files = list_files(training_config.remote_test_data_dir, ".bin")
-    test_local_files = []
-    for filename in tqdm(test_remote_files, desc="Localizing data"):
-        test_local_files.append(
-            localize_file(filename, training_config.local_game_mirror)
-        )
+    test_local_files = None
+    if training_config.remote_test_data_dir:
+        test_remote_files = list_files(training_config.remote_test_data_dir, ".bin")
+        test_local_files = []
+        for filename in tqdm(test_remote_files, desc="Localizing test data"):
+            test_local_files.append(
+                localize_file(filename, training_config.local_game_mirror)
+            )
 
     aim_run = initialize_run(network_config, training_config)
 

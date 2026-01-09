@@ -1,10 +1,12 @@
-from typing import List, Tuple
+from typing import Callable, List, Tuple
+import os
 import random
 import zstandard
 import msgpack
 import torch
 import torch.nn as nn
 import math
+import time
 
 from alphablokus.configs import (
     DirectoriesConfig,
@@ -12,7 +14,13 @@ from alphablokus.configs import (
     NetworkConfig,
     TrainingConfig,
 )
-from alphablokus.files import latest_file, localize_file, list_files
+from alphablokus.files import (
+    from_localized,
+    is_s3,
+    latest_file,
+    localize_file,
+    list_files,
+)
 from alphablokus.res_net import NeuralNet
 from alphablokus.res_net_conv_value import NeuralNet as ResNetConvValueNet
 from alphablokus.res_net_conv_value_position import (
@@ -154,6 +162,67 @@ def load_initial_state(
                 state[k] = v.to(training_config.device)
 
     return model, optimizer, samples
+
+
+def _join_directory(directory: str, filename: str) -> str:
+    if directory.endswith("/"):
+        return f"{directory}{filename}"
+    return f"{directory}/{filename}"
+
+
+def _ensure_local_directory(directory: str) -> None:
+    if directory and not is_s3(directory):
+        os.makedirs(directory, exist_ok=True)
+
+
+def save_model_and_state(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    checkpoint_id: str,
+    output_name: str,
+    model_directory: str,
+    training_directory: str,
+    device: str,
+    add_timestamp: bool = False,
+    logger: Callable[[str], None] = print,
+) -> None:
+    """Saves the model and optimizer state to the configured directories."""
+    checkpoint_id = str(checkpoint_id)
+
+    if output_name:
+        suffix = f"_{output_name}"
+    else:
+        suffix = ""
+
+    if add_timestamp:
+        suffix += f"_{time.time():.0f}"
+
+    if model_directory.strip():
+        _ensure_local_directory(model_directory)
+        onnx_path = _join_directory(model_directory, f"{checkpoint_id}{suffix}.onnx")
+        logger(f"Saving model to: {onnx_path}")
+        with from_localized(onnx_path) as onnx_path:
+            model.save_onnx(onnx_path, device)
+            model.train()
+    else:
+        logger("No model directory set, skipping model save.")
+
+    if training_directory.strip():
+        _ensure_local_directory(training_directory)
+        training_state_path = _join_directory(
+            training_directory, f"{checkpoint_id}{suffix}.pth"
+        )
+        logger(f"Saving training state to: {training_state_path}")
+        with from_localized(training_state_path) as training_state_path:
+            torch.save(
+                {
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                },
+                training_state_path,
+            )
+    else:
+        logger("No training directory set, skipping training state save.")
 
 
 def load_game_file(
@@ -312,11 +381,11 @@ class IterableGameDataset(torch.utils.data.IterableDataset):
             while len(files_in_buffer) < self.shuffle_buffer_file_count and file_paths:
                 files_in_buffer.append(file_paths.pop())
 
-            print(f"Loading files into buffer (worker id: {worker_info.id})")
+            # print(f"Loading files into buffer (worker id: {worker_info.id})")
             boards, values, policies, valid_masks = load_game_files_to_tensor(
                 self.game_config, files_in_buffer
             )
-            print(f"Loaded files into buffer (worker id: {worker_info.id})")
+            # print(f"Loaded files into buffer (worker id: {worker_info.id})")
 
             indices = random.sample(range(boards.shape[0]), boards.shape[0])
             for index in indices:

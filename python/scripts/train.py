@@ -1,4 +1,3 @@
-import torch
 import time
 from dataclasses import dataclass
 import sys
@@ -15,9 +14,9 @@ from alphablokus.train_utils import (
     load_game_data,
     load_initial_state,
     list_game_data_files,
+    save_model_and_state,
     train_loop,
 )
-from alphablokus.files import from_localized
 from prometheus_client import Gauge, start_http_server
 
 
@@ -223,47 +222,6 @@ def train_on_new_samples(
     return poll_stats
 
 
-def save_model_and_state(model, optimizer, samples_total: int, output_name: str):
-    """Saves the model and training state."""
-
-    if output_name:
-        suffix = f"_{output_name}"
-    else:
-        suffix = ""
-
-    if training_config.simulated:
-        suffix += f"_{time.time():.0f}"
-
-    # Save the model locally.
-    if directories_config.model_directory.strip():
-        onnx_path = (
-            directories_config.model_directory + f"{samples_total:08d}{suffix}.onnx"
-        )
-        log(f"Saving model to: {onnx_path}")
-        with from_localized(onnx_path) as onnx_path:
-            model.save_onnx(onnx_path, training_config.device)
-            model.train()
-    else:
-        log("No model directory set, skipping model save.")
-
-    # Save training state so we can resume training later.
-    if directories_config.training_directory.strip():
-        training_state_path = (
-            directories_config.training_directory + f"{samples_total:08d}{suffix}.pth"
-        )
-        log(f"Saving training state to: {training_state_path}")
-        with from_localized(training_state_path) as training_state_path:
-            torch.save(
-                {
-                    "model": model.state_dict(),
-                    "optimizer": optimizer.state_dict(),
-                },
-                training_state_path,
-            )
-    else:
-        log("No training directory set, skipping training state save.")
-
-
 def run():
     # Load the initial state of the model and optimizer.
     model, optimizer, samples_last_trained = load_initial_state(
@@ -312,8 +270,13 @@ def run():
             save_model_and_state(
                 model,
                 optimizer,
-                poll_stats.samples_total_available,
+                f"{poll_stats.samples_total_available:08d}",
                 training_config.output_name,
+                directories_config.model_directory,
+                directories_config.training_directory,
+                training_config.device,
+                simulated=training_config.simulated,
+                logger=log,
             )
             state.samples_since_last_save = 0
             log("Save complete!\n")
@@ -340,8 +303,13 @@ def run():
     save_model_and_state(
         model,
         optimizer,
-        state.samples_last_trained,
+        f"{state.samples_last_trained:08d}",
         training_config.output_name,
+        directories_config.model_directory,
+        directories_config.training_directory,
+        training_config.device,
+        simulated=training_config.simulated,
+        logger=log,
     )
 
 
