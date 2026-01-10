@@ -23,6 +23,7 @@ from alphablokus.files import (
 )
 from alphablokus.res_net import NeuralNet
 from alphablokus.res_net_bottleneck import NeuralNet as ResNetBottleneckNet
+from alphablokus.res_net_bottleneck_double import NeuralNet as ResNetBottleneckDoubleNet
 from alphablokus.res_net_se import NeuralNet as ResNetSENet
 from alphablokus.res_net_global_pool import NeuralNet as ResNetGlobalPoolNet
 from alphablokus.res_net_preact import NeuralNet as ResNetPreactNet
@@ -39,6 +40,8 @@ def initialize_model(
         return NeuralNet(network_config, game_config)
     elif network_config.model_class == "resnet_bottleneck":
         return ResNetBottleneckNet(network_config, game_config)
+    elif network_config.model_class == "resnet_bottleneck_double":
+        return ResNetBottleneckDoubleNet(network_config, game_config)
     elif network_config.model_class == "resnet_se":
         return ResNetSENet(network_config, game_config)
     elif network_config.model_class == "resnet_global_pool":

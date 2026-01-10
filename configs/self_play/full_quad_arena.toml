@@ -10,33 +10,37 @@ type = "console"
 type = "disabled"
 
 [[inference]]
-name = "mcts_1"
-model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_conv_value_1767482124.onnx"
+name = "base"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/standalone_conv_value_position_1767949154.onnx"
 batch_size = 64
-executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+# executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+executor = { type = "ort", execution_provider = "coreml" }
 
 [[inference]]
-name = "mcts_2"
-model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_conv_value_1767545968.onnx"
+name = "deep"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/standalone_resnet_bottleneck_deep_1767965772.onnx"
 batch_size = 64
-executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+# executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+executor = { type = "ort", execution_provider = "coreml" }
 
 [[inference]]
-name = "mcts_3"
-model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_standard_1767525434.onnx"
+name = "fast"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/standalone_resnet_bottleneck_fast_1767969873.onnx"
 batch_size = 64
-executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+# executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+executor = { type = "ort", execution_provider = "coreml" }
 
 [[inference]]
-name = "mcts_4"
-model_path = "s3://alpha-blokus/full_v2/models_simulated/06081134_standard_1767627029.onnx"
+name = "wide"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/standalone_resnet_bottleneck_wide_1767963083.onnx"
 batch_size = 64
-executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+# executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+executor = { type = "ort", execution_provider = "coreml" }
 
 [[agents.QuadArena]]
 type = "mcts"
-name = "mcts_1"
-inference_config_name = "mcts_1"
+name = "2_base"
+inference_config_name = "base"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
@@ -48,8 +52,8 @@ move_selection_temperature = 1.0
 
 [[agents.QuadArena]]
 type = "mcts"
-name = "mcts_2"
-inference_config_name = "mcts_2"
+name = "2_deep"
+inference_config_name = "deep"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
@@ -61,8 +65,8 @@ move_selection_temperature = 1.0
 
 [[agents.QuadArena]]
 type = "mcts"
-name = "mcts_3"
-inference_config_name = "mcts_3"
+name = "2_fast"
+inference_config_name = "fast"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500
@@ -74,8 +78,8 @@ move_selection_temperature = 1.0
 
 [[agents.QuadArena]]
 type = "mcts"
-name = "mcts_4"
-inference_config_name = "mcts_4"
+name = "2_wide"
+inference_config_name = "wide"
 fast_move_probability = 0.0
 fast_move_num_rollouts = 500
 full_move_num_rollouts = 500

@@ -1,5 +1,5 @@
 num_concurrent_threads = 256
-duration_seconds = 30
+duration_seconds = 10
 
 [game]
 board_size = 20
@@ -10,6 +10,6 @@ move_data_file = "static/move_data/full.bin"
 
 [inference]
 name = "default"
-model_path = "static/networks/res_net_full.onnx"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/standalone_conv_value_position_1767949154.onnx"
 batch_size = 128
 executor = { type = "ort", execution_provider = "coreml" }

@@ -22,3 +22,14 @@ python python/scripts/train_standalone.py configs/training/standalone_conv_value
 python python/scripts/train_standalone.py configs/training/standalone_resnet.toml ; \
 python python/scripts/train_standalone.py configs/training/standalone_conv_value.toml ; \
 python python/scripts/train_standalone.py configs/training/standalone_conv_value_position.toml ;
+
+python python/scripts/train_standalone.py configs/training/standalone_resnet.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_deep.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_fast.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_wide.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_deep.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_fast.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_wide.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_deep.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_fast.toml ; \
+python python/scripts/train_standalone.py configs/training/standalone_bottleneck_wide.toml ;
