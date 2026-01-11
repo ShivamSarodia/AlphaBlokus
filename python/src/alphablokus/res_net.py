@@ -145,14 +145,140 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
 
 
 if __name__ == "__main__":
-    from alphablokus.files import from_localized
+    import modelopt.torch.quantization as mtq
 
-    config_path = "configs/training/full_vast_simulated_position.toml"
+    from alphablokus.configs import TrainingStandaloneConfig
+    import random
+
+    from alphablokus.files import from_localized, list_files, localize_file
+    from alphablokus.train_utils import load_game_files_to_tensor
+
+    config_path = "configs/training/standalone_resnet.toml"
+    checkpoint_path = "s3://alpha-blokus/full_v2/training_simulated/06081134_conv_value_position_1767797812.pth"
     output_path = (
-        "s3://alpha-blokus/full_v2/models_untrained/res_net_conv_value_position.onnx"
+        "s3://alpha-blokus/full_v2/models_untrained/res_net_cvp_auto_quantized.onnx"
     )
     device = "cpu"
 
-    model = NeuralNet(NetworkConfig(config_path), GameConfig(config_path))
+    model = NeuralNet(NetworkConfig(config_path), GameConfig(config_path)).to(device)
+    localized_checkpoint = localize_file(checkpoint_path)
+    checkpoint = torch.load(localized_checkpoint, map_location=device)
+    model.load_state_dict(checkpoint["model"])
+    training_config = TrainingStandaloneConfig(config_path)
+    training_config.device = device
+
+    train_remote_files = list_files(training_config.remote_train_data_dir, ".bin")
+    train_remote_files = sorted(train_remote_files, reverse=True)
+    calibration_remote_files = random.sample(train_remote_files, k=10)
+
+    calibration_local_files = [
+        localize_file(filename, training_config.local_game_mirror)
+        for filename in calibration_remote_files
+    ]
+    boards, values, policies, valid_masks = load_game_files_to_tensor(
+        model.game_config, calibration_local_files
+    )
+
+    num_samples = boards.shape[0]
+    indices = list(range(num_samples))
+    random.shuffle(indices)
+
+    calibration_batches = []
+    batch_size = training_config.batch_size
+    for start in range(0, num_samples, batch_size):
+        batch_indices = indices[start : start + batch_size]
+        if not batch_indices:
+            break
+        calibration_batches.append(
+            (
+                boards[batch_indices],
+                values[batch_indices],
+                policies[batch_indices],
+                valid_masks[batch_indices],
+            )
+        )
+        if len(calibration_batches) >= 100:
+            break
+
+    def forward_step(model, batch):
+        board, _, _, _ = batch
+        return model(board)
+
+    def loss_func(output, batch):
+        pred_value, pred_policy = output
+        _, expected_value, expected_policy, valid_policy_mask = batch
+        expected_value = expected_value.to(pred_value.device)
+        expected_policy = expected_policy.to(pred_policy.device)
+        valid_policy_mask = valid_policy_mask.to(pred_policy.device)
+
+        value_loss = nn.CrossEntropyLoss()(pred_value, expected_value)
+
+        pred_policy = pred_policy.view(pred_policy.shape[0], -1).clone()
+        expected_policy = expected_policy.view(expected_policy.shape[0], -1)
+        valid_policy_mask = valid_policy_mask.view(valid_policy_mask.shape[0], -1)
+        pred_policy = pred_policy.masked_fill(~valid_policy_mask, -1e6)
+
+        policy_loss = training_config.policy_loss_weight * nn.CrossEntropyLoss()(
+            pred_policy, expected_policy
+        )
+
+        return value_loss + policy_loss
+
+    int8_cfg = mtq.INT8_SMOOTHQUANT_CFG
+
+    model.eval()
+    quantized_model, _ = mtq.auto_quantize(
+        model,
+        constraints={"effective_bits": 8.0},
+        quantization_formats=[int8_cfg],
+        data_loader=calibration_batches,
+        forward_step=forward_step,
+        loss_func=loss_func,
+        num_calib_steps=len(calibration_batches),
+        num_score_steps=min(4, len(calibration_batches)),
+        method="gradient",
+    )
+
+    mtq.print_quant_summary(quantized_model)
+    from modelopt.torch.quantization.nn.modules.tensor_quantizer import TensorQuantizer
+
+    enabled_quantizers = []
+    disabled_quantizers = []
+    for name, module in quantized_model.named_modules():
+        if isinstance(module, TensorQuantizer):
+            if module.is_enabled:
+                enabled_quantizers.append(name)
+            else:
+                disabled_quantizers.append(name)
+
+    print("\nQuantizers enabled:")
+    for name in enabled_quantizers:
+        print(f"  + {name}")
+    print("\nQuantizers disabled:")
+    for name in disabled_quantizers:
+        print(f"  - {name}")
+
     with from_localized(output_path) as localized_output_path:
-        model.save_onnx(localized_output_path, device=device)
+        quantized_model.eval()
+        dummy_input = (
+            torch.randn(
+                1,
+                4,
+                model.game_config.board_size,
+                model.game_config.board_size,
+                device=device,
+            ),
+        )
+        torch.onnx.export(
+            quantized_model,
+            dummy_input,
+            localized_output_path,
+            dynamo=False,
+            input_names=["board"],
+            output_names=["value", "policy"],
+            dynamic_axes={
+                "board": {0: "batch_size"},
+                "value": {0: "batch_size"},
+                "policy": {0: "batch_size"},
+            },
+        )
