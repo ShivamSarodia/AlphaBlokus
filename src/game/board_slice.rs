@@ -5,7 +5,7 @@ use crate::game::display::{BoardDisplay, BoardDisplayColor, BoardDisplayLayer, B
 
 // Structure representing an board_size x board_size slice of a board, like
 // a single player's pieces on a board.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct BoardSlice {
     cells: Vec<bool>,
     size: usize,

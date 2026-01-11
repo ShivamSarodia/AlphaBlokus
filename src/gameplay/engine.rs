@@ -253,11 +253,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        config::MCTSConfig, config::RandomConfig, inference::OrtExecutor,
-        recorder::read_mcts_data_from_disk, testing,
+        config::MCTSConfig, config::RandomConfig, recorder::read_mcts_data_from_disk, testing,
     };
-    use std::path::Path;
-
     #[tokio::test]
     async fn test_play_games() {
         let expected_num_finished_games = 50;
@@ -289,16 +286,25 @@ mod tests {
 
         let game_config = testing::create_game_config();
         let directory = testing::create_tmp_directory();
-        let inference_client = Arc::new(DefaultClient::build_and_start(
-            OrtExecutor::build(
-                Path::new("static/networks/trivial_net_tiny.onnx"),
+        let inference_config = crate::config::InferenceConfig {
+            name: "default".to_string(),
+            batch_size: 1,
+            model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
+            executor: crate::config::ExecutorConfig::Ort {
+                execution_provider: crate::config::OrtExecutionProvider::Cpu,
+            },
+            reload: None,
+            cache: crate::config::InferenceCacheConfig::default(),
+        };
+        let inference_client = Arc::new(
+            DefaultClient::from_inference_config(
+                &inference_config,
                 game_config,
-                crate::config::OrtExecutionProvider::Cpu,
+                CancellationToken::new(),
             )
+            .await
             .unwrap(),
-            1,
-            CancellationToken::new(),
-        ));
+        );
         let (recorder, _) = Recorder::build_and_start(1, directory.clone()).unwrap();
         let agent_group_config = AgentGroupConfig::Single(AgentConfig::MCTS(MCTSConfig {
             name: "test_mcts_data".to_string(),

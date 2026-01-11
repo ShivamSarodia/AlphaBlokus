@@ -123,6 +123,7 @@ mod tests {
                     execution_provider: crate::config::OrtExecutionProvider::Cpu,
                 },
                 reload: None,
+                cache: Default::default(),
             }],
             num_concurrent_games: 10,
             num_total_games: 100,
@@ -163,6 +164,7 @@ mod tests {
                     execution_provider: crate::config::OrtExecutionProvider::Cpu,
                 },
                 reload: None,
+                cache: Default::default(),
             }],
             num_concurrent_games: 10,
             num_total_games: 0, // Infinite games - would run forever without duration limit

@@ -8,6 +8,22 @@ pub struct InferenceConfig {
     pub executor: ExecutorConfig,
     #[serde(default)]
     pub reload: Option<ReloadConfig>,
+    #[serde(default)]
+    pub cache: InferenceCacheConfig,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct InferenceCacheConfig {
+    #[serde(default = "default_cache_max_entries")]
+    pub max_entries: usize,
+}
+
+impl Default for InferenceCacheConfig {
+    fn default() -> Self {
+        Self {
+            max_entries: default_cache_max_entries(),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -42,4 +58,8 @@ pub enum OrtExecutionProvider {
 
 fn default_s3_cache_size() -> usize {
     3
+}
+
+fn default_cache_max_entries() -> usize {
+    0
 }

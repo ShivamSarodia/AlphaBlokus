@@ -7,6 +7,7 @@ use tokio::time::sleep;
 
 use crate::inference;
 use crate::inference::batcher::Executor;
+use crate::inference::client::ResponseCache;
 use crate::inference::model_source::ModelSource;
 use anyhow::{Context, Result};
 
@@ -24,7 +25,12 @@ impl<E> ReloadExecutor<E>
 where
     E: Executor,
 {
-    pub async fn build<F, M>(model_source: M, poll_interval: Duration, builder: F) -> Result<Self>
+    pub async fn build<F, M>(
+        model_source: M,
+        poll_interval: Duration,
+        builder: F,
+        cache: Option<ResponseCache>,
+    ) -> Result<Self>
     where
         F: Fn(&Path) -> Result<E> + Send + Sync + 'static,
         M: ModelSource + 'static,
@@ -51,6 +57,7 @@ where
             let current_model_path = Arc::clone(&current_model_path);
             let executor_builder = Arc::clone(&executor_builder);
             let model_source = Arc::clone(&model_source);
+            let cache = cache.clone();
 
             async move {
                 Self::reload_loop(
@@ -59,6 +66,7 @@ where
                     executor_builder,
                     executor,
                     current_model_path,
+                    cache,
                 )
                 .await;
             }
@@ -76,6 +84,7 @@ where
         builder: Arc<F>,
         executor: Arc<RwLock<E>>,
         current_model_path: Arc<RwLock<PathBuf>>,
+        cache: Option<ResponseCache>,
     ) where
         F: Fn(&Path) -> Result<E> + Send + Sync + 'static,
         M: ModelSource,
@@ -124,6 +133,10 @@ where
                 let mut guard = current_model_path.write().await;
                 *guard = latest_model;
             }
+            if let Some(cache) = &cache {
+                sleep(Duration::from_secs(1)).await;
+                cache.invalidate_all();
+            }
         }
     }
 
@@ -149,10 +162,13 @@ mod tests {
     use crate::game::Board;
     use crate::inference;
     use crate::inference::LocalModelSource;
+    use crate::inference::client::ResponseCache;
     use crate::testing;
+    use moka::policy::EvictionPolicy;
+    use moka::sync::Cache;
+    use nohash_hasher::BuildNoHashHasher;
     use std::fs;
     use std::path::Path;
-
     #[derive(Clone)]
     struct MockSubExecutor {
         id: usize,
@@ -188,14 +204,19 @@ mod tests {
 
         let model_source = LocalModelSource::new(&directory);
         let executor = Arc::new(
-            ReloadExecutor::build(model_source, Duration::from_millis(25), move |path| {
-                let file_name = path
-                    .file_stem()
-                    .and_then(|name| name.to_str())
-                    .ok_or_else(|| anyhow::anyhow!("Invalid model filename"))?;
-                let id = file_name.parse::<usize>().map_err(anyhow::Error::new)?;
-                Ok(MockSubExecutor { id })
-            })
+            ReloadExecutor::build(
+                model_source,
+                Duration::from_millis(25),
+                move |path| {
+                    let file_name = path
+                        .file_stem()
+                        .and_then(|name| name.to_str())
+                        .ok_or_else(|| anyhow::anyhow!("Invalid model filename"))?;
+                    let id = file_name.parse::<usize>().map_err(anyhow::Error::new)?;
+                    Ok(MockSubExecutor { id })
+                },
+                None,
+            )
             .await
             .unwrap(),
         );
@@ -227,5 +248,50 @@ mod tests {
         .unwrap()
         .unwrap();
         assert_eq!(updated_response[0].value[0], 2.0);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn reload_clears_cache() {
+        let directory = testing::create_tmp_directory();
+        let directory_path = Path::new(&directory);
+
+        let first_model_path = directory_path.join("1.onnx");
+        fs::write(&first_model_path, "first").unwrap();
+
+        let cache: ResponseCache = Cache::builder()
+            .max_capacity(10)
+            .eviction_policy(EvictionPolicy::lru())
+            .build_with_hasher(BuildNoHashHasher::default());
+        cache.insert(
+            1,
+            inference::Response {
+                value: [0.0; NUM_PLAYERS],
+                policy: vec![],
+            },
+        );
+
+        let model_source = LocalModelSource::new(&directory);
+        let _executor = ReloadExecutor::build(
+            model_source,
+            Duration::from_millis(25),
+            move |path| {
+                let file_name = path
+                    .file_stem()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| anyhow::anyhow!("Invalid model filename"))?;
+                let id = file_name.parse::<usize>().map_err(anyhow::Error::new)?;
+                Ok(MockSubExecutor { id })
+            },
+            Some(cache.clone()),
+        )
+        .await
+        .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+        let second_model_path = directory_path.join("2.onnx");
+        fs::write(&second_model_path, "second").unwrap();
+
+        tokio::time::sleep(Duration::from_millis(1250)).await;
+        assert!(cache.get(&1).is_none());
     }
 }

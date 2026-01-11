@@ -11,7 +11,9 @@ pub use agents::{
     PolicySamplingConfig, RandomConfig,
 };
 pub use game::GameConfig;
-pub use inference::{ExecutorConfig, InferenceConfig, OrtExecutionProvider, ReloadConfig};
+pub use inference::{
+    ExecutorConfig, InferenceCacheConfig, InferenceConfig, OrtExecutionProvider, ReloadConfig,
+};
 pub use observability::{LoggingConfig, MetricsConfig, ObservabilityConfig};
 pub use parents::{
     BenchmarkInferenceConfig, LoadableConfig, MCTSAnalyzerConfig, PreprocessMovesConfig,
