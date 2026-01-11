@@ -232,8 +232,10 @@ impl Client for DefaultClient {
         if let Some(cache) = &self.cache {
             let cache_key = self.cache_key(&request);
             if let Some(response) = cache.get(&cache_key) {
+                metrics::counter!("inference_cache_hit_total").increment(1);
                 return Ok(response);
             }
+            metrics::counter!("inference_cache_miss_total").increment(1);
 
             let response = self.send_request(request).await?;
             cache.insert(cache_key, response.clone());
