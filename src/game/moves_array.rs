@@ -1,6 +1,6 @@
 use crate::config::GameConfig;
 use anyhow::Result;
-use bit_set::BitSet;
+use fixedbitset::FixedBitSet;
 use serde::{Deserialize, Serialize};
 
 // List of one-value-per-move.
@@ -54,14 +54,14 @@ impl<T> MovesArray<T> {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MovesBitSet {
-    values: BitSet,
+    values: FixedBitSet,
     num_moves: usize,
 }
 
 impl MovesBitSet {
     pub fn new(num_moves: usize) -> Self {
         MovesBitSet {
-            values: BitSet::with_capacity(num_moves),
+            values: FixedBitSet::with_capacity(num_moves),
             num_moves,
         }
     }
@@ -83,7 +83,7 @@ impl MovesBitSet {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = usize> + '_ {
-        self.values.iter()
+        self.values.ones()
     }
 
     pub fn subtract_iter<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = usize> + 'a {
