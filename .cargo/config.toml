@@ -1,2 +1,5 @@
+[build]
+rustflags = ["-C", "target-cpu=native"]
+
 [alias]
 integration-test = "test test_s3_reload_integration -- --ignored"
