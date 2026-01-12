@@ -42,6 +42,7 @@ impl<T> MovesArray<T> {
         Ok(MovesArray { values })
     }
 
+    #[inline]
     pub fn get<U: Into<usize>>(&self, index: U) -> &T {
         &self.values[index.into()]
     }
@@ -79,6 +80,10 @@ impl MovesBitSet {
 
     pub fn add_mut(&mut self, other: &Self) {
         self.values.union_with(&other.values);
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+        self.values.iter()
     }
 
     pub fn subtract_iter<'a>(&'a self, other: &'a Self) -> impl Iterator<Item = usize> + 'a {
