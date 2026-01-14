@@ -147,32 +147,31 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
 if __name__ == "__main__":
     import modelopt.torch.quantization as mtq
 
-    from alphablokus.configs import TrainingStandaloneConfig
     import random
 
     from alphablokus.files import from_localized, list_files, localize_file
-    from alphablokus.train_utils import load_game_files_to_tensor
+    from alphablokus.game_data import load_game_files_to_tensor
 
     config_path = "configs/training/standalone_resnet.toml"
-    checkpoint_path = "s3://alpha-blokus/full_v2/training_simulated/06081134_conv_value_position_1767797812.pth"
-    output_path = (
-        "s3://alpha-blokus/full_v2/models_untrained/res_net_cvp_auto_quantized.onnx"
-    )
+    checkpoint_path = "s3://alpha-blokus/full_v2/training_simulated/segmented_epochs_True_1768300418.pth"
+    output_path = "s3://alpha-blokus/full_v2/models_simulated/segmented_epochs_True_quantized_1768300418.onnx"
     device = "cpu"
 
     model = NeuralNet(NetworkConfig(config_path), GameConfig(config_path)).to(device)
     localized_checkpoint = localize_file(checkpoint_path)
     checkpoint = torch.load(localized_checkpoint, map_location=device)
     model.load_state_dict(checkpoint["model"])
-    training_config = TrainingStandaloneConfig(config_path)
-    training_config.device = device
 
-    train_remote_files = list_files(training_config.remote_train_data_dir, ".bin")
-    train_remote_files = sorted(train_remote_files, reverse=True)
-    calibration_remote_files = random.sample(train_remote_files, k=10)
+    train_remote_files = list_files("s3://alpha-blokus/full_v2/games/", ".bin")
+    train_remote_files = sorted(train_remote_files, reverse=True)[:10]
+    calibration_remote_files = train_remote_files
+    # calibration_remote_files = random.sample(train_remote_files, k=10)
 
     calibration_local_files = [
-        localize_file(filename, training_config.local_game_mirror)
+        localize_file(
+            filename,
+            "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v2/games",
+        )
         for filename in calibration_remote_files
     ]
     boards, values, policies, valid_masks = load_game_files_to_tensor(
@@ -184,7 +183,7 @@ if __name__ == "__main__":
     random.shuffle(indices)
 
     calibration_batches = []
-    batch_size = training_config.batch_size
+    batch_size = 128
     for start in range(0, num_samples, batch_size):
         batch_indices = indices[start : start + batch_size]
         if not batch_indices:
@@ -218,9 +217,7 @@ if __name__ == "__main__":
         valid_policy_mask = valid_policy_mask.view(valid_policy_mask.shape[0], -1)
         pred_policy = pred_policy.masked_fill(~valid_policy_mask, -1e6)
 
-        policy_loss = training_config.policy_loss_weight * nn.CrossEntropyLoss()(
-            pred_policy, expected_policy
-        )
+        policy_loss = 0.158 * nn.CrossEntropyLoss()(pred_policy, expected_policy)
 
         return value_loss + policy_loss
 

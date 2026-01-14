@@ -46,39 +46,20 @@ class NetworkConfig:
 
 
 @dataclass
-class TrainingConfig:
-    num_epochs: int
+class TrainingLiveConfig:
     learning_rate: float
     batch_size: int
     policy_loss_weight: float
     sampling_ratio: float
     window_size: int
     device: str
-    simulated: bool
     min_samples_for_save: int
     poll_interval_seconds: int
-    output_name: str
-
-    def __init__(self, config_file: str):
-        with open(config_file, "rb") as f:
-            data = tomllib.load(f)
-
-        training_data = data["training"]
-        self.num_epochs = training_data["num_epochs"]
-        self.learning_rate = training_data["learning_rate"]
-        self.batch_size = training_data["batch_size"]
-        self.policy_loss_weight = training_data["policy_loss_weight"]
-        self.sampling_ratio = training_data["sampling_ratio"]
-        self.window_size = training_data["window_size"]
-        self.device = training_data["device"]
-        self.simulated = training_data["simulated"]
-        self.min_samples_for_save = training_data.get("min_samples_for_save", 10000)
-        self.poll_interval_seconds = training_data.get("poll_interval_seconds", 60)
-        self.output_name = training_data.get("output_name", "")
-
-
-@dataclass
-class DirectoriesConfig:
+    in_memory_shuffle_file_count: int
+    num_workers: int
+    prefetch_factor: int
+    local_cache_dir: str
+    cleanup_local_files: bool
     game_data_directory: str
     model_directory: str
     training_directory: str
@@ -87,31 +68,39 @@ class DirectoriesConfig:
         with open(config_file, "rb") as f:
             data = tomllib.load(f)
 
-        self.game_data_directory = data["directories"]["game_data_directory"]
-        self.model_directory = data["directories"]["model_directory"]
-        self.training_directory = data["directories"]["training_directory"]
-
-        assert self.game_data_directory.endswith("/")
-        assert self.model_directory.endswith("/") or self.model_directory == ""
-        assert self.training_directory.endswith("/") or self.training_directory == ""
+        training_data = data["training_live"]
+        self.learning_rate = training_data["learning_rate"]
+        self.batch_size = training_data["batch_size"]
+        self.policy_loss_weight = training_data["policy_loss_weight"]
+        self.sampling_ratio = training_data["sampling_ratio"]
+        self.window_size = training_data["window_size"]
+        self.device = training_data["device"]
+        self.min_samples_for_save = training_data["min_samples_for_save"]
+        self.poll_interval_seconds = training_data["poll_interval_seconds"]
+        self.in_memory_shuffle_file_count = training_data[
+            "in_memory_shuffle_file_count"
+        ]
+        self.num_workers = training_data["num_workers"]
+        self.prefetch_factor = training_data["prefetch_factor"]
+        self.local_cache_dir = training_data["local_cache_dir"]
+        self.cleanup_local_files = training_data["cleanup_local_files"]
+        directories_data = data["directories"]
+        self.game_data_directory = directories_data["game_data_directory"]
+        self.model_directory = directories_data["model_directory"]
+        self.training_directory = directories_data["training_directory"]
 
 
 @dataclass
-class TrainingStandaloneConfig:
+class TrainingOfflineConfig:
     device: str
     learning_rate: float
     policy_loss_weight: float
-    num_epochs: int
     batch_size: int
-    shuffle_buffer_file_count: int
-    train_batches_per_test: int
+    in_memory_shuffle_file_count: int
     num_workers: int
     prefetch_factor: int
-    remote_train_data_dir: str
-    remote_test_data_dir: str
+    game_data_directory: str
     local_game_mirror: str
-    aim_repo_path: str
-    max_train_files: int
     model_directory: str
     training_directory: str
     output_name: str
@@ -120,22 +109,16 @@ class TrainingStandaloneConfig:
         with open(config_file, "rb") as f:
             data = tomllib.load(f)
 
-        standalone_data = data["training_standalone"]
-
-        self.device = standalone_data["device"]
-        self.learning_rate = standalone_data["learning_rate"]
-        self.policy_loss_weight = standalone_data["policy_loss_weight"]
-        self.num_epochs = standalone_data["num_epochs"]
-        self.batch_size = standalone_data["batch_size"]
-        self.shuffle_buffer_file_count = standalone_data["shuffle_buffer_file_count"]
-        self.train_batches_per_test = standalone_data.get("train_batches_per_test", 0)
-        self.num_workers = standalone_data["num_workers"]
-        self.prefetch_factor = standalone_data["prefetch_factor"]
-        self.remote_train_data_dir = standalone_data["remote_train_data_dir"]
-        self.remote_test_data_dir = standalone_data.get("remote_test_data_dir", "")
-        self.local_game_mirror = standalone_data["local_game_mirror"]
-        self.aim_repo_path = standalone_data["aim_repo_path"]
-        self.max_train_files = standalone_data.get("max_train_files", 0)
-        self.model_directory = standalone_data["model_directory"]
-        self.training_directory = standalone_data["training_directory"]
-        self.output_name = standalone_data["output_name"]
+        offline_data = data["training_offline"]
+        self.device = offline_data["device"]
+        self.learning_rate = offline_data["learning_rate"]
+        self.policy_loss_weight = offline_data["policy_loss_weight"]
+        self.batch_size = offline_data["batch_size"]
+        self.in_memory_shuffle_file_count = offline_data["in_memory_shuffle_file_count"]
+        self.num_workers = offline_data["num_workers"]
+        self.prefetch_factor = offline_data["prefetch_factor"]
+        self.game_data_directory = offline_data["game_data_directory"]
+        self.local_game_mirror = offline_data["local_game_mirror"]
+        self.model_directory = offline_data["model_directory"]
+        self.training_directory = offline_data["training_directory"]
+        self.output_name = offline_data["output_name"]

@@ -7,9 +7,13 @@ exclude_machines = {}
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 
 
-def search(instance_type, purpose):
+def search(instance_type, purpose, gpu_key):
     assert instance_type in ["on-demand", "bid"]
     assert purpose in ["training", "self-play"]
+    if purpose == "self-play":
+        assert gpu_key in ["3070", "3060"]
+    else:
+        assert gpu_key is None
 
     url = "https://console.vast.ai/api/v0/search/asks/"
     payload = {
@@ -31,7 +35,11 @@ def search(instance_type, purpose):
     }
 
     if purpose == "self-play":
-        payload["q"]["gpu_name"] = "RTX 3070"
+        gpu_name = {
+            "3070": "RTX 3070",
+            "3060": "RTX 3060",
+        }
+        payload["q"]["gpu_name"] = gpu_name[gpu_key]
 
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
@@ -218,7 +226,13 @@ assert instance_type in ["on-demand", "bid"]
 purpose = input("Select purpose (training/self-play): ").strip()
 assert purpose in ["training", "self-play"]
 
-offers = search(instance_type, purpose)
+if purpose == "self-play":
+    gpu_key = input("Select GPU (3070/3060): ").strip()
+    assert gpu_key in ["3070", "3060"]
+else:
+    gpu_key = None
+
+offers = search(instance_type, purpose, gpu_key)
 selected = select_instance(offers[:8])
 if not selected:
     exit(1)
