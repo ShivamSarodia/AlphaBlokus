@@ -19,11 +19,11 @@ reload = { poll_interval_seconds = 60000 }
 cache = { max_entries = 4000000 }
 
 [[agents.DuoArena]]
-name = "pentobi_level_5"
+name = "pentobi_level_6"
 type = "pentobi"
 binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
 opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
-level = 5
+level = 6
 
 [[agents.DuoArena]]
 name = "mcts"
