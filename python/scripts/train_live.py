@@ -202,10 +202,13 @@ def run_live_training(config_path: str) -> None:
         )
 
         samples_last_trained += new_samples
-        samples_since_last_save += samples_trained
+        samples_since_last_save += new_samples
         poll_duration_seconds = time.time() - poll_start
         log(f"Poll finished in {poll_duration_seconds:.1f}s.")
         log(f"Trained {samples_trained} samples this poll.")
+        log(
+            f"{samples_since_last_save}/{training_config.min_samples_for_save} since last save."
+        )
 
         publish_metrics(
             samples_total_available=samples_total,
@@ -219,10 +222,11 @@ def run_live_training(config_path: str) -> None:
         )
 
         if samples_since_last_save >= training_config.min_samples_for_save:
+            save_name = f"{samples_last_trained:09d}"
             save_model_and_state(
                 model=model,
                 optimizer=optimizer,
-                name=samples_last_trained,
+                name=save_name,
                 model_directory=training_config.model_directory,
                 training_directory=training_config.training_directory,
                 device=training_config.device,
