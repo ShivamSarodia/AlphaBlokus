@@ -136,6 +136,10 @@ where
             if let Some(cache) = &cache {
                 sleep(Duration::from_secs(1)).await;
                 cache.invalidate_all();
+                tracing::info!(
+                    "Cleared inference cache after reloading model {}",
+                    latest_model.display()
+                );
             }
         }
     }
