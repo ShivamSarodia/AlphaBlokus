@@ -98,33 +98,6 @@ class StaticListFileProvider(FileProvider):
         return list(this_worker_paths[start:end])
 
 
-class WindowedS3FileProvider(FileProvider):
-    def __init__(
-        self,
-        s3_prefix: str,
-        *,
-        window_size_samples: int,
-    ):
-        self.s3_prefix = s3_prefix
-        self.window_size_samples = window_size_samples
-
-    def next_files(
-        self, count: int, worker_id: int = 0, num_workers: int = 1
-    ) -> List[str]:
-        if num_workers != 1 or worker_id != 0:
-            raise ValueError(
-                "WindowedS3FileProvider does not support multiple workers."
-            )
-
-        files = list_game_files_with_samples(self.s3_prefix)
-        window_files = build_sample_window(files, self.window_size_samples)
-        pool = [file_info.path for file_info in window_files]
-        if not pool:
-            return []
-        random.shuffle(pool)
-        return pool[:count]
-
-
 class StaticWindowedS3FileProvider(FileProvider):
     def __init__(
         self,
