@@ -19,9 +19,9 @@ device = "mps"
 learning_rate = 1e-3
 batch_size = 128
 policy_loss_weight = 0.158
-sampling_ratio = 4.0
+sampling_ratio = 1.5
 window_size = 300000
-min_samples_for_save = 10000
+min_samples_for_save = 30000
 poll_interval_seconds = 10
 in_memory_shuffle_file_count = 3
 num_workers = 1
@@ -31,5 +31,5 @@ cleanup_local_files = true
 
 [directories]
 game_data_directory = "s3://alpha-blokus/full_v2/games/"
-model_directory = "s3://alpha-blokus/full_v2/models_2/"
-training_directory = "s3://alpha-blokus/full_v2/training_2/"
+model_directory = "s3://alpha-blokus/full_v2/models_v2/"
+training_directory = "s3://alpha-blokus/full_v2/training_v2/"
