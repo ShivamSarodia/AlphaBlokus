@@ -6,12 +6,20 @@ import time
 exclude_machines = {}
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 
+GPUS = {
+    "3090": "RTX 3090",
+    "3070": "RTX 3070",
+    "3060": "RTX 3060",
+    "4090": "RTX 4090",
+}
+
 
 def search(instance_type, purpose, gpu_key):
+    print(f"Searching for {instance_type} {purpose} {gpu_key}")
     assert instance_type in ["on-demand", "bid"]
     assert purpose in ["training", "self-play"]
     if purpose == "self-play":
-        assert gpu_key in ["3070", "3060"]
+        assert gpu_key in GPUS
     else:
         assert gpu_key is None
 
@@ -35,11 +43,7 @@ def search(instance_type, purpose, gpu_key):
     }
 
     if purpose == "self-play":
-        gpu_name = {
-            "3070": "RTX 3070",
-            "3060": "RTX 3060",
-        }
-        payload["q"]["gpu_name"] = gpu_name[gpu_key]
+        payload["q"]["gpu_name"] = GPUS[gpu_key]
 
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
@@ -227,8 +231,8 @@ purpose = input("Select purpose (training/self-play): ").strip()
 assert purpose in ["training", "self-play"]
 
 if purpose == "self-play":
-    gpu_key = input("Select GPU (3070/3060): ").strip()
-    assert gpu_key in ["3070", "3060"]
+    gpu_key = input(f"Select GPU ({'/'.join(GPUS.keys())}): ").strip()
+    assert gpu_key in GPUS
 else:
     gpu_key = None
 

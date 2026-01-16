@@ -12,14 +12,11 @@ from alphablokus.res_net_se import NeuralNet as ResNetSENet
 from alphablokus.res_net_global_pool import NeuralNet as ResNetGlobalPoolNet
 from alphablokus.res_net_preact import NeuralNet as ResNetPreactNet
 from alphablokus.trivial_net import TrivialNet
+from alphablokus.log import log
 
 
 class TrainingError(Exception):
     pass
-
-
-def log(message: str) -> None:
-    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
 
 
 def initialize_model(

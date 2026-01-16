@@ -14,9 +14,9 @@ from alphablokus.files import list_files
 from alphablokus.train_utils import (
     get_loss,
     initialize_model,
-    log,
     save_model_and_state,
 )
+from alphablokus.log import log
 
 
 def run_offline_training(config_path: str) -> None:

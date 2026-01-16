@@ -15,6 +15,7 @@ from alphablokus.files import (
     parse_num_games_from_filename,
 )
 from alphablokus.game_data import load_game_file
+from alphablokus.log import log
 
 
 @dataclass(frozen=True)
@@ -122,6 +123,49 @@ class WindowedS3FileProvider(FileProvider):
             return []
         random.shuffle(pool)
         return pool[:count]
+
+
+class StaticWindowedS3FileProvider(FileProvider):
+    def __init__(
+        self,
+        s3_prefix: str,
+        *,
+        window_size_samples: int,
+    ):
+        self.s3_prefix = s3_prefix
+        self.window_size_samples = window_size_samples
+
+        # Maintain an in-memory shuffled window of files.
+        self.current_window_paths = []
+
+    def _reload_window(self):
+        """
+        Query S3 to populate self.current_window_paths with the latest batch files
+        from S3.
+        """
+        files = list_game_files_with_samples(self.s3_prefix)
+        window_files = build_sample_window(files, self.window_size_samples)
+        self.current_window_paths = [file_info.path for file_info in window_files]
+        random.shuffle(self.current_window_paths)
+        total_samples = sum(file_info.num_samples for file_info in window_files)
+        log(
+            f"Reloaded window with {len(self.current_window_paths)} files. Found {total_samples} samples."
+        )
+
+    def next_files(
+        self, count: int, worker_id: int = 0, num_workers: int = 1
+    ) -> List[str]:
+        if num_workers != 1 or worker_id != 0:
+            raise ValueError(
+                "StaticWindowedS3FileProvider does not support multiple workers."
+            )
+
+        output = []
+        while len(output) < count:
+            if not self.current_window_paths:
+                self._reload_window()
+            output.append(self.current_window_paths.pop(0))
+        return output
 
 
 class BufferedGameBatchDataset(torch.utils.data.IterableDataset):

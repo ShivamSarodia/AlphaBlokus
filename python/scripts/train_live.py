@@ -12,17 +12,16 @@ from prometheus_client import Gauge, start_http_server
 from alphablokus.configs import GameConfig, NetworkConfig, TrainingLiveConfig
 from alphablokus.data_loaders import (
     BufferedGameBatchDataset,
-    WindowedS3FileProvider,
+    StaticWindowedS3FileProvider,
     build_streaming_dataloader,
     list_game_files_with_samples,
 )
 from alphablokus.train_utils import (
     get_loss,
     load_initial_state,
-    log,
     save_model_and_state,
 )
-
+from alphablokus.log import log
 
 METRICS_PORT = int(os.getenv("TRAINING_METRICS_PORT", "9101"))
 
@@ -118,8 +117,14 @@ def train_for_samples(
         if samples_trained >= max_samples:
             break
 
+        # Log every 10,000 samples.
+        if samples_trained % 10000 < batch_size:
+            log(
+                f"Step: {samples_trained}/{max_samples}. Loss: {loss.item():.4f} (Value: {value_loss.item():.4f}, Policy: {policy_loss.item():.4f})"
+            )
+
     log(
-        f"Trained {samples_trained}/{max_samples} samples. "
+        f"Finished training on {samples_trained}/{max_samples} samples. "
         f"Loss: {loss.item():.4f} (Value: {value_loss.item():.4f}, Policy: {policy_loss.item():.4f})"
     )
     return samples_trained
@@ -143,6 +148,24 @@ def run_live_training(config_path: str) -> None:
     samples_since_last_save = 0
     start_metrics_server()
 
+    file_provider = StaticWindowedS3FileProvider(
+        training_config.game_data_directory,
+        window_size_samples=int(training_config.window_size),
+    )
+    dataset = BufferedGameBatchDataset(
+        game_config,
+        file_provider,
+        training_config.batch_size,
+        training_config.in_memory_shuffle_file_count,
+        local_cache_dir=training_config.local_cache_dir or None,
+        cleanup_local_files=training_config.cleanup_local_files,
+    )
+    dataloader = build_streaming_dataloader(
+        dataset,
+        num_workers=training_config.num_workers,
+        prefetch_factor=training_config.prefetch_factor,
+    )
+
     while True:
         poll_start = time.time()
         files = list_game_files_with_samples(training_config.game_data_directory)
@@ -156,15 +179,7 @@ def run_live_training(config_path: str) -> None:
 
         log(f"Found {new_samples} new samples (total={samples_total}).")
 
-        if samples_total > training_config.window_size * 2:
-            window_size = training_config.window_size
-        else:
-            window_size = max(samples_total / 2, 50000)
-
-        sampling_ratio = max(
-            min(samples_total / window_size, training_config.sampling_ratio), 1.0
-        )
-        target_samples = int(new_samples * sampling_ratio)
+        target_samples = int(new_samples * training_config.sampling_ratio)
 
         if target_samples == 0:
             log("Target samples is 0, skipping training.")
@@ -173,26 +188,9 @@ def run_live_training(config_path: str) -> None:
 
         log(
             f"Training on {target_samples} samples "
-            f"(window_size={window_size}, sampling_ratio={sampling_ratio:.2f})."
+            f"(window_size={training_config.window_size}, sampling_ratio={training_config.sampling_ratio:.2f})."
         )
 
-        file_provider = WindowedS3FileProvider(
-            training_config.game_data_directory,
-            window_size_samples=int(window_size),
-        )
-        dataset = BufferedGameBatchDataset(
-            game_config,
-            file_provider,
-            training_config.batch_size,
-            training_config.in_memory_shuffle_file_count,
-            local_cache_dir=training_config.local_cache_dir or None,
-            cleanup_local_files=training_config.cleanup_local_files,
-        )
-        dataloader = build_streaming_dataloader(
-            dataset,
-            num_workers=training_config.num_workers,
-            prefetch_factor=training_config.prefetch_factor,
-        )
         samples_trained = train_for_samples(
             dataloader,
             model,
