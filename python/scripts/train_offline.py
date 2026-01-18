@@ -1,5 +1,6 @@
 import argparse
 import time
+from collections import deque
 
 import torch
 import random
@@ -14,7 +15,9 @@ from alphablokus.files import list_files
 from alphablokus.train_utils import (
     get_loss,
     initialize_model,
+    restore_training_snapshot,
     save_model_and_state,
+    take_training_snapshot,
 )
 from alphablokus.log import log
 
@@ -34,20 +37,12 @@ def run_offline_training(config_path: str) -> None:
     # Custom logic for training schedule.
     ############################################################################################
 
-    is_four_times = random.randint(0, 1) > 0
-    if is_four_times:
-        windows = [
-            train_files[-400:],
-            train_files[-300:],
-            train_files[-200:],
-            train_files[-100:],
-        ]
-    else:
-        windows = [
-            train_files[-400:],
-            train_files[-200:],
-            train_files[-100:],
-        ]
+    windows = [
+        train_files[-700:],
+        train_files[-500:],
+        train_files[-300:],
+        train_files[-150:],
+    ]
     train_files = [random.sample(window, len(window)) for window in windows]
     train_files = sum(train_files, [])
 
@@ -76,14 +71,33 @@ def run_offline_training(config_path: str) -> None:
     batches_seen = 0
     samples_trained = 0
     log_every_batches = 200
+    snapshot_history = deque(maxlen=11)
 
     for batch in dataloader:
+        snapshot_history.append(take_training_snapshot(model, optimizer))
         loss, value_loss, policy_loss = get_loss(
             batch,
             model,
             device=training_config.device,
             policy_loss_weight=training_config.policy_loss_weight,
         )
+
+        if torch.isnan(loss).any():
+            if snapshot_history:
+                rollback_batches = 10
+                if len(snapshot_history) < rollback_batches + 1:
+                    rollback_batches = len(snapshot_history) - 1
+                restore_training_snapshot(
+                    snapshot_history[0], model, optimizer, training_config.device
+                )
+                snapshot_history.clear()
+                log(
+                    "!!! LOSS IS NaN: RESTORED MODEL/OPTIMIZER "
+                    "FROM PREVIOUS BATCHES. CONTINUING. !!!"
+                )
+                continue
+            log("!!! LOSS IS NaN: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!")
+            continue
 
         optimizer.zero_grad()
         loss.backward()
@@ -104,7 +118,7 @@ def run_offline_training(config_path: str) -> None:
     save_model_and_state(
         model=model,
         optimizer=optimizer,
-        name=training_config.output_name + f"_{is_four_times}",
+        name=training_config.output_name,
         model_directory=training_config.model_directory,
         training_directory=training_config.training_directory,
         device=training_config.device,

@@ -1,7 +1,9 @@
+import copy
 import os
+import time
+
 import torch
 import torch.nn as nn
-import time
 
 from alphablokus.configs import GameConfig, NetworkConfig
 from alphablokus.files import from_localized, is_s3, latest_file, localize_file
@@ -17,6 +19,60 @@ from alphablokus.log import log
 
 class TrainingError(Exception):
     pass
+
+
+def _copy_state_to_cpu(value):
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu().clone()
+    if isinstance(value, dict):
+        return {k: _copy_state_to_cpu(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_copy_state_to_cpu(v) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_copy_state_to_cpu(v) for v in value)
+    return copy.deepcopy(value)
+
+
+def _move_state_to_device(value, device: str):
+    if isinstance(value, torch.Tensor):
+        return value.to(device)
+    if isinstance(value, dict):
+        return {k: _move_state_to_device(v, device) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_move_state_to_device(v, device) for v in value]
+    if isinstance(value, tuple):
+        return tuple(_move_state_to_device(v, device) for v in value)
+    return value
+
+
+def move_optimizer_state_to_device(
+    optimizer: torch.optim.Optimizer, device: str
+) -> None:
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
+
+
+def take_training_snapshot(
+    model: nn.Module, optimizer: torch.optim.Optimizer
+) -> dict[str, dict]:
+    return {
+        "model": _copy_state_to_cpu(model.state_dict()),
+        "optimizer": _copy_state_to_cpu(optimizer.state_dict()),
+    }
+
+
+def restore_training_snapshot(
+    snapshot: dict[str, dict],
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    device: str,
+) -> None:
+    model_state = _move_state_to_device(snapshot["model"], device)
+    model.load_state_dict(model_state)
+    optimizer.load_state_dict(snapshot["optimizer"])
+    move_optimizer_state_to_device(optimizer, device)
 
 
 def initialize_model(
@@ -75,10 +131,7 @@ def load_initial_state(
     model = model.to(device=training_config.device)
 
     # Move optimizer state to the same device as the model.
-    for state in optimizer.state.values():
-        for k, v in state.items():
-            if isinstance(v, torch.Tensor):
-                state[k] = v.to(training_config.device)
+    move_optimizer_state_to_device(optimizer, training_config.device)
 
     return model, optimizer, samples
 
@@ -165,6 +218,4 @@ def get_loss(
     )
 
     total_loss = value_loss + policy_loss
-    if total_loss.isnan().any():
-        raise TrainingError("Loss is NaN")
     return total_loss, value_loss, policy_loss

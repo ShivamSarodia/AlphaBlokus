@@ -17,6 +17,7 @@ from alphablokus.data_loaders import (
     list_game_files_with_samples,
 )
 from alphablokus.train_utils import (
+    TrainingError,
     get_loss,
     load_initial_state,
     save_model_and_state,
@@ -98,7 +99,6 @@ def train_for_samples(
     max_samples: int,
 ) -> int:
     samples_trained = 0
-
     for batch in dataloader:
         loss, value_loss, policy_loss = get_loss(
             batch,
@@ -106,6 +106,9 @@ def train_for_samples(
             device=training_config.device,
             policy_loss_weight=training_config.policy_loss_weight,
         )
+
+        if torch.isnan(loss).any():
+            raise TrainingError("Loss is NaN")
 
         optimizer.zero_grad()
         loss.backward()

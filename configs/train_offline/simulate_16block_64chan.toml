@@ -8,7 +8,7 @@ move_data_file = "static/move_data/full.bin"
 [network]
 model_class = "resnet"
 main_body_channels = 64
-residual_blocks = 10
+residual_blocks = 16
 value_head_channels = 64
 value_head_flat_layer_width = 64
 policy_head_channels = 64
@@ -26,4 +26,4 @@ game_data_directory = "s3://alpha-blokus/full_v2/games/"
 local_game_mirror = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v2/games"
 model_directory = "s3://alpha-blokus/full_v2/models_simulated/"
 training_directory = "s3://alpha-blokus/full_v2/training_simulated/"
-output_name = "segmented_epochs"
+output_name = "10m_16block_64chan"

@@ -12,6 +12,9 @@ struct Cli {
     /// Path to config file to load.
     #[arg(short, long, value_name = "FILE")]
     config: PathBuf,
+    /// Optional run name to attach as a label to all published metrics.
+    #[arg(long, value_name = "NAME")]
+    run_name: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -24,7 +27,7 @@ fn main() -> Result<()> {
     // Initialize observability based on config
     // Don't drop the guard to flush logs on shutdown.
     let _guard = utils::init_logger(&config.observability.logging);
-    utils::init_metrics(&config.observability.metrics)?;
+    utils::init_metrics(&config.observability.metrics, cli.run_name.as_deref())?;
 
     tracing::info!("Starting self-play with config: {:?}", config);
 
