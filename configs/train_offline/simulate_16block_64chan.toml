@@ -27,3 +27,5 @@ local_game_mirror = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v
 model_directory = "s3://alpha-blokus/full_v2/models_simulated/"
 training_directory = "s3://alpha-blokus/full_v2/training_simulated/"
 output_name = "10m_16block_64chan"
+initial_training_state_file = ""
+load_optimizer_from_initial_training_state = true

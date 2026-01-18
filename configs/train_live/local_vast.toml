@@ -31,5 +31,5 @@ cleanup_local_files = true
 
 [directories]
 game_data_directory = "s3://alpha-blokus/full_v2/games/"
-model_directory = "s3://alpha-blokus/full_v2/models_v2/"
-training_directory = "s3://alpha-blokus/full_v2/training_v2/"
+model_directory = "s3://alpha-blokus/full_v2/models_v3/"
+training_directory = "s3://alpha-blokus/full_v2/training_v3/"

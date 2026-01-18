@@ -104,6 +104,8 @@ class TrainingOfflineConfig:
     model_directory: str
     training_directory: str
     output_name: str
+    initial_training_state_file: str
+    load_optimizer_from_initial_training_state: bool
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
@@ -122,3 +124,7 @@ class TrainingOfflineConfig:
         self.model_directory = offline_data["model_directory"]
         self.training_directory = offline_data["training_directory"]
         self.output_name = offline_data["output_name"]
+        self.initial_training_state_file = offline_data["initial_training_state_file"]
+        self.load_optimizer_from_initial_training_state = offline_data[
+            "load_optimizer_from_initial_training_state"
+        ]

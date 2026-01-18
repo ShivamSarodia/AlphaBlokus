@@ -14,7 +14,7 @@ from alphablokus.data_loaders import (
 from alphablokus.files import list_files
 from alphablokus.train_utils import (
     get_loss,
-    initialize_model,
+    load_initial_state,
     restore_training_snapshot,
     save_model_and_state,
     take_training_snapshot,
@@ -27,24 +27,43 @@ def run_offline_training(config_path: str) -> None:
     network_config = NetworkConfig(config_path)
     training_config = TrainingOfflineConfig(config_path)
 
-    model = initialize_model(network_config, game_config).to(training_config.device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=training_config.learning_rate)
+    initial_state_file = training_config.initial_training_state_file.strip() or None
+    model, optimizer, _ = load_initial_state(
+        network_config,
+        game_config,
+        learning_rate=training_config.learning_rate,
+        device=training_config.device,
+        training_file=initial_state_file,
+        skip_loading_optimizer=not training_config.load_optimizer_from_initial_training_state,
+    )
 
-    train_files = list_files(training_config.game_data_directory, ".bin")
-    train_files = sorted(train_files)
+    all_files = list_files(training_config.game_data_directory, ".bin")
+    all_files = sorted(all_files)
 
     ############################################################################################
     # Custom logic for training schedule.
     ############################################################################################
 
-    windows = [
-        train_files[-700:],
-        train_files[-500:],
-        train_files[-300:],
-        train_files[-150:],
-    ]
-    train_files = [random.sample(window, len(window)) for window in windows]
-    train_files = sum(train_files, [])
+    random.seed(42)
+
+    # windows = [
+    #     all_files[-700:],
+    #     all_files[-500:],
+    #     all_files[-300:],
+    #     all_files[-150:],
+    # ]
+    # train_files = [random.sample(window, len(window)) for window in windows]
+    # train_files = sum(train_files, [])
+
+    train_files = []
+    n = len(all_files)
+    assert n > 300, "Needs at least 300 files."
+
+    # starts correspond to -300, -280, ..., -60 (all full 60-length windows)
+    for start in range(n - 300, n - 60 + 1, 20):
+        this_window_files = all_files[start : start + 60]
+        random.shuffle(this_window_files)
+        train_files += this_window_files
 
     ############################################################################################
     # End custom logic for training schedule.

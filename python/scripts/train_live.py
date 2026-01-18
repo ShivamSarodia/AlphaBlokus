@@ -16,6 +16,7 @@ from alphablokus.data_loaders import (
     build_streaming_dataloader,
     list_game_files_with_samples,
 )
+from alphablokus.files import latest_file
 from alphablokus.train_utils import (
     TrainingError,
     get_loss,
@@ -141,12 +142,15 @@ def run_live_training(config_path: str) -> None:
     if training_config.num_workers not in (0, 1):
         raise ValueError("Live training supports num_workers of 0 or 1.")
 
+    initial_training_file = latest_file(training_config.training_directory, ".pth")
+    assert initial_training_file is not None, "No initial training state found."
+
     model, optimizer, samples_last_trained = load_initial_state(
         network_config,
         game_config,
-        training_config,
-        training_config.training_directory,
-        skip_loading_from_file=False,
+        learning_rate=training_config.learning_rate,
+        device=training_config.device,
+        training_file=initial_training_file,
     )
     samples_since_last_save = 0
     start_metrics_server()
