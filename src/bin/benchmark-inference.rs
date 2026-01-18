@@ -12,10 +12,19 @@ use std::{path::PathBuf, sync::Arc};
 
 #[derive(Parser)]
 #[command()]
+#[command(group(
+    clap::ArgGroup::new("config_source")
+        .required(true)
+        .multiple(false)
+        .args(&["config", "config_url"])
+))]
 struct Cli {
     /// Path to config file to load.
     #[arg(short, long, value_name = "FILE")]
-    config: PathBuf,
+    config: Option<PathBuf>,
+    /// URL to config file to load.
+    #[arg(long, value_name = "URL")]
+    config_url: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -23,8 +32,12 @@ fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
-    let config =
-        BenchmarkInferenceConfig::from_file(&cli.config).context("Failed to load config")?;
+    let config = match (&cli.config, cli.config_url.as_deref()) {
+        (Some(path), None) => BenchmarkInferenceConfig::from_file(path),
+        (None, Some(url)) => BenchmarkInferenceConfig::from_url(url),
+        _ => unreachable!("clap enforces exactly one config source"),
+    }
+    .context("Failed to load config")?;
     config
         .game
         .load_move_profiles()

@@ -24,6 +24,18 @@ pub trait LoadableConfig: Sized + DeserializeOwned {
             .with_context(|| format!("Failed to read config from path: {}", path.display()))?;
         Self::from_string(&contents)
     }
+
+    /// Given a URL, fetch the contents into a string and produce a static
+    /// reference to it.
+    fn from_url(url: &str) -> Result<&'static mut Self> {
+        let contents = reqwest::blocking::get(url)
+            .with_context(|| format!("Failed to request config from URL: {url}"))?
+            .error_for_status()
+            .with_context(|| format!("Config URL returned error status: {url}"))?
+            .text()
+            .with_context(|| format!("Failed to read config body from URL: {url}"))?;
+        Self::from_string(&contents)
+    }
 }
 
 #[derive(Deserialize, Debug)]
