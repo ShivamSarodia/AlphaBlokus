@@ -105,13 +105,25 @@ def load_initial_state(
     device: str,
     training_file: str | None,
     skip_loading_optimizer: bool = False,
+    optimizer_type: str = "adam",
 ) -> tuple[nn.Module, torch.optim.Optimizer, int]:
     """
     Loads the initial state of the model and optimizer from the training directory.
     """
     # Load the model and optimizer.
     model = initialize_model(network_config, game_config)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    if optimizer_type == "adam":
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    elif optimizer_type == "sgd":
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=learning_rate,
+            momentum=0.90,
+            nesterov=True,
+            weight_decay=1e-4,
+        )
+    else:
+        raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
     samples = 0
 
     if training_file is None:

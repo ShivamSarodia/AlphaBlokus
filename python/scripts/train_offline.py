@@ -4,6 +4,7 @@ from collections import deque
 
 import torch
 import random
+from torch.nn.utils import clip_grad_norm_
 
 from alphablokus.configs import GameConfig, NetworkConfig, TrainingOfflineConfig
 from alphablokus.data_loaders import (
@@ -35,6 +36,7 @@ def run_offline_training(config_path: str) -> None:
         device=training_config.device,
         training_file=initial_state_file,
         skip_loading_optimizer=not training_config.load_optimizer_from_initial_training_state,
+        optimizer_type=training_config.optimizer_type,
     )
 
     all_files = list_files(training_config.game_data_directory, ".bin")
@@ -120,6 +122,8 @@ def run_offline_training(config_path: str) -> None:
 
         optimizer.zero_grad()
         loss.backward()
+        if training_config.optimizer_type == "sgd":
+            clip_grad_norm_(model.parameters(), 5.0)
         optimizer.step()
 
         batch_size = batch[0].shape[0]

@@ -16,7 +16,7 @@ policy_convolution_kernel = 3
 
 [training_offline]
 device = "mps"
-learning_rate = 1e-3
+learning_rate = 0.02
 policy_loss_weight = 0.158
 batch_size = 128
 in_memory_shuffle_file_count = 3
@@ -26,7 +26,7 @@ game_data_directory = "s3://alpha-blokus/full_v2/games/"
 local_game_mirror = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v2/games"
 model_directory = "s3://alpha-blokus/full_v2/models_simulated/"
 training_directory = "s3://alpha-blokus/full_v2/training_simulated/"
-output_name = "2026_01_18_optimizers_adam_without_existing_state"
+output_name = "2026_01_18_optimizers_sgd_lr0p02"
 initial_training_state_file = "s3://alpha-blokus/full_v2/training_v2/007174278.pth"
 load_optimizer_from_initial_training_state = false
-optimizer_type = "adam"
+optimizer_type = "sgd"

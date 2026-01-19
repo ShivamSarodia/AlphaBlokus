@@ -29,3 +29,4 @@ training_directory = "s3://alpha-blokus/full_v2/training_simulated/"
 output_name = "10m_10block_96chan"
 initial_training_state_file = ""
 load_optimizer_from_initial_training_state = true
+optimizer_type = "adam"

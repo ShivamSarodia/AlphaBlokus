@@ -106,6 +106,7 @@ class TrainingOfflineConfig:
     output_name: str
     initial_training_state_file: str
     load_optimizer_from_initial_training_state: bool
+    optimizer_type: str
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
@@ -128,3 +129,4 @@ class TrainingOfflineConfig:
         self.load_optimizer_from_initial_training_state = offline_data[
             "load_optimizer_from_initial_training_state"
         ]
+        self.optimizer_type = offline_data["optimizer_type"]
