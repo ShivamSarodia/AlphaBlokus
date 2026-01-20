@@ -20,6 +20,7 @@ from alphablokus.files import latest_file
 from alphablokus.train_utils import (
     TrainingError,
     get_loss,
+    get_sample_count_from_training_filename,
     load_initial_state,
     save_model_and_state,
 )
@@ -145,7 +146,10 @@ def run_live_training(config_path: str) -> None:
     initial_training_file = latest_file(training_config.training_directory, ".pth")
     assert initial_training_file is not None, "No initial training state found."
 
-    model, optimizer, samples_last_trained = load_initial_state(
+    samples_last_trained = get_sample_count_from_training_filename(
+        initial_training_file
+    )
+    model, optimizer = load_initial_state(
         network_config,
         game_config,
         learning_rate=training_config.learning_rate,

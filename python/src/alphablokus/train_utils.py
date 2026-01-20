@@ -97,6 +97,20 @@ def initialize_model(
         raise ValueError(f"Invalid model class: {network_config.model_class}")
 
 
+def get_sample_count_from_training_filename(training_file: str | None) -> int:
+    if training_file is None:
+        return 0
+
+    filename = os.path.basename(training_file)
+    stem, _ = os.path.splitext(filename)
+    try:
+        return int(stem)
+    except ValueError as exc:
+        raise ValueError(
+            f"Training file name must be an integer sample count, got: {filename}"
+        ) from exc
+
+
 def load_initial_state(
     network_config: NetworkConfig,
     game_config: GameConfig,
@@ -106,7 +120,7 @@ def load_initial_state(
     training_file: str | None,
     skip_loading_optimizer: bool = False,
     optimizer_type: str = "adam",
-) -> tuple[nn.Module, torch.optim.Optimizer, int]:
+) -> tuple[nn.Module, torch.optim.Optimizer]:
     """
     Loads the initial state of the model and optimizer from the training directory.
     """
@@ -124,13 +138,10 @@ def load_initial_state(
         )
     else:
         raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
-    samples = 0
-
     if training_file is None:
         print("No training state found, starting from scratch.")
     else:
         print("Loading training state from:", training_file)
-        samples = int(training_file.split(".")[-2].split("/")[-1])
         initial_training_path = localize_file(training_file)
         initial_training_state = torch.load(
             initial_training_path, map_location=device
@@ -145,7 +156,7 @@ def load_initial_state(
     # Move optimizer state to the same device as the model.
     move_optimizer_state_to_device(optimizer, device)
 
-    return model, optimizer, samples
+    return model, optimizer
 
 
 def _join_directory(directory: str, filename: str) -> str:

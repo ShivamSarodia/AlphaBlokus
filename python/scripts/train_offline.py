@@ -29,7 +29,7 @@ def run_offline_training(config_path: str) -> None:
     training_config = TrainingOfflineConfig(config_path)
 
     initial_state_file = training_config.initial_training_state_file.strip() or None
-    model, optimizer, _ = load_initial_state(
+    model, optimizer = load_initial_state(
         network_config,
         game_config,
         learning_rate=training_config.learning_rate,
