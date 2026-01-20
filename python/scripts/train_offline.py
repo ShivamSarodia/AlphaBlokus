@@ -48,24 +48,24 @@ def run_offline_training(config_path: str) -> None:
 
     random.seed(42)
 
-    # windows = [
-    #     all_files[-700:],
-    #     all_files[-500:],
-    #     all_files[-300:],
-    #     all_files[-150:],
-    # ]
-    # train_files = [random.sample(window, len(window)) for window in windows]
-    # train_files = sum(train_files, [])
+    windows = [
+        all_files[-700:],
+        all_files[-500:],
+        all_files[-300:],
+        all_files[-150:],
+    ]
+    train_files = [random.sample(window, len(window)) for window in windows]
+    train_files = sum(train_files, [])
 
-    train_files = []
-    n = len(all_files)
-    assert n > 300, "Needs at least 300 files."
+    # train_files = []
+    # n = len(all_files)
+    # assert n > 300, "Needs at least 300 files."
 
-    # starts correspond to -300, -280, ..., -60 (all full 60-length windows)
-    for start in range(n - 300, n - 60 + 1, 20):
-        this_window_files = all_files[start : start + 60]
-        random.shuffle(this_window_files)
-        train_files += this_window_files
+    # # starts correspond to -300, -280, ..., -60 (all full 60-length windows)
+    # for start in range(n - 300, n - 60 + 1, 20):
+    #     this_window_files = all_files[start : start + 60]
+    #     random.shuffle(this_window_files)
+    #     train_files += this_window_files
 
     ############################################################################################
     # End custom logic for training schedule.
