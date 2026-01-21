@@ -7,6 +7,10 @@ fn default_agent_name() -> String {
     "unnamed".to_string()
 }
 
+fn default_empty_string() -> String {
+    String::new()
+}
+
 /// An agent group config describes the methodology for selecting agents for
 /// each game.
 #[derive(Deserialize, Debug)]
@@ -49,8 +53,16 @@ pub struct MCTSConfig {
     pub default_exploitation_value: DefaultExploitationValue,
     /// The name of the inference config that the engine should pass to the
     /// MCTS agent. The config file must contain an inference config with this
-    /// name.
+    /// name. Ignored if policy/value inference config names are provided.
     pub inference_config_name: String,
+    /// Optional inference config name to use for policy evaluation.
+    /// When set, value_inference_config_name must also be set.
+    #[serde(default = "default_empty_string")]
+    pub policy_inference_config_name: String,
+    /// Optional inference config name to use for value evaluation.
+    /// When set, policy_inference_config_name must also be set.
+    #[serde(default = "default_empty_string")]
+    pub value_inference_config_name: String,
     /// If provided, saves debug information for each move as a new file in this directory.
     #[serde(default)]
     pub trace_file: Option<PathBuf>,

@@ -1,14 +1,14 @@
 use ahash::AHashMap as HashMap;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use rand::seq::SliceRandom;
 use tokio::task::JoinSet;
 
 use crate::agents::{Agent, MCTSAgent, PentobiAgent, PolicySamplingAgent, RandomAgent};
 use crate::config::{AgentConfig, AgentGroupConfig, GameConfig, NUM_PLAYERS};
 use crate::game::{GameStatus, State};
-use crate::inference::DefaultClient;
+use crate::inference::{DefaultClient, PolicyValueClient};
 use crate::recorder::Recorder;
 
 pub fn build_agent(
@@ -18,10 +18,30 @@ pub fn build_agent(
 ) -> Result<Box<dyn Agent>> {
     let agent: Box<dyn Agent> = match agent_config {
         AgentConfig::MCTS(mcts_config) => {
-            let client = inference_clients
-                .get(&mcts_config.inference_config_name)
-                .context("Missing inference client for MCTS config")?;
-            Box::new(MCTSAgent::new(mcts_config, game_config, Arc::clone(client)))
+            let policy_name = mcts_config.policy_inference_config_name.as_str();
+            let value_name = mcts_config.value_inference_config_name.as_str();
+            let agent: Box<dyn Agent>;
+            if policy_name.is_empty() && value_name.is_empty() {
+                let client = inference_clients
+                    .get(&mcts_config.inference_config_name)
+                    .context("Missing inference client for MCTS config")?;
+                agent = Box::new(MCTSAgent::new(mcts_config, game_config, Arc::clone(client)));
+            } else if policy_name.is_empty() || value_name.is_empty() {
+                return Err(anyhow!(
+                    "MCTS config must specify both policy_inference_config_name and value_inference_config_name or neither"
+                ));
+            } else {
+                let policy_client = inference_clients
+                    .get(policy_name)
+                    .context("Missing inference client for MCTS policy config")?;
+                let value_client = inference_clients
+                    .get(value_name)
+                    .context("Missing inference client for MCTS value config")?;
+                let client =
+                    PolicyValueClient::new(Arc::clone(policy_client), Arc::clone(value_client));
+                agent = Box::new(MCTSAgent::new(mcts_config, game_config, Arc::new(client)));
+            }
+            agent
         }
         AgentConfig::PolicySampling(policy_sampling_config) => {
             let client = inference_clients
@@ -255,6 +275,31 @@ mod tests {
     use crate::{
         config::MCTSConfig, config::RandomConfig, recorder::read_mcts_data_from_disk, testing,
     };
+
+    async fn build_random_inference_client(
+        name: &str,
+        game_config: &'static GameConfig,
+    ) -> Arc<DefaultClient> {
+        let inference_config = crate::config::InferenceConfig {
+            name: name.to_string(),
+            batch_size: 1,
+            model_path: "unused.onnx".to_string(),
+            executor: crate::config::ExecutorConfig::Random {
+                sleep_duration_ms: 0,
+            },
+            reload: None,
+            cache: crate::config::InferenceCacheConfig::default(),
+        };
+        Arc::new(
+            DefaultClient::from_inference_config(
+                &inference_config,
+                game_config,
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap(),
+        )
+    }
     #[tokio::test]
     async fn test_play_games() {
         let expected_num_finished_games = 50;
@@ -317,6 +362,8 @@ mod tests {
             temperature_turn_cutoff: 10,
             move_selection_temperature: 0.0,
             inference_config_name: "default".to_string(),
+            policy_inference_config_name: "".to_string(),
+            value_inference_config_name: "".to_string(),
             trace_file: None,
             default_exploitation_value: DefaultExploitationValue::NetworkValue,
         }));
@@ -393,6 +440,67 @@ mod tests {
 
             players_seen[mcts_data.player] = true;
         }
+    }
+
+    #[tokio::test]
+    async fn test_mcts_policy_value_empty_uses_single_config() {
+        use crate::config::DefaultExploitationValue;
+
+        let game_config = testing::create_game_config();
+        let inference_client = build_random_inference_client("default", game_config).await;
+        let agent_config = AgentConfig::MCTS(MCTSConfig {
+            name: "test_mcts".to_string(),
+            fast_move_probability: 0.0,
+            fast_move_num_rollouts: 1,
+            full_move_num_rollouts: 1,
+            total_dirichlet_noise_alpha: 1.0,
+            root_dirichlet_noise_fraction: 0.0,
+            ucb_exploration_factor: 1.0,
+            temperature_turn_cutoff: 10,
+            move_selection_temperature: 0.0,
+            inference_config_name: "default".to_string(),
+            policy_inference_config_name: "".to_string(),
+            value_inference_config_name: "".to_string(),
+            trace_file: None,
+            default_exploitation_value: DefaultExploitationValue::NetworkValue,
+        });
+        let agent_config = Box::leak(Box::new(agent_config));
+        let inference_clients =
+            HashMap::from([("default".to_string(), Arc::clone(&inference_client))]);
+        let agent = build_agent(agent_config, game_config, &inference_clients);
+        assert!(agent.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_mcts_policy_value_split_configs_builds() {
+        use crate::config::DefaultExploitationValue;
+
+        let game_config = testing::create_game_config();
+        let policy_client = build_random_inference_client("policy", game_config).await;
+        let value_client = build_random_inference_client("value", game_config).await;
+        let agent_config = AgentConfig::MCTS(MCTSConfig {
+            name: "test_mcts".to_string(),
+            fast_move_probability: 0.0,
+            fast_move_num_rollouts: 1,
+            full_move_num_rollouts: 1,
+            total_dirichlet_noise_alpha: 1.0,
+            root_dirichlet_noise_fraction: 0.0,
+            ucb_exploration_factor: 1.0,
+            temperature_turn_cutoff: 10,
+            move_selection_temperature: 0.0,
+            inference_config_name: "default".to_string(),
+            policy_inference_config_name: "policy".to_string(),
+            value_inference_config_name: "value".to_string(),
+            trace_file: None,
+            default_exploitation_value: DefaultExploitationValue::NetworkValue,
+        });
+        let agent_config = Box::leak(Box::new(agent_config));
+        let inference_clients = HashMap::from([
+            ("policy".to_string(), Arc::clone(&policy_client)),
+            ("value".to_string(), Arc::clone(&value_client)),
+        ]);
+        let agent = build_agent(agent_config, game_config, &inference_clients);
+        assert!(agent.is_ok());
     }
 
     #[tokio::test]

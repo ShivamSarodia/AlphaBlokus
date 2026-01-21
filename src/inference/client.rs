@@ -1,6 +1,7 @@
 use std::{
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
+    sync::Arc,
     time::Duration,
 };
 
@@ -45,6 +46,11 @@ pub type ResponseCache = Cache<u64, Response, BuildNoHashHasher<u64>>;
 pub struct DefaultClient {
     request_sender: mpsc::UnboundedSender<RequestChannelMessage>,
     cache: Option<ResponseCache>,
+}
+
+pub struct PolicyValueClient {
+    policy_client: Arc<DefaultClient>,
+    value_client: Arc<DefaultClient>,
 }
 
 pub trait Client {
@@ -192,6 +198,31 @@ impl DefaultClient {
             .sync_latest_model()
             .await
             .with_context(|| format!("Failed to download model from S3 {}", s3_uri))
+    }
+}
+
+impl PolicyValueClient {
+    pub fn new(policy_client: Arc<DefaultClient>, value_client: Arc<DefaultClient>) -> Self {
+        Self {
+            policy_client,
+            value_client,
+        }
+    }
+}
+
+impl Client for PolicyValueClient {
+    async fn evaluate(&self, request: Request) -> Result<Response> {
+        let policy_request = request.clone();
+        let value_request = request;
+        let (policy_response, value_response) = tokio::try_join!(
+            self.policy_client.evaluate(policy_request),
+            self.value_client.evaluate(value_request)
+        )?;
+
+        Ok(Response {
+            value: value_response.value,
+            policy: policy_response.policy,
+        })
     }
 }
 

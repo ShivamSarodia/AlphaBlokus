@@ -12,6 +12,7 @@ mod tensorrt;
 pub use batcher::Executor;
 pub use client::Client;
 pub use client::DefaultClient;
+pub use client::PolicyValueClient;
 pub use client::Request;
 pub use client::Response;
 pub use model_source::{LocalModelSource, ModelSource, S3ModelSource};

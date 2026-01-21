@@ -261,6 +261,8 @@ mod tests {
             temperature_turn_cutoff: 10,
             move_selection_temperature: 0.0,
             inference_config_name: "".to_string(),
+            policy_inference_config_name: "".to_string(),
+            value_inference_config_name: "".to_string(),
             trace_file: None,
             default_exploitation_value: DefaultExploitationValue::NetworkValue,
         }));
