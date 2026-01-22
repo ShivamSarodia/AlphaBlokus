@@ -11,7 +11,7 @@ filename = "self_play.log"
 [mcts_recorder]
 type = "directory"
 data_directory = "s3://alpha-blokus/full_v2/games"
-flush_row_count = 10000
+flush_row_count = 2000
 
 [[inference]]
 name = "default"
