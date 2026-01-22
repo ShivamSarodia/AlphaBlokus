@@ -15,7 +15,7 @@ flush_row_count = 2000
 
 [[inference]]
 name = "default"
-model_path = "s3://alpha-blokus/full_v2/models_v3/"
+model_path = "s3://alpha-blokus/full_v2/models_v4/"
 batch_size = 128
 executor = { type = "tensorrt", max_batch_size = 128, pool_size = 32 }
 reload = { poll_interval_seconds = 60 }
