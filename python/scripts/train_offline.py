@@ -48,12 +48,29 @@ def run_offline_training(config_path: str) -> None:
 
     random.seed(42)
 
+    # windows = [
+    #     all_files[-750:-200],
+    #     all_files[-550:-133],
+    #     all_files[-350:-200],
+    #     all_files[-150:-66],
+    # ]
+    #
+    # In this schedule, we grab:
+    #    files -200 to -133     2x
+    #    files -133 to -66      1x
+    #    files -66 to -0        0x
+    #
+    # This way, when we start sampling with a window size of 200 files and 3x
+    # sampling ratio, we'll even out to selecting each file a total of ~3 times
+    # as originally planned.
+
     windows = [
         all_files[-700:],
         all_files[-500:],
         all_files[-300:],
         all_files[-150:],
     ]
+
     train_files = [random.sample(window, len(window)) for window in windows]
     train_files = sum(train_files, [])
 
