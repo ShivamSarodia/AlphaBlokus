@@ -15,15 +15,15 @@ policy_head_channels = 64
 policy_convolution_kernel = 3
 
 [training_live]
-device = "mps"
+device = "cuda"
 learning_rate = 1e-3
 batch_size = 128
 policy_loss_weight = 0.158
-sampling_ratio = 1.0
-window_size = 60000
-min_samples_for_save = 50000
+sampling_ratio = 3.0
+window_size = 2000000
+min_samples_for_save = 30000
 poll_interval_seconds = 10
-in_memory_shuffle_file_count = 3
+in_memory_shuffle_file_count = 50
 num_workers = 1
 prefetch_factor = 60
 local_cache_dir = ""
@@ -31,5 +31,5 @@ cleanup_local_files = true
 
 [directories]
 game_data_directory = "s3://alpha-blokus/full_v2/games/"
-model_directory = "s3://alpha-blokus/full_v2/models_v3/"
-training_directory = "s3://alpha-blokus/full_v2/training_v3/"
+model_directory = "s3://alpha-blokus/full_v2/models_v4/"
+training_directory = "s3://alpha-blokus/full_v2/training_v4/"

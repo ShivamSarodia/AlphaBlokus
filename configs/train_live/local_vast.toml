@@ -21,13 +21,13 @@ batch_size = 128
 policy_loss_weight = 0.158
 sampling_ratio = 3.0
 window_size = 2000000
-min_samples_for_save = 20000
+min_samples_for_save = 30000
 poll_interval_seconds = 10
-in_memory_shuffle_file_count = 20
+in_memory_shuffle_file_count = 50
 num_workers = 1
 prefetch_factor = 60
-local_cache_dir = ""
-cleanup_local_files = true
+local_cache_dir = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v2/games"
+cleanup_local_files = false
 
 [directories]
 game_data_directory = "s3://alpha-blokus/full_v2/games/"
