@@ -12,7 +12,7 @@ from alphablokus.data_loaders import (
     StaticListFileProvider,
     build_streaming_dataloader,
 )
-from alphablokus.files import list_files
+from alphablokus.files import list_files, parse_num_games_from_filename
 from alphablokus.train_utils import (
     get_loss,
     load_initial_state,
@@ -41,6 +41,8 @@ def run_offline_training(config_path: str) -> None:
 
     all_files = list_files(training_config.game_data_directory, ".bin")
     all_files = sorted(all_files)
+    file_infos = [(path, parse_num_games_from_filename(path)) for path in all_files]
+    total_samples = sum(num_samples for _, num_samples in file_infos)
 
     ############################################################################################
     # Custom logic for training schedule.
@@ -48,31 +50,24 @@ def run_offline_training(config_path: str) -> None:
 
     random.seed(42)
 
-    # windows = [
-    #     all_files[-750:-200],
-    #     all_files[-550:-133],
-    #     all_files[-350:-200],
-    #     all_files[-150:-66],
-    # ]
-    #
-    # In this schedule, we grab:
-    #    files -200 to -133     2x
-    #    files -133 to -66      1x
-    #    files -66 to -0        0x
-    #
-    # This way, when we start sampling with a window size of 200 files and 3x
-    # sampling ratio, we'll even out to selecting each file a total of ~3 times
-    # as originally planned.
+    def build_last_sample_window(
+        files_with_samples: list[tuple[str, int]], target_samples: int
+    ) -> list[str]:
+        window_paths = []
+        samples_seen = 0
+        for path, num_samples in sorted(files_with_samples, reverse=True):
+            if samples_seen >= target_samples:
+                break
+            window_paths.append(path)
+            samples_seen += num_samples
+        return random.sample(window_paths, len(window_paths))
 
-    windows = [
-        all_files[-700:],
-        all_files[-500:],
-        all_files[-300:],
-        all_files[-150:],
-    ]
-
-    train_files = [random.sample(window, len(window)) for window in windows]
-    train_files = sum(train_files, [])
+    train_files = (
+        build_last_sample_window(file_infos, int(total_samples * 3 / 4))
+        + build_last_sample_window(file_infos, int(total_samples / 2))
+        + build_last_sample_window(file_infos, int(total_samples / 4))
+        + build_last_sample_window(file_infos, 3_000_000)
+    )
 
     # train_files = []
     # n = len(all_files)

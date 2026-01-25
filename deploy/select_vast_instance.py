@@ -6,48 +6,41 @@ import time
 exclude_machines = {}
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 
-GPUS = {
-    "3090": "RTX 3090",
-    "3070": "RTX 3070",
-    "3060": "RTX 3060",
-    "4090": "RTX 4090",
-}
+# GPUS = {
+#     "3090": "RTX 3090",
+#     "3070": "RTX 3070",
+#     "4070": "RTX 4070",
+#     "4090": "RTX 4090",
+# }
 
 
-def search(instance_type, purpose, gpu_key):
-    print(f"Searching for {instance_type} {purpose} {gpu_key}")
+def search(instance_type, purpose):
     assert instance_type in ["on-demand", "bid"]
     assert purpose in ["training", "self-play"]
-    if purpose == "self-play":
-        assert gpu_key in GPUS
-    else:
-        assert gpu_key is None
 
-    url = "https://console.vast.ai/api/v0/search/asks/"
+    url = "https://console.vast.ai/api/v0/bundles/"
     payload = {
-        "q": {
-            "order": [["dph_total", "asc"]],
-            "verified": {"eq": True},
-            "rentable": {"eq": True},
-            "type": instance_type,
-            "allocated_storage": "64",
-            "reliability2": {"gt": 0.995},
-            "inet_down": {"gt": 100},
-            "inet_up": {"gt": 100},
-            "duration": {"gte": 1},
-            "dph_total": {"lte": 0.3},
-            "cpu_cores": {"gte": 8},
-            "cpu_ram": {"gte": 22},
-            "cuda_max_good": {"gte": 12.0},
-        }
+        "order": [["dph_total", "asc"]],
+        "verified": {"eq": True},
+        "rentable": {"eq": True},
+        "type": instance_type,
+        "allocated_storage": "64",
+        "reliability2": {"gt": 0.995},
+        "inet_down": {"gt": 100},
+        "inet_up": {"gt": 100},
+        "duration": {"gte": 1},
+        "cpu_cores": {"gte": 8},
+        "cpu_ram": {"gte": 22},
+        "cuda_max_good": {"gte": 12.0},
     }
 
     if purpose == "self-play":
-        payload["q"]["gpu_name"] = GPUS[gpu_key]
+        # payload["gpu_name"] = "RTX 3070"
+        payload["total_flops"] = {"gte": 19.0}
 
     headers = {"Accept": "application/json", "Content-Type": "application/json"}
 
-    response = requests.request("PUT", url, headers=headers, data=json.dumps(payload))
+    response = requests.request("POST", url, headers=headers, data=json.dumps(payload))
     response.raise_for_status()
     offers = response.json()["offers"]
 
@@ -92,11 +85,15 @@ def print_table(offers):
         {"name": "GPU", "extractor": lambda _, offer: offer["gpu_name"]},
         {
             "name": "CPU",
-            "extractor": lambda _, offer: offer["cpu_name"][:18],
+            "extractor": lambda _, offer: offer.get("cpu_name", "Unknown")[:18],
         },
         {
             "name": "Cost ($/hr)",
             "extractor": lambda _, offer: f"{offer['computed_cost']:.3f}",
+        },
+        {
+            "name": "DPH Total ($/hr)",
+            "extractor": lambda _, offer: f"{offer['dph_total']:.3f}",
         },
         {
             "name": "CPU GHz",
@@ -230,13 +227,13 @@ assert instance_type in ["on-demand", "bid"]
 purpose = input("Select purpose (training/self-play): ").strip()
 assert purpose in ["training", "self-play"]
 
-if purpose == "self-play":
-    gpu_key = input(f"Select GPU ({'/'.join(GPUS.keys())}): ").strip()
-    assert gpu_key in GPUS
-else:
-    gpu_key = None
+# if purpose == "self-play":
+#     gpu_key = input(f"Select GPU ({'/'.join(GPUS.keys())}): ").strip()
+#     assert gpu_key in GPUS
+# else:
+#     gpu_key = None
 
-offers = search(instance_type, purpose, gpu_key)
+offers = search(instance_type, purpose)
 selected = select_instance(offers[:8])
 if not selected:
     exit(1)

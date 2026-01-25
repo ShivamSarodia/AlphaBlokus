@@ -1,1 +1,15 @@
 cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/6b32cfeee7a5d575ce8ee4e98301a4b4/raw?cb=$RANDOM$RANDOM"
+cargo run --release --bin self-play -- --config 
+
+
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/140.toml --run-name 140 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/150.toml --run-name 150 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/155.toml --run-name 155 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/160.toml --run-name 160 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/165.toml --run-name 165 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/170.toml --run-name 170 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/175.toml --run-name 175 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/180.toml --run-name 180 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/185.toml --run-name 185 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/190.toml --run-name 190 ; \
+cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/193.toml --run-name 193 ;
