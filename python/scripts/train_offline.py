@@ -1,5 +1,5 @@
 import argparse
-import time
+from typing import Optional, Tuple
 from collections import deque
 
 import torch
@@ -21,6 +21,43 @@ from alphablokus.train_utils import (
     take_training_snapshot,
 )
 from alphablokus.log import log
+
+
+def build_sample_window(
+    files_with_samples: list[tuple[str, int]],
+    *,
+    start_samples: int,
+    end_samples: int,
+    origin: str,
+) -> list[str]:
+    if origin not in ["start", "end"]:
+        raise ValueError("origin must be 'start' or 'end'")
+
+    if start_samples < end_samples:
+        start_samples, end_samples = end_samples, start_samples
+
+    if origin == "end":
+        total_samples = sum(num_samples for _, num_samples in files_with_samples)
+        start_samples, end_samples = (
+            total_samples - end_samples,
+            total_samples - start_samples,
+        )
+    else:
+        total_samples = sum(num_samples for _, num_samples in files_with_samples)
+
+    start_samples = max(0, min(start_samples, total_samples))
+    end_samples = max(0, min(end_samples, total_samples))
+
+    window_paths = []
+    samples_seen = 0
+    for path, num_samples in sorted(files_with_samples):
+        samples_seen += num_samples
+        if samples_seen <= end_samples:
+            continue
+        if samples_seen >= start_samples:
+            break
+        window_paths.append(path)
+    return random.sample(window_paths, len(window_paths))
 
 
 def run_offline_training(config_path: str) -> None:
@@ -50,23 +87,18 @@ def run_offline_training(config_path: str) -> None:
 
     random.seed(42)
 
-    def build_last_sample_window(
-        files_with_samples: list[tuple[str, int]], target_samples: int
-    ) -> list[str]:
-        window_paths = []
-        samples_seen = 0
-        for path, num_samples in sorted(files_with_samples, reverse=True):
-            if samples_seen >= target_samples:
-                break
-            window_paths.append(path)
-            samples_seen += num_samples
-        return random.sample(window_paths, len(window_paths))
-
-    train_files = (
-        build_last_sample_window(file_infos, int(total_samples * 3 / 4))
-        + build_last_sample_window(file_infos, int(total_samples / 2))
-        + build_last_sample_window(file_infos, int(total_samples / 4))
-        + build_last_sample_window(file_infos, 3_000_000)
+    window_size = 2_000_000
+    sample_ratio = 3
+    train_files = []
+    for start_samples in range(10_000_000, 19_300_000, int(window_size / sample_ratio)):
+        train_files += build_sample_window(
+            file_infos,
+            start_samples=start_samples,
+            end_samples=start_samples + window_size,
+            origin="end",
+        )
+    total_train_samples = sum(
+        parse_num_games_from_filename(path) for path in train_files
     )
 
     # train_files = []
@@ -83,7 +115,10 @@ def run_offline_training(config_path: str) -> None:
     # End custom logic for training schedule.
     ############################################################################################
 
-    log(f"Training on {len(train_files)} files.")
+    log(
+        f"Training on {len(train_files)} files containing {total_train_samples} samples."
+    )
+    model.train()
 
     log("Starting training pass.")
     file_provider = StaticListFileProvider(train_files)
@@ -146,6 +181,18 @@ def run_offline_training(config_path: str) -> None:
             log(
                 f"Step {samples_trained}: loss={loss.item():.4f}, "
                 f"value={value_loss.item():.4f}, policy={policy_loss.item():.4f}"
+            )
+
+        if samples_trained % 3_000_000 < training_config.batch_size:
+            log(f"Saving model and state at {samples_trained} samples.")
+            save_model_and_state(
+                model=model,
+                optimizer=optimizer,
+                name=training_config.output_name + f"_tr{samples_trained:09d}",
+                model_directory=training_config.model_directory,
+                training_directory=training_config.training_directory,
+                device=training_config.device,
+                add_timestamp=True,
             )
 
     log(f"Finished training pass. Trained {samples_trained} samples.")

@@ -47,6 +47,9 @@ def localize_file(path: str, into_directory: Optional[str] = None) -> str:
     Given a path, download it to local if needed and return the local path.
     """
     if is_s3(path):
+        # If it's an onnx file, localize the data file too.
+        if path.endswith(".onnx"):
+            _fetch_s3_file(path + ".data", into_directory)
         return _fetch_s3_file(path, into_directory)
     else:
         return path

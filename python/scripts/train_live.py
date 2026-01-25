@@ -242,8 +242,6 @@ def run_live_training(config_path: str) -> None:
             )
             samples_since_last_save = 0
 
-        time.sleep(training_config.poll_interval_seconds)
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Live training script")

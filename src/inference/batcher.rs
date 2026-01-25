@@ -87,7 +87,8 @@ impl<T: Executor> Batcher<T> {
                         // Otherwise, send the error to all the waiting senders.
                         Err(err) => {
                             let err = err.context("Error in inference executor");
-                            let err_msg = err.to_string();
+                            // Include the full error chain so TensorRT failures are visible upstream.
+                            let err_msg = format!("{:#}", err);
 
                             for response_sender in response_senders {
                                 if response_sender
