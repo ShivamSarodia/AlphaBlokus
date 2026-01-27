@@ -16,7 +16,7 @@ policy_convolution_kernel = 3
 
 [training_offline]
 device = "mps"
-learning_rate = 1e-3
+learning_rate = 0.10
 policy_loss_weight = 0.158
 batch_size = 128
 in_memory_shuffle_file_count = 8
@@ -26,10 +26,10 @@ game_data_directory = "s3://alpha-blokus/full_v2/games/"
 local_game_mirror = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v2/games"
 model_directory = "s3://alpha-blokus/full_v2/models_simulated/"
 training_directory = "s3://alpha-blokus/full_v2/training_simulated/"
-output_name = "v2_base"
+output_name = "v2_sgd_lr0p10"
 initial_training_state_file = "s3://alpha-blokus/full_v2/training_v4/013721615.pth"
-load_optimizer_from_initial_training_state = true
-optimizer_type = "adam"
-optimizer_weight_decay = 0.0
+load_optimizer_from_initial_training_state = false
+optimizer_type = "sgd"
+optimizer_weight_decay = 1e-4
 value_head_l2 = 0.0
-gradient_clip_norm = 0.0
+gradient_clip_norm = 3.0

@@ -96,7 +96,7 @@ def run_offline_training(config_path: str) -> None:
             file_infos,
             start_samples=start_samples,
             end_samples=start_samples + window_size,
-            origin="end",
+            origin="start",
         )
     total_train_samples = sum(
         parse_num_games_from_filename(path) for path in train_files

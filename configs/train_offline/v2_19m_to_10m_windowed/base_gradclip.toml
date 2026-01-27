@@ -32,4 +32,4 @@ load_optimizer_from_initial_training_state = true
 optimizer_type = "adam"
 optimizer_weight_decay = 0.0
 value_head_l2 = 0.0
-gradient_clip_norm = 0.0
+gradient_clip_norm = 3.0
