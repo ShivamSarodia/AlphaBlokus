@@ -74,6 +74,7 @@ def run_offline_training(config_path: str) -> None:
         training_file=initial_state_file,
         skip_loading_optimizer=not training_config.load_optimizer_from_initial_training_state,
         optimizer_type=training_config.optimizer_type,
+        optimizer_weight_decay=training_config.optimizer_weight_decay,
     )
 
     all_files = list_files(training_config.game_data_directory, ".bin")
@@ -90,7 +91,7 @@ def run_offline_training(config_path: str) -> None:
     window_size = 2_000_000
     sample_ratio = 3
     train_files = []
-    for start_samples in range(10_000_000, 19_300_000, int(window_size / sample_ratio)):
+    for start_samples in range(13_721_615, 18_500_000, int(window_size / sample_ratio)):
         train_files += build_sample_window(
             file_infos,
             start_samples=start_samples,
@@ -148,6 +149,7 @@ def run_offline_training(config_path: str) -> None:
             model,
             device=training_config.device,
             policy_loss_weight=training_config.policy_loss_weight,
+            value_head_l2=training_config.value_head_l2,
         )
 
         if torch.isnan(loss).any():
@@ -169,8 +171,8 @@ def run_offline_training(config_path: str) -> None:
 
         optimizer.zero_grad()
         loss.backward()
-        if training_config.optimizer_type == "sgd":
-            clip_grad_norm_(model.parameters(), 5.0)
+        if training_config.gradient_clip_norm is not None:
+            clip_grad_norm_(model.parameters(), training_config.gradient_clip_norm)
         optimizer.step()
 
         batch_size = batch[0].shape[0]
@@ -182,6 +184,10 @@ def run_offline_training(config_path: str) -> None:
                 f"Step {samples_trained}: loss={loss.item():.4f}, "
                 f"value={value_loss.item():.4f}, policy={policy_loss.item():.4f}"
             )
+
+        # TEMPORARY: Stop training after 3m samples.
+        # if samples_trained >= 3_000_000:
+        #     break
 
         if samples_trained % 3_000_000 < training_config.batch_size:
             log(f"Saving model and state at {samples_trained} samples.")

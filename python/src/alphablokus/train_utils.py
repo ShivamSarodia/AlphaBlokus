@@ -120,6 +120,7 @@ def load_initial_state(
     training_file: str | None,
     skip_loading_optimizer: bool = False,
     optimizer_type: str = "adam",
+    optimizer_weight_decay: float = 0.0,
 ) -> tuple[nn.Module, torch.optim.Optimizer]:
     """
     Loads the initial state of the model and optimizer from the training directory.
@@ -127,14 +128,27 @@ def load_initial_state(
     # Load the model and optimizer.
     model = initialize_model(network_config, game_config)
     if optimizer_type == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+        assert (
+            optimizer_weight_decay == 0.0
+        ), "optimizer_weight_decay must be 0.0 when optimizer_type is 'adam'"
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=optimizer_weight_decay,
+        )
+    elif optimizer_type == "adamw":
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=optimizer_weight_decay,
+        )
     elif optimizer_type == "sgd":
         optimizer = torch.optim.SGD(
             model.parameters(),
             lr=learning_rate,
             momentum=0.90,
             nesterov=True,
-            weight_decay=1e-4,
+            weight_decay=optimizer_weight_decay,
         )
     else:
         raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
@@ -218,6 +232,7 @@ def get_loss(
     *,
     device: str,
     policy_loss_weight: float,
+    value_head_l2: float = 0.0,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     # Forward pass
     board, expected_value, expected_policy, valid_policy_mask = batch
@@ -241,4 +256,13 @@ def get_loss(
     )
 
     total_loss = value_loss + policy_loss
+    if value_head_l2 > 0.0:
+        value_head = None
+        if hasattr(model, "value_head"):
+            value_head = model.value_head
+        elif hasattr(model, "values"):
+            value_head = model.values
+        if value_head is not None:
+            l2_term = sum((param**2).sum() for param in value_head.parameters())
+            total_loss = total_loss + (value_head_l2 * l2_term)
     return total_loss, value_loss, policy_loss

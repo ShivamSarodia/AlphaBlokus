@@ -12,21 +12,21 @@ type = "disabled"
 
 [[inference]]
 name = "default"
-model_path = "s3://alpha-blokus/full_v2/models_simulated/19m_from_10m_windowed_tr003000064_1769335155.onnx"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/start_from_10m_windowed_sgd_lr0p20_1769445704.onnx"
 batch_size = 16
 executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
 reload = { poll_interval_seconds = 60000 }
 cache = { max_entries = 4000000 }
 
 [[agents.DuoArena]]
-name = "pentobi_level_6"
+name = "start_from_10m_windowed_sgd_lr0p20_1769445704_pentobi_level_6"
 type = "pentobi"
 binary_path = "/workspace/pentobi/pentobi_gtp/pentobi-gtp"
 opening_book = "/workspace/pentobi/opening_books/book_classic.blksgf"
 level = 6
 
 [[agents.DuoArena]]
-name = "mcts"
+name = "start_from_10m_windowed_sgd_lr0p20_1769445704_mcts"
 type = "mcts"
 inference_config_name = "default"
 fast_move_probability = 0.0

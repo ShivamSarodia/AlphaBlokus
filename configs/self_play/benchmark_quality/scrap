@@ -13,3 +13,31 @@ cargo run --release --bin self-play -- --config configs/self_play/benchmark_grou
 cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/185.toml --run-name 185 ; \
 cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/190.toml --run-name 190 ; \
 cargo run --release --bin self-play -- --config configs/self_play/benchmark_group/193.toml --run-name 193 ;
+
+
+
+
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_adam_gradclip.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_adam_nooptstate.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_adam_vheadl2.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_sgd_lr0p10.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_adamw.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_sgd_lr0p05.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_sgd_lr0p02.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_sgd_lr0p20.toml ; \
+poetry run python scripts/train_offline.py ../configs/train_offline/start_from_10m_windowed/start_from_10m_windowed_adamw_vheadl2.toml ;
+
+
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/4027a5f84b09e86b8d30081838e52ff1/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/5e181dff6af6177fede4ad48381730b3/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/d1e660ef78b787ab3232e8664e31642d/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/e1749c62bdac62a5fc1cdcae3305026e/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/878bcf0faeb5625182fdc1947ab3cd01/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/96529687b9f84adae35bc8f0bced982a/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/346098892ffe8dd4065e89e8f47646f4/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/78e890c7226be8789eae511ea6e880f3/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/3b609b3bf0c70d9a6605d87025986492/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/5e0bb2433c0528eb93a857f4828568e5/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/4fd73a8777f48c7f470ff00f689b3f46/raw" ; \
+cargo run --release --bin self-play -- --config-url "https://gist.githubusercontent.com/ShivamSarodia/425990b1f9f6b9af0cd375bd35a3070f/raw" ;
+

@@ -96,6 +96,9 @@ class TrainingOfflineConfig:
     learning_rate: float
     policy_loss_weight: float
     batch_size: int
+    optimizer_weight_decay: float
+    value_head_l2: float
+    gradient_clip_norm: float | None
     in_memory_shuffle_file_count: int
     num_workers: int
     prefetch_factor: int
@@ -130,3 +133,6 @@ class TrainingOfflineConfig:
             "load_optimizer_from_initial_training_state"
         ]
         self.optimizer_type = offline_data["optimizer_type"]
+        self.optimizer_weight_decay = offline_data.get("optimizer_weight_decay", 0.0)
+        self.value_head_l2 = offline_data.get("value_head_l2", 0.0)
+        self.gradient_clip_norm = offline_data.get("gradient_clip_norm")
