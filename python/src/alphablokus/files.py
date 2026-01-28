@@ -2,6 +2,7 @@ import dotenv
 import boto3
 import os
 import tempfile
+import time
 from contextlib import contextmanager
 from typing import Optional, List
 
@@ -14,6 +15,9 @@ s3 = boto3.client(
     region_name=os.getenv("AWS_REGION_NAME"),
     endpoint_url=os.getenv("AWS_ENDPOINT_URL"),
 )
+
+_LIST_FILES_CACHE: dict[tuple[str, str | None], tuple[float, List[str]]] = {}
+_LIST_FILES_TTL_SECONDS = 60.0
 
 
 def is_s3(path: str) -> bool:
@@ -86,15 +90,32 @@ def from_localized(path: str):
         yield path
 
 
-def list_files(directory: str, extension: str) -> List[str]:
+def list_files(directory: str, extension: str | None = None) -> List[str]:
     """
     Given a directory, return a list of all files with the given extension
     in that directory.
     """
     if is_s3(directory):
-        return _list_s3_files(directory, extension)
+        return _list_s3_files(directory)
     else:
         return _list_local_files(directory, extension)
+
+
+def cached_list_files(directory: str, extension: str | None = None) -> List[str]:
+    """
+    Like list_files, but caches results for a short TTL to avoid repeated calls.
+    """
+    key = (directory, extension)
+    now = time.time()
+    cached = _LIST_FILES_CACHE.get(key)
+    if cached is not None:
+        cached_at, cached_files = cached
+        if now - cached_at <= _LIST_FILES_TTL_SECONDS:
+            return cached_files
+
+    files = list_files(directory, extension)
+    _LIST_FILES_CACHE[key] = (now, files)
+    return files
 
 
 def latest_file(directory: str, extension: str) -> Optional[str]:
@@ -108,13 +129,11 @@ def latest_file(directory: str, extension: str) -> Optional[str]:
     return max(files)
 
 
-def _list_s3_files(directory: str, extension: str) -> List[str]:
+def _list_s3_files(directory: str) -> List[str]:
     """
     Given an S3 directory (e.g., 's3://bucket/path/to/dir/'), return a list of all files with the given extension
     in that directory.
     """
-    if not extension.startswith("."):
-        raise ValueError("`extension` must start with '.' (e.g., '.parquet').")
     if not directory.endswith("/"):
         raise ValueError("`directory` must end with '/' (e.g., 's3://bucket/path/').")
 
@@ -157,17 +176,17 @@ def _list_s3_files(directory: str, extension: str) -> List[str]:
     return [f"s3://{bucket}/{key}" for key in keys if not key.endswith("/")]
 
 
-def _list_local_files(directory: str, extension: str) -> List[str]:
+def _list_local_files(directory: str, extension: str | None = None) -> List[str]:
     """
     Given a local directory, return a list of all files with the given extension
     in that directory.
     """
-    if not extension.startswith("."):
+    if extension is not None and not extension.startswith("."):
         raise ValueError("`extension` must start with '.' (e.g., '.pth').")
     return [
         os.path.join(directory, f)
         for f in os.listdir(directory)
-        if f.endswith(extension)
+        if extension is None or f.endswith(extension)
     ]
 
 

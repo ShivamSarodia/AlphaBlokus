@@ -18,6 +18,7 @@ dependencies = [
     "aim",
     "numpy",
     "prometheus-client",
+    "mcp",
 ]
 
 [tool.setuptools]
