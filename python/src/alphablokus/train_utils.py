@@ -128,9 +128,9 @@ def load_initial_state(
     # Load the model and optimizer.
     model = initialize_model(network_config, game_config)
     if optimizer_type == "adam":
-        assert (
-            optimizer_weight_decay == 0.0
-        ), "optimizer_weight_decay must be 0.0 when optimizer_type is 'adam'"
+        assert optimizer_weight_decay == 0.0, (
+            "optimizer_weight_decay must be 0.0 when optimizer_type is 'adam'"
+        )
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=learning_rate,
@@ -157,9 +157,7 @@ def load_initial_state(
     else:
         print("Loading training state from:", training_file)
         initial_training_path = localize_file(training_file)
-        initial_training_state = torch.load(
-            initial_training_path, map_location=device
-        )
+        initial_training_state = torch.load(initial_training_path, map_location=device)
         model.load_state_dict(initial_training_state["model"])
         if not skip_loading_optimizer:
             optimizer.load_state_dict(initial_training_state["optimizer"])
@@ -233,7 +231,7 @@ def get_loss(
     device: str,
     policy_loss_weight: float,
     value_head_l2: float = 0.0,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
     # Forward pass
     board, expected_value, expected_policy, valid_policy_mask = batch
     board = board.to(device)
@@ -265,4 +263,14 @@ def get_loss(
         if value_head is not None:
             l2_term = sum((param**2).sum() for param in value_head.parameters())
             total_loss = total_loss + (value_head_l2 * l2_term)
+
+    try:
+        if torch.isnan(total_loss).any():
+            log("!!! LOSS IS NaN !!!")
+            return None, None, None
+    except torch.AcceleratorError as e:
+        log("!!! AcceleratorError: !!!")
+        log(f"Error: {e}")
+        return None, None, None
+
     return total_loss, value_loss, policy_loss

@@ -109,8 +109,8 @@ def train_for_samples(
             policy_loss_weight=training_config.policy_loss_weight,
         )
 
-        if torch.isnan(loss).any():
-            raise TrainingError("Loss is NaN")
+        if loss is None:
+            raise TrainingError("Loss not computed")
 
         optimizer.zero_grad()
         loss.backward()

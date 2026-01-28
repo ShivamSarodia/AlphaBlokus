@@ -91,7 +91,8 @@ def run_offline_training(config_path: str) -> None:
     window_size = 2_000_000
     sample_ratio = 3
     train_files = []
-    for start_samples in range(13_721_615, 18_500_000, int(window_size / sample_ratio)):
+    # Train on samples from 13.72M to 19M (17m + 2m window size)
+    for start_samples in range(13_721_615, 17_000_000, int(window_size / sample_ratio)):
         train_files += build_sample_window(
             file_infos,
             start_samples=start_samples,
@@ -152,7 +153,7 @@ def run_offline_training(config_path: str) -> None:
             value_head_l2=training_config.value_head_l2,
         )
 
-        if torch.isnan(loss).any():
+        if loss is None:
             if snapshot_history:
                 rollback_batches = 10
                 if len(snapshot_history) < rollback_batches + 1:
@@ -162,11 +163,11 @@ def run_offline_training(config_path: str) -> None:
                 )
                 snapshot_history.clear()
                 log(
-                    "!!! LOSS IS NaN: RESTORED MODEL/OPTIMIZER "
+                    "!!! LOSS NOT COMPUTED: RESTORED MODEL/OPTIMIZER "
                     "FROM PREVIOUS BATCHES. CONTINUING. !!!"
                 )
                 continue
-            log("!!! LOSS IS NaN: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!")
+            log("!!! LOSS NOT COMPUTED: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!")
             continue
 
         optimizer.zero_grad()
