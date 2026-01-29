@@ -1,4 +1,4 @@
 [mcp_servers.alpha-blokus]
 command = "poetry"
 args = ["run", "python", "scripts/mcp_server.py"]
-cwd = "../python"
+cwd = "python"

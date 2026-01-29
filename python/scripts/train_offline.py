@@ -144,63 +144,71 @@ def run_offline_training(config_path: str) -> None:
     snapshot_history = deque(maxlen=11)
 
     for batch in dataloader:
-        snapshot_history.append(take_training_snapshot(model, optimizer))
-        loss, value_loss, policy_loss = get_loss(
-            batch,
-            model,
-            device=training_config.device,
-            policy_loss_weight=training_config.policy_loss_weight,
-            value_head_l2=training_config.value_head_l2,
-        )
+        try:
+            snapshot_history.append(take_training_snapshot(model, optimizer))
 
-        if loss is None:
-            if snapshot_history:
-                rollback_batches = 10
-                if len(snapshot_history) < rollback_batches + 1:
-                    rollback_batches = len(snapshot_history) - 1
-                restore_training_snapshot(
-                    snapshot_history[0], model, optimizer, training_config.device
-                )
-                snapshot_history.clear()
-                log(
-                    "!!! LOSS NOT COMPUTED: RESTORED MODEL/OPTIMIZER "
-                    "FROM PREVIOUS BATCHES. CONTINUING. !!!"
-                )
-                continue
-            log("!!! LOSS NOT COMPUTED: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!")
-            continue
-
-        optimizer.zero_grad()
-        loss.backward()
-        if training_config.gradient_clip_norm is not None:
-            clip_grad_norm_(model.parameters(), training_config.gradient_clip_norm)
-        optimizer.step()
-
-        batch_size = batch[0].shape[0]
-        samples_trained += batch_size
-        batches_seen += 1
-
-        if batches_seen % log_every_batches == 0:
-            log(
-                f"Step {samples_trained}: loss={loss.item():.4f}, "
-                f"value={value_loss.item():.4f}, policy={policy_loss.item():.4f}"
-            )
-
-        # TEMPORARY: Stop training after 3m samples.
-        # if samples_trained >= 3_000_000:
-        #     break
-
-        if samples_trained % 3_000_000 < training_config.batch_size:
-            log(f"Saving model and state at {samples_trained} samples.")
-            save_model_and_state(
-                model=model,
-                optimizer=optimizer,
-                name=training_config.output_name + f"_tr{samples_trained:09d}",
-                model_directory=training_config.model_directory,
-                training_directory=training_config.training_directory,
+            loss, value_loss, policy_loss = get_loss(
+                batch,
+                model,
                 device=training_config.device,
-                add_timestamp=True,
+                policy_loss_weight=training_config.policy_loss_weight,
+                value_head_l2=training_config.value_head_l2,
             )
+
+            if loss is None:
+                if snapshot_history:
+                    rollback_batches = 10
+                    if len(snapshot_history) < rollback_batches + 1:
+                        rollback_batches = len(snapshot_history) - 1
+                    restore_training_snapshot(
+                        snapshot_history[0], model, optimizer, training_config.device
+                    )
+                    snapshot_history.clear()
+                    log(
+                        "!!! LOSS NOT COMPUTED: RESTORED MODEL/OPTIMIZER "
+                        "FROM PREVIOUS BATCHES. CONTINUING. !!!"
+                    )
+                    continue
+                log("!!! LOSS NOT COMPUTED: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!")
+                continue
+
+            optimizer.zero_grad()
+            loss.backward()
+            if training_config.gradient_clip_norm is not None:
+                clip_grad_norm_(model.parameters(), training_config.gradient_clip_norm)
+            optimizer.step()
+
+            batch_size = batch[0].shape[0]
+            samples_trained += batch_size
+            batches_seen += 1
+
+            if batches_seen % log_every_batches == 0:
+                log(
+                    f"Step {samples_trained}: loss={loss.item():.4f}, "
+                    f"value={value_loss.item():.4f}, policy={policy_loss.item():.4f}"
+                )
+
+            # TEMPORARY: Stop training after 3m samples.
+            # if samples_trained >= 3_000_000:
+            #     break
+
+            if samples_trained % 3_000_000 < training_config.batch_size:
+                log(f"Saving model and state at {samples_trained} samples.")
+                save_model_and_state(
+                    model=model,
+                    optimizer=optimizer,
+                    name=training_config.output_name + f"_tr{samples_trained:09d}",
+                    model_directory=training_config.model_directory,
+                    training_directory=training_config.training_directory,
+                    device=training_config.device,
+                    add_timestamp=True,
+                )
+        except torch.AcceleratorError as exc:
+            log(
+                "!!! AcceleratorError during batch; skipping batch. "
+                f"Error: {exc}"
+            )
+            continue
 
     log(f"Finished training pass. Trained {samples_trained} samples.")
 
