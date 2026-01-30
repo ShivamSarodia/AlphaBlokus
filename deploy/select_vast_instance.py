@@ -45,6 +45,9 @@ def search(instance_type, purpose):
     offers = response.json()["offers"]
 
     offers = [o for o in offers if o["machine_id"] not in exclude_machines]
+    offers = [
+        o for o in offers if "titan" not in o.get("gpu_name", "").lower()
+    ]
 
     for offer in offers:
         augment(offer)
