@@ -127,31 +127,12 @@ def load_initial_state(
     """
     # Load the model and optimizer.
     model = initialize_model(network_config, game_config)
-    if optimizer_type == "adam":
-        assert optimizer_weight_decay == 0.0, (
-            "optimizer_weight_decay must be 0.0 when optimizer_type is 'adam'"
-        )
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=optimizer_weight_decay,
-        )
-    elif optimizer_type == "adamw":
-        optimizer = torch.optim.AdamW(
-            model.parameters(),
-            lr=learning_rate,
-            weight_decay=optimizer_weight_decay,
-        )
-    elif optimizer_type == "sgd":
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=learning_rate,
-            momentum=0.90,
-            nesterov=True,
-            weight_decay=optimizer_weight_decay,
-        )
-    else:
-        raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
+    optimizer = build_optimizer(
+        model,
+        learning_rate=learning_rate,
+        optimizer_type=optimizer_type,
+        optimizer_weight_decay=optimizer_weight_decay,
+    )
     if training_file is None:
         print("No training state found, starting from scratch.")
     else:
@@ -169,6 +150,39 @@ def load_initial_state(
     move_optimizer_state_to_device(optimizer, device)
 
     return model, optimizer
+
+
+def build_optimizer(
+    model: nn.Module,
+    *,
+    learning_rate: float,
+    optimizer_type: str = "adam",
+    optimizer_weight_decay: float = 0.0,
+) -> torch.optim.Optimizer:
+    if optimizer_type == "adam":
+        assert optimizer_weight_decay == 0.0, (
+            "optimizer_weight_decay must be 0.0 when optimizer_type is 'adam'"
+        )
+        return torch.optim.Adam(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=optimizer_weight_decay,
+        )
+    if optimizer_type == "adamw":
+        return torch.optim.AdamW(
+            model.parameters(),
+            lr=learning_rate,
+            weight_decay=optimizer_weight_decay,
+        )
+    if optimizer_type == "sgd":
+        return torch.optim.SGD(
+            model.parameters(),
+            lr=learning_rate,
+            momentum=0.90,
+            nesterov=True,
+            weight_decay=optimizer_weight_decay,
+        )
+    raise ValueError(f"Unsupported optimizer type: {optimizer_type}")
 
 
 def _join_directory(directory: str, filename: str) -> str:

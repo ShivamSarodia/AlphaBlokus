@@ -19,6 +19,7 @@ from alphablokus.train_utils import (
     restore_training_snapshot,
     save_model_and_state,
     take_training_snapshot,
+    build_optimizer,
 )
 from alphablokus.log import log
 
@@ -91,14 +92,49 @@ def run_offline_training(config_path: str) -> None:
     window_size = 2_000_000
     sample_ratio = 3
     train_files = []
-    # Train on samples from 13.72M to 19M (17m + 2m window size)
-    for start_samples in range(13_721_615, 17_000_000, int(window_size / sample_ratio)):
+
+    for start_samples in range(10_500_000, 17_000_000, int(window_size / sample_ratio)):
         train_files += build_sample_window(
             file_infos,
             start_samples=start_samples,
             end_samples=start_samples + window_size,
             origin="start",
         )
+
+    # train_files = []
+
+    # # Last 3/4
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=15_000_000,
+    #     end_samples=0,
+    #     origin="end",
+    # )
+
+    # # Last 1/2
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=10_000_000,
+    #     end_samples=0,
+    #     origin="end",
+    # )
+
+    # # Last 1/4
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=5_000_000,
+    #     end_samples=0,
+    #     origin="end",
+    # )
+
+    # # Last 1/4 again
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=5_000_000,
+    #     end_samples=0,
+    #     origin="end",
+    # )
+
     total_train_samples = sum(
         parse_num_games_from_filename(path) for path in train_files
     )
@@ -140,6 +176,7 @@ def run_offline_training(config_path: str) -> None:
 
     batches_seen = 0
     samples_trained = 0
+    samples_seen_since_last_optimizer_reset = 0
     log_every_batches = 200
     snapshot_history = deque(maxlen=11)
 
@@ -169,7 +206,9 @@ def run_offline_training(config_path: str) -> None:
                         "FROM PREVIOUS BATCHES. CONTINUING. !!!"
                     )
                     continue
-                log("!!! LOSS NOT COMPUTED: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!")
+                log(
+                    "!!! LOSS NOT COMPUTED: NO SNAPSHOT AVAILABLE. SKIPPING UPDATE. !!!"
+                )
                 continue
 
             optimizer.zero_grad()
@@ -180,6 +219,7 @@ def run_offline_training(config_path: str) -> None:
 
             batch_size = batch[0].shape[0]
             samples_trained += batch_size
+            samples_seen_since_last_optimizer_reset += batch_size
             batches_seen += 1
 
             if batches_seen % log_every_batches == 0:
@@ -203,11 +243,18 @@ def run_offline_training(config_path: str) -> None:
                     device=training_config.device,
                     add_timestamp=True,
                 )
+
+            if samples_seen_since_last_optimizer_reset >= window_size:
+                optimizer = build_optimizer(
+                    model=model,
+                    optimizer_type=training_config.optimizer_type,
+                    optimizer_weight_decay=training_config.optimizer_weight_decay,
+                    learning_rate=training_config.learning_rate,
+                )
+                samples_seen_since_last_optimizer_reset = 0
+
         except torch.AcceleratorError as exc:
-            log(
-                "!!! AcceleratorError during batch; skipping batch. "
-                f"Error: {exc}"
-            )
+            log(f"!!! AcceleratorError during batch; skipping batch. Error: {exc}")
             continue
 
     log(f"Finished training pass. Trained {samples_trained} samples.")

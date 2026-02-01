@@ -2,9 +2,11 @@ import requests
 import json
 import os
 import time
+from vastai_sdk import VastAI
 
 exclude_machines = {}
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
+vast_sdk = VastAI(api_key=VASTAI_API_KEY)
 
 # GPUS = {
 #     "3090": "RTX 3090",
@@ -14,48 +16,40 @@ VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 # }
 
 
-def search(instance_type, purpose):
+def search(instance_type):
     assert instance_type in ["on-demand", "bid"]
-    assert purpose in ["training", "self-play"]
 
-    url = "https://console.vast.ai/api/v0/bundles/"
-    payload = {
-        "order": [["dph_total", "asc"]],
-        "verified": {"eq": True},
-        "rentable": {"eq": True},
-        "type": instance_type,
-        "allocated_storage": "64",
-        "reliability2": {"gt": 0.995},
-        "inet_down": {"gt": 100},
-        "inet_up": {"gt": 100},
-        "duration": {"gte": 1},
-        "cpu_cores": {"gte": 8},
-        "cpu_ram": {"gte": 22},
-        "cuda_max_good": {"gte": 12.0},
-    }
+    filters = [
+        "total_flops>19.0",
+        "reliability>0.99",
+        "inet_up>100",
+        "inet_down>100",
+        "duration>1",
+        "cpu_ram>22",
+        "cuda_max_good>12.0",
+        # Obvious ones
+        "rented=False",
+        "rentable=True",
+        "verified=True",
+    ]
 
-    if purpose == "self-play":
-        # payload["gpu_name"] = "RTX 3070"
-        payload["total_flops"] = {"gte": 19.0}
-
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
-
-    response = requests.request("POST", url, headers=headers, data=json.dumps(payload))
-    response.raise_for_status()
-    offers = response.json()["offers"]
+    offers = vast_sdk.search_offers(
+        query=" ".join(filters),
+        type=instance_type,
+        disable_bundling=True,
+        storage=48,
+        order="dph_total",
+    )
 
     offers = [o for o in offers if o["machine_id"] not in exclude_machines]
-    offers = [
-        o for o in offers if "titan" not in o.get("gpu_name", "").lower()
-    ]
+    offers = [o for o in offers if "titan" not in o.get("gpu_name", "").lower()]
 
     for offer in offers:
         augment(offer)
     offers.sort(key=lambda o: o["computed_cost"])
 
     offers = [o for o in offers if o["available_cpu_ghz"] >= 40]
-
-    print(offers[0])
+    offers = dedupe_offers(offers)
 
     return offers
 
@@ -76,19 +70,26 @@ def augment(offer):
     offer["available_ram"] = offer["cpu_ram"] / 1024
 
 
-def print_table(offers):
-    """Print offers as a formatted table."""
-    if not offers:
-        print("No offers found.")
-        return
+def dedupe_offers(offers):
+    seen = set()
+    deduped = []
+    columns = offer_columns()
+    for offer in offers:
+        key = tuple(col["extractor"](0, offer) for col in columns[1:])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(offer)
+    return deduped
 
-    # Define columns: each column has a name and a function to extract/format the value
-    columns = [
+
+def offer_columns():
+    return [
         {"name": "#", "extractor": lambda idx, _: str(idx)},
-        {"name": "GPU", "extractor": lambda _, offer: offer["gpu_name"]},
+        {"name": "GPU", "extractor": lambda _, offer: offer.get("gpu_name") or "Unknown"},
         {
             "name": "CPU",
-            "extractor": lambda _, offer: offer.get("cpu_name", "Unknown")[:18],
+            "extractor": lambda _, offer: (offer.get("cpu_name") or "Unknown")[:18],
         },
         {
             "name": "Cost ($/hr)",
@@ -120,9 +121,18 @@ def print_table(offers):
         },
         {
             "name": "Location",
-            "extractor": lambda _, offer: offer["geolocation"],
+            "extractor": lambda _, offer: offer.get("geolocation") or "",
         },
     ]
+
+
+def print_table(offers):
+    """Print offers as a formatted table."""
+    if not offers:
+        print("No offers found.")
+        return
+
+    columns = offer_columns()
 
     # Auto-calculate column widths
     widths = []
@@ -227,17 +237,8 @@ def get_instance(instance_id):
 instance_type = input("Select instance type (on-demand/bid): ").strip()
 assert instance_type in ["on-demand", "bid"]
 
-purpose = input("Select purpose (training/self-play): ").strip()
-assert purpose in ["training", "self-play"]
-
-# if purpose == "self-play":
-#     gpu_key = input(f"Select GPU ({'/'.join(GPUS.keys())}): ").strip()
-#     assert gpu_key in GPUS
-# else:
-#     gpu_key = None
-
-offers = search(instance_type, purpose)
-selected = select_instance(offers[:8])
+offers = search(instance_type)
+selected = select_instance(offers[:40])
 if not selected:
     exit(1)
 
