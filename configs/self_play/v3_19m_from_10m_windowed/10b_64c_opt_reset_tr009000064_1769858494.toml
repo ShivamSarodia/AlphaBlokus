@@ -1,5 +1,5 @@
 num_concurrent_games = 64
-duration_seconds = 600
+duration_seconds = 300
 
 [observability.metrics]
 type = "prometheus"
