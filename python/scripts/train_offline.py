@@ -61,6 +61,66 @@ def build_sample_window(
     return random.sample(window_paths, len(window_paths))
 
 
+def build_train_files_windowed(
+    file_infos: list[tuple[str, int]], total_samples: int
+) -> list[str]:
+    window_size = 2_000_000
+    sample_ratio = 3
+    train_files = []
+
+    for start_samples in range(13_721_615 - window_size, 19_304_037 - window_size, int(window_size / sample_ratio)):
+        train_files += build_sample_window(
+            file_infos,
+            start_samples=start_samples,
+            end_samples=start_samples + window_size,
+            origin="start",
+        )
+
+    return train_files
+
+
+def build_train_files_bulk(
+    file_infos: list[tuple[str, int]], total_samples: int
+) -> list[str]:
+    endpoint_from_start = 10_000_000
+
+    train_files = []
+
+    # Last 3/4
+    train_files += build_sample_window(
+        file_infos,
+        start_samples=int(endpoint_from_start * 0.25),
+        end_samples=endpoint_from_start,
+        origin="start",
+    )
+
+    # Last 1/2
+    train_files += build_sample_window(
+        file_infos,
+        start_samples=int(endpoint_from_start * 0.5),
+        end_samples=endpoint_from_start,
+        origin="start",
+    )
+
+    # Last 1/4
+    train_files += build_sample_window(
+        file_infos,
+        start_samples=int(endpoint_from_start * 0.75),
+        end_samples=endpoint_from_start,
+        origin="start",
+    )
+
+    # Last 1/8th
+    train_files += build_sample_window(
+        file_infos,
+        start_samples=int(endpoint_from_start * 0.875),
+        end_samples=endpoint_from_start,
+        origin="start",
+    )
+
+    return train_files
+
+
 def run_offline_training(config_path: str) -> None:
     game_config = GameConfig(config_path)
     network_config = NetworkConfig(config_path)
@@ -89,51 +149,7 @@ def run_offline_training(config_path: str) -> None:
 
     random.seed(42)
 
-    window_size = 2_000_000
-    sample_ratio = 3
-    train_files = []
-
-    for start_samples in range(10_500_000, 17_000_000, int(window_size / sample_ratio)):
-        train_files += build_sample_window(
-            file_infos,
-            start_samples=start_samples,
-            end_samples=start_samples + window_size,
-            origin="start",
-        )
-
-    # train_files = []
-
-    # # Last 3/4
-    # train_files += build_sample_window(
-    #     file_infos,
-    #     start_samples=15_000_000,
-    #     end_samples=0,
-    #     origin="end",
-    # )
-
-    # # Last 1/2
-    # train_files += build_sample_window(
-    #     file_infos,
-    #     start_samples=10_000_000,
-    #     end_samples=0,
-    #     origin="end",
-    # )
-
-    # # Last 1/4
-    # train_files += build_sample_window(
-    #     file_infos,
-    #     start_samples=5_000_000,
-    #     end_samples=0,
-    #     origin="end",
-    # )
-
-    # # Last 1/4 again
-    # train_files += build_sample_window(
-    #     file_infos,
-    #     start_samples=5_000_000,
-    #     end_samples=0,
-    #     origin="end",
-    # )
+    train_files = build_train_files_windowed(file_infos, total_samples)
 
     total_train_samples = sum(
         parse_num_games_from_filename(path) for path in train_files
@@ -176,7 +192,7 @@ def run_offline_training(config_path: str) -> None:
 
     batches_seen = 0
     samples_trained = 0
-    samples_seen_since_last_optimizer_reset = 0
+    # samples_seen_since_last_optimizer_reset = 0
     log_every_batches = 200
     snapshot_history = deque(maxlen=11)
 
@@ -213,13 +229,16 @@ def run_offline_training(config_path: str) -> None:
 
             optimizer.zero_grad()
             loss.backward()
-            if training_config.gradient_clip_norm is not None:
+            if (
+                training_config.gradient_clip_norm is not None
+                and training_config.gradient_clip_norm > 0.0
+            ):
                 clip_grad_norm_(model.parameters(), training_config.gradient_clip_norm)
             optimizer.step()
 
             batch_size = batch[0].shape[0]
             samples_trained += batch_size
-            samples_seen_since_last_optimizer_reset += batch_size
+            # samples_seen_since_last_optimizer_reset += batch_size
             batches_seen += 1
 
             if batches_seen % log_every_batches == 0:
@@ -244,14 +263,14 @@ def run_offline_training(config_path: str) -> None:
                     add_timestamp=True,
                 )
 
-            if samples_seen_since_last_optimizer_reset >= window_size:
-                optimizer = build_optimizer(
-                    model=model,
-                    optimizer_type=training_config.optimizer_type,
-                    optimizer_weight_decay=training_config.optimizer_weight_decay,
-                    learning_rate=training_config.learning_rate,
-                )
-                samples_seen_since_last_optimizer_reset = 0
+            # if samples_seen_since_last_optimizer_reset >= window_size:
+            #     optimizer = build_optimizer(
+            #         model=model,
+            #         optimizer_type=training_config.optimizer_type,
+            #         optimizer_weight_decay=training_config.optimizer_weight_decay,
+            #         learning_rate=training_config.learning_rate,
+            #     )
+            #     samples_seen_since_last_optimizer_reset = 0
 
         except torch.AcceleratorError as exc:
             log(f"!!! AcceleratorError during batch; skipping batch. Error: {exc}")

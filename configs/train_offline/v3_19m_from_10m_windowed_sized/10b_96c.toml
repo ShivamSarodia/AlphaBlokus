@@ -1,0 +1,35 @@
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"
+
+[network]
+model_class = "resnet"
+main_body_channels = 96
+residual_blocks = 10
+value_head_channels = 64
+value_head_flat_layer_width = 64
+policy_head_channels = 64
+policy_convolution_kernel = 3
+
+[training_offline]
+device = "mps"
+learning_rate = 1e-3
+policy_loss_weight = 0.158
+batch_size = 128
+in_memory_shuffle_file_count = 8
+num_workers = 2
+prefetch_factor = 60
+game_data_directory = "s3://alpha-blokus/full_v2/games/"
+local_game_mirror = "/Users/shivamsarodia/Dev/AlphaBlokus/data/s3_mirrors/full_v2/games"
+model_directory = "s3://alpha-blokus/full_v2/models_simulated/v3_19m_from_10m_windowed_sized"
+training_directory = "s3://alpha-blokus/full_v2/training_simulated/v3_19m_from_10m_windowed_sized"
+output_name = "10b_96c"
+initial_training_state_file = "s3://alpha-blokus/full_v2/training_simulated/10m_10block_96chan_1768713088.pth"
+load_optimizer_from_initial_training_state = false
+optimizer_type = "adam"
+optimizer_weight_decay = 0.0
+value_head_l2 = 0.0
+gradient_clip_norm = 0.0

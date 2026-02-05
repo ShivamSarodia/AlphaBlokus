@@ -9,33 +9,31 @@ from alphablokus.save_onnx import SaveOnnxMixin
 class ResidualBlock(nn.Module):
     def __init__(self, net_config: NetworkConfig):
         super().__init__()
-        channels = net_config.main_body_channels
 
-        self.bn1 = nn.BatchNorm2d(channels)
-        self.relu1 = nn.ReLU()
-        self.conv1 = nn.Conv2d(
-            in_channels=channels,
-            out_channels=channels,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
-        )
-        self.bn2 = nn.BatchNorm2d(channels)
-        self.relu2 = nn.ReLU()
-        self.conv2 = nn.Conv2d(
-            in_channels=channels,
-            out_channels=channels,
-            kernel_size=3,
-            stride=1,
-            padding=1,
-            bias=False,
+        self.convolutional_block = nn.Sequential(
+            nn.Conv2d(
+                in_channels=net_config.main_body_channels,
+                out_channels=net_config.main_body_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(net_config.main_body_channels),
+            nn.ReLU(),
+            nn.Conv2d(
+                in_channels=net_config.main_body_channels,
+                out_channels=net_config.main_body_channels,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
+            ),
+            nn.BatchNorm2d(net_config.main_body_channels),
         )
 
     def forward(self, x):
-        out = self.conv1(self.relu1(self.bn1(x)))
-        out = self.conv2(self.relu2(self.bn2(out)))
-        return x + out
+        return F.relu(x + self.convolutional_block(x))
 
 
 class ValueHead(nn.Module):
@@ -50,13 +48,18 @@ class ValueHead(nn.Module):
             ),
             nn.BatchNorm2d(net_config.value_head_channels),
             nn.ReLU(),
-            nn.AdaptiveAvgPool2d(1),
             nn.Flatten(),
             nn.Linear(
-                net_config.value_head_channels, net_config.value_head_flat_layer_width
+                net_config.value_head_channels
+                * game_config.board_size
+                * game_config.board_size,
+                net_config.value_head_flat_layer_width,
             ),
             nn.ReLU(),
-            nn.Linear(net_config.value_head_flat_layer_width, 4),
+            nn.Linear(
+                net_config.value_head_flat_layer_width,
+                4,
+            ),
         )
 
     def forward(self, x):
@@ -144,15 +147,3 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
             self.value_head(x),
             self.policy_head(x),
         )
-
-
-if __name__ == "__main__":
-    from alphablokus.files import from_localized
-
-    config_path = "configs/training/full_vast_simulated_position.toml"
-    output_path = "s3://alpha-blokus/full_v2/models_untrained/res_net_conv_value_position_preact.onnx"
-    device = "cpu"
-
-    model = NeuralNet(NetworkConfig(config_path), GameConfig(config_path))
-    with from_localized(output_path) as localized_output_path:
-        model.save_onnx(localized_output_path, device=device)
