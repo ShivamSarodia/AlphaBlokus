@@ -4,7 +4,17 @@ import os
 import time
 from vastai_sdk import VastAI
 
-exclude_machines = {}
+good_hosts = {
+    "132729"
+}
+
+exclude_hosts = {
+    # Bad internet speed
+    "97910",
+    # Cannot connect via SSH
+    "319453",
+}
+
 VASTAI_API_KEY = os.getenv("VASTAI_API_KEY")
 vast_sdk = VastAI(api_key=VASTAI_API_KEY)
 
@@ -41,7 +51,7 @@ def search(instance_type):
         order="dph_total",
     )
 
-    offers = [o for o in offers if o["machine_id"] not in exclude_machines]
+    offers = [o for o in offers if str(o["host_id"]) not in exclude_hosts]
     offers = [o for o in offers if "titan" not in o.get("gpu_name", "").lower()]
 
     for offer in offers:
@@ -65,7 +75,7 @@ def augment(offer):
     )
 
     offer["available_cpu_ghz"] = (
-        offer["cpu_ghz"] * offer["cpu_cores"] * offer["gpu_frac"]
+        (offer["cpu_ghz"] or 0) * (offer["cpu_cores"] or 0) * offer["gpu_frac"]
     )
     offer["available_ram"] = offer["cpu_ram"] / 1024
 
@@ -74,8 +84,9 @@ def dedupe_offers(offers):
     seen = set()
     deduped = []
     columns = offer_columns()
+    dedupe_columns = [col for col in columns if col["name"] != "#"]
     for offer in offers:
-        key = tuple(col["extractor"](0, offer) for col in columns[1:])
+        key = tuple(col["extractor"](0, offer) for col in dedupe_columns)
         if key in seen:
             continue
         seen.add(key)
@@ -86,6 +97,7 @@ def dedupe_offers(offers):
 def offer_columns():
     return [
         {"name": "#", "extractor": lambda idx, _: str(idx)},
+        {"name": "Host ID", "extractor": lambda _, offer: str(offer.get("host_id") or "")},
         {"name": "GPU", "extractor": lambda _, offer: offer.get("gpu_name") or "Unknown"},
         {
             "name": "CPU",

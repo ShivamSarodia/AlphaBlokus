@@ -16,7 +16,7 @@ def list_s3_files(
 ) -> dict[str, object]:
     """
     List files in an S3 directory (e.g., 's3://bucket/path/'), sorted alphabetically.
-    Set direction to "asc" or "desc".
+    Set direction to "asc" or "desc". Directory path must end with trailing slash.
 
     Returns a paginated response with:
       - items: list of file paths

@@ -156,6 +156,7 @@ def run_live_training(config_path: str) -> None:
         device=training_config.device,
         training_file=initial_training_file,
     )
+    model.train()
     samples_since_last_save = 0
     start_metrics_server()
 

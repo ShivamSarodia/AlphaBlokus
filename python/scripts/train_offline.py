@@ -147,9 +147,17 @@ def run_offline_training(config_path: str) -> None:
     # Custom logic for training schedule.
     ############################################################################################
 
-    random.seed(42)
+    # random.seed(42)
 
-    train_files = build_train_files_windowed(file_infos, total_samples)
+    train_files = build_sample_window(
+        file_infos,
+        # The last ~100k samples on disk were not trained on for the
+        # final model we produced.
+        start_samples=18_000_000 - 2_700_000,
+        # We trained over one whole window.
+        end_samples=18_000_000,
+        origin="start",
+    )
 
     total_train_samples = sum(
         parse_num_games_from_filename(path) for path in train_files
