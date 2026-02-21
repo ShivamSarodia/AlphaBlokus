@@ -2,7 +2,7 @@
 
 - s3://alpha-blokus/full_v2/models_simulated -- where onnx files for simulated runs are generally saved, sometimes in a subdirectory inside. note that usually each onnx file also has an onnx.data file
 - s3://alpha-blokus/full_v2/training_simulated -- where the pth files for simulated runs are generally saved, sometimes in a subdirectory inside. the file name in this directory is the same as the file name in the models_simulated directory, just the extensions differ.
-
+- s3://alpha-blokus/full_v2/games -- where most game data is stored. the format of game data files is like 2025-12-29_17-35-09-188900145-93928152_10004.bin where the final `10004` is the number of samples in that file. (Just FYI - early on, most files have approximately 10,000 samples, and the later on, most files have approximately 2,000 samples.)
 
 # Creating config files
 

@@ -1,1 +1,1 @@
-"""MCP server package for S3 listing tools."""
+"""MCP server package."""
