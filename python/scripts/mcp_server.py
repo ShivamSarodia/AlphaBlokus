@@ -1,4 +1,4 @@
-"""Run the AlphaBlokus MCP server over stdio."""
+"""Run the S3 listing MCP server over stdio."""
 
 from alphablokus.mcp.server import run
 

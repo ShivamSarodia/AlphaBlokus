@@ -84,7 +84,9 @@ def dedupe_offers(offers):
     seen = set()
     deduped = []
     columns = offer_columns()
-    dedupe_columns = [col for col in columns if col["name"] != "#"]
+    dedupe_columns = [
+        col for col in columns if col["name"] not in {"#", "Offer ID"}
+    ]
     for offer in offers:
         key = tuple(col["extractor"](0, offer) for col in dedupe_columns)
         if key in seen:
@@ -97,6 +99,7 @@ def dedupe_offers(offers):
 def offer_columns():
     return [
         {"name": "#", "extractor": lambda idx, _: str(idx)},
+        {"name": "Offer ID", "extractor": lambda _, offer: str(offer.get("id") or "")},
         {"name": "Host ID", "extractor": lambda _, offer: str(offer.get("host_id") or "")},
         {"name": "GPU", "extractor": lambda _, offer: offer.get("gpu_name") or "Unknown"},
         {
@@ -170,26 +173,84 @@ def print_table(offers):
         print(row)
 
 
-def select_instance(offers):
-    """Prompt user to select an instance and return the selected offer."""
+def select_instances(offers):
+    """Prompt user to select one or more instances and return selected offers."""
     if not offers:
-        return None
+        return []
 
     print_table(offers)
 
+    offers_by_id = {}
+    offers_by_host_id = {}
+    for offer in offers:
+        offer_id = str(offer.get("id"))
+        host_id = str(offer.get("host_id"))
+        if offer_id and offer_id != "None":
+            offers_by_id[offer_id] = offer
+        if host_id and host_id != "None":
+            offers_by_host_id.setdefault(host_id, []).append(offer)
+
     while True:
         try:
-            choice = input(f"\nSelect an instance (0-{len(offers) - 1}): ").strip()
-            index = int(choice)
-            if 0 <= index < len(offers):
-                return offers[index]
-            else:
-                print(f"Please enter a number between 0 and {len(offers) - 1}")
+            choice = input(
+                "\nSelect one or more instances (comma-separated row #, Offer ID, or Host ID): "
+            ).strip()
+            if not choice:
+                print("Please enter at least one value")
+                continue
+
+            tokens = [t.strip() for t in choice.replace(" ", ",").split(",") if t.strip()]
+            selected = []
+            selected_offer_ids = set()
+            invalid = []
+
+            for token in tokens:
+                if token in offers_by_id:
+                    offer = offers_by_id[token]
+                    offer_id = str(offer["id"])
+                    if offer_id not in selected_offer_ids:
+                        selected_offer_ids.add(offer_id)
+                        selected.append(offer)
+                    continue
+
+                if token in offers_by_host_id:
+                    for offer in offers_by_host_id[token]:
+                        offer_id = str(offer["id"])
+                        if offer_id not in selected_offer_ids:
+                            selected_offer_ids.add(offer_id)
+                            selected.append(offer)
+                    continue
+
+                if token.isdigit():
+                    index = int(token)
+                    if 0 <= index < len(offers):
+                        offer = offers[index]
+                        offer_id = str(offer["id"])
+                        if offer_id not in selected_offer_ids:
+                            selected_offer_ids.add(offer_id)
+                            selected.append(offer)
+                        continue
+
+                invalid.append(token)
+
+            if invalid:
+                print(
+                    "Could not match: "
+                    + ", ".join(invalid)
+                    + ". Use row #, Offer ID, or Host ID from the table."
+                )
+                continue
+
+            if not selected:
+                print("No valid instances selected")
+                continue
+
+            return selected
         except ValueError:
-            print("Please enter a valid number")
+            print("Please enter valid values")
         except (EOFError, KeyboardInterrupt):
             print("\nCancelled.")
-            return None
+            return []
 
 
 def create_from_template(offer_id, min_bid=None):
@@ -250,29 +311,50 @@ instance_type = input("Select instance type (on-demand/bid): ").strip()
 assert instance_type in ["on-demand", "bid"]
 
 offers = search(instance_type)
-selected = select_instance(offers[:40])
-if not selected:
+selected_offers = select_instances(offers[:40])
+if not selected_offers:
     exit(1)
 
-print(f"\nSelected offer ID: {selected['id']}")
-if instance_type == "bid":
-    min_bid = selected["min_bid"]
-else:
-    min_bid = None
+print("\nSelected offers:")
+for offer in selected_offers:
+    print(
+        f"  Offer ID {offer['id']} (Host ID {offer['host_id']}, "
+        f"cost={offer['computed_cost']:.3f}/hr)"
+    )
 
-created = create_from_template(selected["id"], min_bid)
+created_instances = []
+for offer in selected_offers:
+    min_bid = offer["min_bid"] if instance_type == "bid" else None
+    created = create_from_template(offer["id"], min_bid)
+    instance_id = created["new_contract"]
+    created_instances.append(
+        {
+            "instance_id": instance_id,
+            "offer_id": offer["id"],
+            "host_id": offer["host_id"],
+        }
+    )
+    print(
+        f"Created instance {instance_id} from Offer ID {offer['id']} "
+        f"(Host ID {offer['host_id']})."
+    )
 
-instance_id = created["new_contract"]
-print(f"\nCreated instance: {instance_id}. Waiting for ports...")
+print("\nWaiting for SSH ports. Commands will print as each instance is ready:")
 
-while True:
-    instance = get_instance(instance_id)
-    if not instance.get("ports", {}).get("22/tcp"):
+pending = {item["instance_id"]: item for item in created_instances}
+while pending:
+    for instance_id in list(pending.keys()):
+        instance = get_instance(instance_id)
+        if not instance.get("ports", {}).get("22/tcp"):
+            continue
+
+        ip_address = instance["public_ipaddr"]
+        port = instance["ports"]["22/tcp"][0]["HostPort"]
+        item = pending.pop(instance_id)
+        print(
+            f"[instance {instance_id} | offer {item['offer_id']} | host {item['host_id']}] "
+            f"SSH with: ssh -i ~/.ssh/id_ed25519_personal -p {port} root@{ip_address}"
+        )
+
+    if pending:
         time.sleep(10)
-        continue
-
-    ip_address = instance["public_ipaddr"]
-    port = instance["ports"]["22/tcp"][0]["HostPort"]
-    break
-
-print(f"SSH with: ssh -i ~/.ssh/id_ed25519_personal -p {port} root@{ip_address}")
