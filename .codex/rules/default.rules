@@ -1,0 +1,15 @@
+# Auto-allow: `aws s3 ls ...` outside the sandbox without prompting.
+prefix_rule(
+    pattern = ["aws", "s3", "ls"],
+    decision = "allow",
+    justification = "Allow listing S3 buckets/paths",
+    match = [
+        "aws s3 ls",
+        "aws s3 ls s3://my-bucket",
+        "aws s3 ls s3://my-bucket/prefix/ --recursive",
+    ],
+    not_match = [
+        "aws s3 cp file s3://my-bucket/",
+        "aws s3 rm s3://my-bucket/ --recursive",
+    ],
+)

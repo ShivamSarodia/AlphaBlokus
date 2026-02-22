@@ -76,6 +76,8 @@ def select_train_files(
         return build_train_files_windowed(file_infos, total_samples)
     if methodology == "bulk":
         return build_train_files_bulk(file_infos, total_samples)
+    if methodology == "dropoff":
+        return build_train_files_dropoff(file_infos, total_samples)
 
     raise ValueError(f"Unknown selection_methodology='{methodology}'.")
 
@@ -101,6 +103,49 @@ def build_train_files_final_2p7m(
         end_samples=0,
         origin="end",
     )
+
+
+def build_train_files_dropoff(
+    file_infos: list[tuple[str, int]], total_samples: int
+) -> list[str]:
+    # Build a weighted subset of about 2.7M samples from the most recent 10.8M.
+    max_age_in_samples = 10_800_000
+    target_window_samples = 2_700_000
+    dropoff_power = 3.4
+    sorted_infos = sorted(file_infos)
+    recent_candidates: list[tuple[str, int, int]] = []
+    samples_from_end = 0
+
+    for path, num_samples in reversed(sorted_infos):
+        if samples_from_end >= max_age_in_samples:
+            break
+        recent_candidates.append((path, num_samples, samples_from_end))
+        samples_from_end += num_samples
+
+    if not recent_candidates:
+        return []
+
+    newest_path, newest_samples, _ = recent_candidates[0]
+    train_files: list[str] = [newest_path]
+    selected_samples = newest_samples
+
+    if selected_samples < target_window_samples:
+        weighted_pool: list[tuple[float, str, int]] = []
+        for path, num_samples, age_in_samples in recent_candidates[1:]:
+            # Weight decays by sample age (not file index): newest=1.0, oldest~0.0.
+            base_weight = max(1e-9, 1.0 - (age_in_samples / max_age_in_samples))
+            weight = max(1e-9, base_weight**dropoff_power)
+            # Weighted sampling without replacement (larger key = sampled earlier).
+            key = random.random() ** (1.0 / weight)
+            weighted_pool.append((key, path, num_samples))
+
+        for _, path, num_samples in sorted(weighted_pool, reverse=True):
+            train_files.append(path)
+            selected_samples += num_samples
+            if selected_samples >= target_window_samples:
+                break
+
+    return random.sample(train_files, len(train_files))
 
 
 def build_train_files_windowed(
