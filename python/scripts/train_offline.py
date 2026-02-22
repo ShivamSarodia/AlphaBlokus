@@ -88,7 +88,7 @@ def build_train_files_custom(
     # Intentionally hand-editable custom schedule.
     return build_sample_window(
         file_infos,
-        start_samples=2_700_000,
+        start_samples=1_000_000,
         end_samples=0,
         origin="end",
     )
