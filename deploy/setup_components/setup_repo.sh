@@ -11,6 +11,6 @@ git remote set-url origin "https://${GITHUB_PAT}@github.com/ShivamSarodia/AlphaB
 pip install pre-commit
 pre-commit install
 
-npm install -g @openai/codex
+mkdir /tmp/games
 
 echo "✅ Set up repo"
