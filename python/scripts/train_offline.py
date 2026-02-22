@@ -108,8 +108,8 @@ def build_train_files_final_2p7m(
 def build_train_files_dropoff(
     file_infos: list[tuple[str, int]], total_samples: int
 ) -> list[str]:
-    # Build a weighted subset of about 2.7M samples from the most recent 10.8M.
-    max_age_in_samples = 10_800_000
+    # Build a weighted subset of about 2.7M samples from the most recent 5.0M.
+    max_age_in_samples = 5_000_000
     target_window_samples = 2_700_000
     dropoff_power = 3.4
     sorted_infos = sorted(file_infos)
