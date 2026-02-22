@@ -151,11 +151,13 @@ def build_train_files_dropoff(
 def build_train_files_windowed(
     file_infos: list[tuple[str, int]], total_samples: int
 ) -> list[str]:
-    window_size = 2_000_000
+    window_size = 2_700_000
     sample_ratio = 3
+    step = int(window_size / sample_ratio)
+
     train_files = []
 
-    for start_samples in range(13_721_615 - window_size, 19_304_037 - window_size, int(window_size / sample_ratio)):
+    for start_samples in range(18_000_000 - window_size + step, 22_800_257 - window_size, step):
         train_files += build_sample_window(
             file_infos,
             start_samples=start_samples,
@@ -169,32 +171,32 @@ def build_train_files_windowed(
 def build_train_files_bulk(
     file_infos: list[tuple[str, int]], total_samples: int
 ) -> list[str]:
-    endpoint_from_start = 10_000_000
+    endpoint_from_end = 10_000_000
 
     train_files = []
 
     # Last 3/4
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_start * 0.25),
-        end_samples=endpoint_from_start,
-        origin="start",
+        start_samples=int(endpoint_from_end * 0.75),
+        end_samples=0,
+        origin="end",
     )
 
     # Last 1/2
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_start * 0.5),
-        end_samples=endpoint_from_start,
-        origin="start",
+        start_samples=int(endpoint_from_end * 0.5),
+        end_samples=0,
+        origin="end",
     )
 
     # Last 1/4
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_start * 0.75),
-        end_samples=endpoint_from_start,
-        origin="start",
+        start_samples=int(endpoint_from_end * 0.25),
+        end_samples=0,
+        origin="end",
     )
 
     # Last 1/8th
