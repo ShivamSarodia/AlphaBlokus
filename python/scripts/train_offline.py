@@ -151,9 +151,9 @@ def run_offline_training(config_path: str) -> None:
 
     train_files = build_sample_window(
         file_infos,
-        start_samples=0,
-        end_samples=2_500_000,
-        origin="start",
+        start_samples=2_700_000,
+        end_samples=0,
+        origin="end",
     )
 
     # train_files = build_train_files_windowed(file_infos, total_samples)
