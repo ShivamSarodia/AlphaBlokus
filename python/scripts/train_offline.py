@@ -61,6 +61,48 @@ def build_sample_window(
     return random.sample(window_paths, len(window_paths))
 
 
+def select_train_files(
+    file_infos: list[tuple[str, int]],
+    training_config: TrainingOfflineConfig,
+) -> list[str]:
+    methodology = training_config.selection_methodology
+    total_samples = sum(num_samples for _, num_samples in file_infos)
+
+    if methodology == "custom":
+        return build_train_files_custom(file_infos, total_samples)
+    if methodology == "final_2.7m":
+        return build_train_files_final_2p7m(file_infos, total_samples)
+    if methodology == "windowed":
+        return build_train_files_windowed(file_infos, total_samples)
+    if methodology == "bulk":
+        return build_train_files_bulk(file_infos, total_samples)
+
+    raise ValueError(f"Unknown selection_methodology='{methodology}'.")
+
+
+def build_train_files_custom(
+    file_infos: list[tuple[str, int]], total_samples: int
+) -> list[str]:
+    # Intentionally hand-editable custom schedule.
+    return build_sample_window(
+        file_infos,
+        start_samples=2_700_000,
+        end_samples=0,
+        origin="end",
+    )
+
+
+def build_train_files_final_2p7m(
+    file_infos: list[tuple[str, int]], total_samples: int
+) -> list[str]:
+    return build_sample_window(
+        file_infos,
+        start_samples=2_700_000,
+        end_samples=0,
+        origin="end",
+    )
+
+
 def build_train_files_windowed(
     file_infos: list[tuple[str, int]], total_samples: int
 ) -> list[str]:
@@ -138,47 +180,19 @@ def run_offline_training(config_path: str) -> None:
         optimizer_weight_decay=training_config.optimizer_weight_decay,
     )
 
-    all_files = list_files(training_config.game_data_directory, ".bin")
-    all_files = sorted(all_files)
+    all_files = sorted(list_files(training_config.game_data_directory, ".bin"))
     file_infos = [(path, parse_num_games_from_filename(path)) for path in all_files]
     total_samples = sum(num_samples for _, num_samples in file_infos)
-
-    ############################################################################################
-    # Custom logic for training schedule.
-    ############################################################################################
-
-    # random.seed(42)
-
-    train_files = build_sample_window(
-        file_infos,
-        start_samples=2_700_000,
-        end_samples=0,
-        origin="end",
-    )
-
-    # train_files = build_train_files_windowed(file_infos, total_samples)
-
+    train_files = select_train_files(file_infos, training_config)
 
     total_train_samples = sum(
         parse_num_games_from_filename(path) for path in train_files
     )
 
-    # train_files = []
-    # n = len(all_files)
-    # assert n > 300, "Needs at least 300 files."
-
-    # # starts correspond to -300, -280, ..., -60 (all full 60-length windows)
-    # for start in range(n - 300, n - 60 + 1, 20):
-    #     this_window_files = all_files[start : start + 60]
-    #     random.shuffle(this_window_files)
-    #     train_files += this_window_files
-
-    ############################################################################################
-    # End custom logic for training schedule.
-    ############################################################################################
-
     log(
-        f"Training on {len(train_files)} files containing {total_train_samples} samples."
+        "Training with "
+        f"selection_methodology='{training_config.selection_methodology}' "
+        f"on {len(train_files)} files containing {total_train_samples} samples."
     )
     model.train()
 

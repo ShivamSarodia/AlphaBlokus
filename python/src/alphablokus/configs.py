@@ -110,6 +110,7 @@ class TrainingOfflineConfig:
     initial_training_state_file: str
     load_optimizer_from_initial_training_state: bool
     optimizer_type: str
+    selection_methodology: str
 
     def __init__(self, config_file: str):
         with open(config_file, "rb") as f:
@@ -136,3 +137,4 @@ class TrainingOfflineConfig:
         self.optimizer_weight_decay = offline_data.get("optimizer_weight_decay", 0.0)
         self.value_head_l2 = offline_data.get("value_head_l2", 0.0)
         self.gradient_clip_norm = offline_data.get("gradient_clip_norm")
+        self.selection_methodology = offline_data.get("selection_methodology", "custom")
