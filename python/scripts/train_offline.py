@@ -65,6 +65,8 @@ def select_train_files(
     file_infos: list[tuple[str, int]],
     training_config: TrainingOfflineConfig,
 ) -> list[str]:
+    random.seed(42)
+
     methodology = training_config.selection_methodology
     total_samples = sum(num_samples for _, num_samples in file_infos)
 
@@ -157,7 +159,7 @@ def build_train_files_windowed(
 
     train_files = []
 
-    for start_samples in range(18_000_000 - window_size + step, 22_800_257 - window_size, step):
+    for start_samples in range(20_300_000, 22_800_257, step):
         train_files += build_sample_window(
             file_infos,
             start_samples=start_samples,

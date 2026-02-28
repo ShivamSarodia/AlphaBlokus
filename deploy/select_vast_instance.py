@@ -31,6 +31,7 @@ def search(instance_type):
 
     filters = [
         "total_flops>19.0",
+        # "total_flops>37.0",
         "reliability>0.99",
         "inet_up>100",
         "inet_down>100",
