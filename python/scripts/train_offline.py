@@ -173,30 +173,30 @@ def build_train_files_windowed(
 def build_train_files_bulk(
     file_infos: list[tuple[str, int]], total_samples: int
 ) -> list[str]:
-    endpoint_from_end = 10_000_000
+    samples_from_end = 10_000_000
 
     train_files = []
 
-    # Last 3/4
+    # Whole chunk
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_end * 0.75),
+        start_samples=int(samples_from_end),
         end_samples=0,
         origin="end",
     )
 
-    # Last 1/2
+    # Last 2/3
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_end * 0.5),
+        start_samples=int(samples_from_end * 0.667),
         end_samples=0,
         origin="end",
     )
 
-    # Last 1/4
+    # Last 1/3
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_end * 0.25),
+        start_samples=int(samples_from_end * 0.333),
         end_samples=0,
         origin="end",
     )
@@ -204,9 +204,9 @@ def build_train_files_bulk(
     # Last 1/8th
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(endpoint_from_start * 0.875),
-        end_samples=endpoint_from_start,
-        origin="start",
+        start_samples=int(samples_from_end * 0.167),
+        end_samples=0,
+        origin="end",
     )
 
     return train_files
