@@ -9,6 +9,7 @@ from alphablokus.configs import GameConfig, NetworkConfig
 from alphablokus.files import from_localized, is_s3, latest_file, localize_file
 from alphablokus.res_net import NeuralNet
 from alphablokus.res_net_complex_value_head import NeuralNet as ResNetComplexValueHeadNet
+from alphablokus.res_net_film import NeuralNet as ResNetFilmNet
 from alphablokus.res_net_old_value_head import NeuralNet as ResNetOldValueHeadNet
 from alphablokus.trivial_net import TrivialNet
 from alphablokus.log import log
@@ -80,6 +81,8 @@ def initialize_model(
         return TrivialNet(game_config)
     elif network_config.model_class == "resnet":
         return NeuralNet(network_config, game_config)
+    elif network_config.model_class == "resnet_film":
+        return ResNetFilmNet(network_config, game_config)
     elif network_config.model_class == "resnet_complex_value_head":
         return ResNetComplexValueHeadNet(network_config, game_config)
     elif network_config.model_class == "resnet_old_value_head":

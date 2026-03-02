@@ -24,6 +24,7 @@ class GameConfig:
 class NetworkConfig:
     model_class: str
     main_body_channels: int
+    film_channels: int | None
     residual_blocks: int
     value_head_channels: int
     value_head_flat_layer_width: int
@@ -36,6 +37,7 @@ class NetworkConfig:
 
         self.model_class = data["network"]["model_class"]
         self.main_body_channels = data["network"]["main_body_channels"]
+        self.film_channels = data["network"].get("film_channels")
         self.residual_blocks = data["network"]["residual_blocks"]
         self.value_head_channels = data["network"]["value_head_channels"]
         self.value_head_flat_layer_width = data["network"][
@@ -43,6 +45,17 @@ class NetworkConfig:
         ]
         self.policy_head_channels = data["network"]["policy_head_channels"]
         self.policy_convolution_kernel = data["network"]["policy_convolution_kernel"]
+
+        if self.model_class == "resnet_film" and self.film_channels is None:
+            raise ValueError(
+                "network.film_channels must be set when network.model_class is "
+                "'resnet_film'"
+            )
+        if self.model_class != "resnet_film" and self.film_channels is not None:
+            raise ValueError(
+                "network.film_channels must not be set unless network.model_class is "
+                "'resnet_film'"
+            )
 
 
 @dataclass
