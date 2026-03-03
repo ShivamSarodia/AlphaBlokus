@@ -179,6 +179,7 @@ impl Node {
                     .iter()
                     .map(|&x| x.into())
                     .collect(),
+                piece_availability: state.piece_availability_player_pov(self.player),
             })
             .await?;
 
@@ -405,6 +406,7 @@ impl Node {
                 .collect(),
             // This will be populated externally when the game is over.
             game_result: [0.0; NUM_PLAYERS],
+            piece_availability: vec![],
         })
     }
 

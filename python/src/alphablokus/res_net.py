@@ -174,7 +174,7 @@ if __name__ == "__main__":
         )
         for filename in calibration_remote_files
     ]
-    boards, values, policies, valid_masks = load_game_files_to_tensor(
+    boards, values, policies, valid_masks, piece_availabilities = load_game_files_to_tensor(
         model.game_config, calibration_local_files
     )
 
@@ -194,18 +194,21 @@ if __name__ == "__main__":
                 values[batch_indices],
                 policies[batch_indices],
                 valid_masks[batch_indices],
+                piece_availabilities[batch_indices],
             )
         )
         if len(calibration_batches) >= 100:
             break
 
     def forward_step(model, batch):
-        board, _, _, _ = batch
+        board = batch[0]
         return model(board)
 
     def loss_func(output, batch):
         pred_value, pred_policy = output
-        _, expected_value, expected_policy, valid_policy_mask = batch
+        expected_value = batch[1]
+        expected_policy = batch[2]
+        valid_policy_mask = batch[3]
         expected_value = expected_value.to(pred_value.device)
         expected_policy = expected_policy.to(pred_policy.device)
         valid_policy_mask = valid_policy_mask.to(pred_policy.device)

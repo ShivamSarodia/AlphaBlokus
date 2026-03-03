@@ -96,6 +96,15 @@ pub struct MCTSAnalyzerConfig {
 
 impl LoadableConfig for MCTSAnalyzerConfig {}
 
+#[derive(Deserialize, Debug)]
+pub struct EnrichPieceAvailabilityConfig {
+    pub game: GameConfig,
+    pub source_s3_path: String,
+    pub destination_s3_directory: String,
+}
+
+impl LoadableConfig for EnrichPieceAvailabilityConfig {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -134,5 +143,10 @@ mod tests {
     #[test]
     fn self_play_configs_load() -> Result<()> {
         assert_configs_load::<SelfPlayConfig>("configs/self_play")
+    }
+
+    #[test]
+    fn enrich_piece_availability_configs_load() -> Result<()> {
+        assert_configs_load::<EnrichPieceAvailabilityConfig>("configs/enrich_piece_availability")
     }
 }

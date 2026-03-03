@@ -118,9 +118,9 @@ mod tests {
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
                 batch_size: 2,
-                model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
-                executor: ExecutorConfig::Ort {
-                    execution_provider: crate::config::OrtExecutionProvider::Cpu,
+                model_path: "unused.onnx".to_string(),
+                executor: ExecutorConfig::Random {
+                    sleep_duration_ms: 0,
                 },
                 reload: None,
                 cache: Default::default(),
@@ -159,9 +159,9 @@ mod tests {
             inference: vec![InferenceConfig {
                 name: "default".to_string(),
                 batch_size: 2,
-                model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
-                executor: ExecutorConfig::Ort {
-                    execution_provider: crate::config::OrtExecutionProvider::Cpu,
+                model_path: "unused.onnx".to_string(),
+                executor: ExecutorConfig::Random {
+                    sleep_duration_ms: 0,
                 },
                 reload: None,
                 cache: Default::default(),

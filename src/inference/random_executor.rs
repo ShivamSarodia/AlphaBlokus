@@ -55,6 +55,10 @@ mod tests {
             .execute(vec![inference::Request {
                 board: Board::new(&testing::create_game_config()),
                 valid_move_indexes: vec![0, 1, 2],
+                piece_availability: vec![
+                    vec![1u8; testing::create_game_config().num_pieces];
+                    crate::config::NUM_PLAYERS
+                ],
             }])
             .unwrap();
 

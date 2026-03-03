@@ -7,10 +7,12 @@ use crate::tensorrt::bridge::ffi;
 use super::utils::log_ffi_error;
 
 pub struct MemoryBlockSizes {
-    pub input_device_bytes: usize,
+    pub board_device_bytes: usize,
+    pub piece_availability_device_bytes: usize,
     pub value_device_bytes: usize,
     pub policy_device_bytes: usize,
-    pub input_host_bytes: usize,
+    pub board_host_bytes: usize,
+    pub piece_availability_host_bytes: usize,
     pub value_host_bytes: usize,
     pub policy_host_bytes: usize,
 }
@@ -32,10 +34,12 @@ pub struct MemoryBlockItem {
 }
 
 pub struct MemoryBlock {
-    pub input_device: DeviceBuffer,
+    pub board_device: DeviceBuffer,
+    pub piece_availability_device: DeviceBuffer,
     pub value_device: DeviceBuffer,
     pub policy_device: DeviceBuffer,
-    pub input_host: HostBuffer,
+    pub board_host: HostBuffer,
+    pub piece_availability_host: HostBuffer,
     pub value_host: HostBuffer,
     pub policy_host: HostBuffer,
 }
@@ -53,10 +57,14 @@ impl MemoryPool {
         let mut blocks = Vec::with_capacity(pool_size);
         for _ in 0..pool_size {
             blocks.push(Arc::new(MemoryBlock {
-                input_device: DeviceBuffer::new(sizes.input_device_bytes)?,
+                board_device: DeviceBuffer::new(sizes.board_device_bytes)?,
+                piece_availability_device: DeviceBuffer::new(
+                    sizes.piece_availability_device_bytes,
+                )?,
                 value_device: DeviceBuffer::new(sizes.value_device_bytes)?,
                 policy_device: DeviceBuffer::new(sizes.policy_device_bytes)?,
-                input_host: HostBuffer::new(sizes.input_host_bytes)?,
+                board_host: HostBuffer::new(sizes.board_host_bytes)?,
+                piece_availability_host: HostBuffer::new(sizes.piece_availability_host_bytes)?,
                 value_host: HostBuffer::new(sizes.value_host_bytes)?,
                 policy_host: HostBuffer::new(sizes.policy_host_bytes)?,
             }));

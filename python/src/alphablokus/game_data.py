@@ -10,18 +10,24 @@ from alphablokus.configs import GameConfig
 def load_game_file(
     game_config: GameConfig,
     local_file_path: str,
+    require_piece_availability: bool = False,
 ) -> tuple[
-    List[torch.Tensor], List[torch.Tensor], List[torch.Tensor], List[torch.Tensor]
+    List[torch.Tensor],
+    List[torch.Tensor],
+    List[torch.Tensor],
+    List[torch.Tensor],
+    List[torch.Tensor],
 ]:
     boards = []
     values = []
     policies = []
     valid_masks = []
+    piece_availabilities = []
     with zstandard.open(local_file_path, "rb") as f:
         game_data_list = f.read()
         game_data_list = msgpack.unpackb(game_data_list)
 
-        for game_data in game_data_list:
+        for row_idx, game_data in enumerate(game_data_list):
             board = [game_data["board"]["slices"][i]["cells"] for i in range(4)]
             boards.append(torch.as_tensor(board, dtype=torch.float32))
 
@@ -70,26 +76,69 @@ def load_game_file(
             ] = True
             valid_masks.append(valid_mask)
 
-    return boards, values, policies, valid_masks
+            raw_piece_availability = game_data.get("piece_availability")
+            has_piece_availability = (
+                raw_piece_availability is not None and len(raw_piece_availability) > 0
+            )
+            if not has_piece_availability:
+                if require_piece_availability:
+                    raise ValueError(
+                        "Missing or empty piece_availability in "
+                        f"{local_file_path} at row {row_idx}"
+                    )
+                piece_availabilities.append(
+                    torch.ones((4, game_config.num_pieces), dtype=torch.float32)
+                )
+                continue
+
+            piece_availability = torch.as_tensor(
+                raw_piece_availability, dtype=torch.float32
+            )
+            if piece_availability.shape != (4, game_config.num_pieces):
+                raise ValueError(
+                    "Invalid piece_availability shape in "
+                    f"{local_file_path} at row {row_idx}. Expected (4, "
+                    f"{game_config.num_pieces}), got {tuple(piece_availability.shape)}"
+                )
+            if not torch.all(
+                (piece_availability == 0.0) | (piece_availability == 1.0)
+            ):
+                raise ValueError(
+                    "Non-binary piece_availability values in "
+                    f"{local_file_path} at row {row_idx}"
+                )
+            piece_availabilities.append(piece_availability)
+
+    return boards, values, policies, valid_masks, piece_availabilities
 
 
 def load_game_files_to_tensor(
     game_config: GameConfig,
     local_file_paths: List[str],
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    require_piece_availability: bool = False,
+) -> tuple[
+    torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor
+]:
     boards = []
     values = []
     policies = []
     valid_masks = []
+    piece_availabilities = []
     for file_path in local_file_paths:
-        board, value, policy, valid_mask = load_game_file(game_config, file_path)
+        board, value, policy, valid_mask, piece_availability = load_game_file(
+            game_config,
+            file_path,
+            require_piece_availability=require_piece_availability,
+        )
         boards += board
         values += value
         policies += policy
         valid_masks += valid_mask
+        piece_availabilities += piece_availability
     return (
         torch.stack(boards),
         torch.stack(values),
         torch.stack(policies),
         torch.stack(valid_masks),
+        torch.stack(piece_availabilities),
     )

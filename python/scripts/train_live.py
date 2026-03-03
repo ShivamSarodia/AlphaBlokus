@@ -22,6 +22,7 @@ from alphablokus.train_utils import (
     get_loss,
     get_sample_count_from_training_filename,
     load_initial_state,
+    requires_piece_availability,
     save_model_and_state,
 )
 from alphablokus.log import log
@@ -99,6 +100,7 @@ def train_for_samples(
     optimizer: torch.optim.Optimizer,
     training_config: TrainingLiveConfig,
     max_samples: int,
+    expects_piece_availability: bool,
 ) -> int:
     samples_trained = 0
     for batch in dataloader:
@@ -107,6 +109,7 @@ def train_for_samples(
             model,
             device=training_config.device,
             policy_loss_weight=training_config.policy_loss_weight,
+            expects_piece_availability=expects_piece_availability,
         )
 
         if loss is None:
@@ -139,6 +142,7 @@ def run_live_training(config_path: str) -> None:
     game_config = GameConfig(config_path)
     network_config = NetworkConfig(config_path)
     training_config = TrainingLiveConfig(config_path)
+    needs_piece_availability = requires_piece_availability(network_config)
 
     if training_config.num_workers not in (0, 1):
         raise ValueError("Live training supports num_workers of 0 or 1.")
@@ -169,6 +173,7 @@ def run_live_training(config_path: str) -> None:
         file_provider,
         training_config.batch_size,
         training_config.in_memory_shuffle_file_count,
+        require_piece_availability=needs_piece_availability,
         local_cache_dir=training_config.local_cache_dir or None,
         cleanup_local_files=training_config.cleanup_local_files,
     )
@@ -209,6 +214,7 @@ def run_live_training(config_path: str) -> None:
             optimizer,
             training_config,
             target_samples,
+            expects_piece_availability=needs_piece_availability,
         )
 
         samples_last_trained += new_samples

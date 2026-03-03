@@ -53,6 +53,7 @@ impl<T: inference::Client + Send + Sync> Agent for PolicySamplingAgent<T> {
             .evaluate(inference::Request {
                 board: state.board().clone_with_player_pov(player as i32),
                 valid_move_indexes: player_pov_move_indexes,
+                piece_availability: state.piece_availability_player_pov(player),
             })
             .await?;
 

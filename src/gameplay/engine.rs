@@ -334,9 +334,9 @@ mod tests {
         let inference_config = crate::config::InferenceConfig {
             name: "default".to_string(),
             batch_size: 1,
-            model_path: "static/networks/trivial_net_tiny.onnx".to_string(),
-            executor: crate::config::ExecutorConfig::Ort {
-                execution_provider: crate::config::OrtExecutionProvider::Cpu,
+            model_path: "unused.onnx".to_string(),
+            executor: crate::config::ExecutorConfig::Random {
+                sleep_duration_ms: 0,
             },
             reload: None,
             cache: crate::config::InferenceCacheConfig::default(),

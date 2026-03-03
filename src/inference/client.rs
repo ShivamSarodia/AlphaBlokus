@@ -28,6 +28,7 @@ use tokio_util::sync::CancellationToken;
 pub struct Request {
     pub board: Board,
     pub valid_move_indexes: Vec<usize>,
+    pub piece_availability: Vec<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -362,6 +363,7 @@ mod tests {
                 Request {
                     board,
                     valid_move_indexes: vec![i],
+                    piece_availability: vec![vec![1u8; game_config.num_pieces]; NUM_PLAYERS],
                 }
             })
             .collect::<Vec<_>>();
@@ -458,6 +460,7 @@ mod tests {
         let request = Request {
             board: Board::new(&game_config),
             valid_move_indexes: vec![1, 2, 3],
+            piece_availability: vec![vec![1u8; game_config.num_pieces]; NUM_PLAYERS],
         };
 
         let first = client.evaluate(request.clone()).await.unwrap();
@@ -466,5 +469,64 @@ mod tests {
         assert_eq!(first.value, [0.25; NUM_PLAYERS]);
         assert_eq!(second.value, [0.25; NUM_PLAYERS]);
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn request_piece_availability_has_expected_shape() {
+        let game_config = testing::create_game_config();
+        let request = Request {
+            board: Board::new(game_config),
+            valid_move_indexes: vec![1, 2, 3],
+            piece_availability: vec![vec![1u8; game_config.num_pieces]; NUM_PLAYERS],
+        };
+        assert_eq!(request.piece_availability.len(), NUM_PLAYERS);
+        for row in &request.piece_availability {
+            assert_eq!(row.len(), game_config.num_pieces);
+            assert!(row.iter().all(|&value| value == 1));
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn cache_miss_when_piece_availability_differs() {
+        let game_config = testing::create_game_config();
+        let call_count = Arc::new(AtomicUsize::new(0));
+
+        struct CountingExecutor {
+            call_count: Arc<AtomicUsize>,
+        }
+
+        impl Executor for CountingExecutor {
+            fn execute(&self, requests: Vec<Request>) -> Result<Vec<Response>> {
+                self.call_count.fetch_add(1, Ordering::SeqCst);
+                Ok(requests
+                    .into_iter()
+                    .map(|request| Response {
+                        value: [0.25; NUM_PLAYERS],
+                        policy: vec![0.0; request.valid_move_indexes.len()],
+                    })
+                    .collect())
+            }
+        }
+
+        let client = DefaultClient::build_with_executor(
+            CountingExecutor {
+                call_count: Arc::clone(&call_count),
+            },
+            1,
+            CancellationToken::new(),
+            DefaultClient::build_cache(&crate::config::InferenceCacheConfig { max_entries: 10 }),
+        );
+
+        let first_request = Request {
+            board: Board::new(game_config),
+            valid_move_indexes: vec![1, 2, 3],
+            piece_availability: vec![vec![1u8; game_config.num_pieces]; NUM_PLAYERS],
+        };
+        let mut second_request = first_request.clone();
+        second_request.piece_availability[0][0] = 0;
+
+        let _first = client.evaluate(first_request).await.unwrap();
+        let _second = client.evaluate(second_request).await.unwrap();
+        assert_eq!(call_count.load(Ordering::SeqCst), 2);
     }
 }

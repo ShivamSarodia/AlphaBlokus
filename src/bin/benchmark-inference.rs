@@ -88,6 +88,10 @@ fn run_benchmark_inference(config: &'static BenchmarkInferenceConfig) -> Result<
                         let request = Request {
                             board: random_board(&config.game),
                             valid_move_indexes: random_valid_move_indexes(&config.game),
+                            piece_availability: vec![
+                                vec![1u8; config.game.num_pieces];
+                                NUM_PLAYERS
+                            ],
                         };
                         tokio::select! {
                             _ = cancel_token.cancelled() => {

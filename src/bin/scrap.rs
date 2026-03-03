@@ -1,5 +1,5 @@
 use alpha_blokus::{
-    config::{self, GameConfig},
+    config::{self, GameConfig, NUM_PLAYERS},
     inference::{Client, DefaultClient, Request},
     recorder::read_mcts_data_from_disk,
     utils,
@@ -72,6 +72,7 @@ fn run(config: &'static ScrapConfig) -> Result<()> {
             .evaluate(Request {
                 board: first_mcts_data.board.clone(),
                 valid_move_indexes: first_mcts_data.valid_moves.clone(),
+                piece_availability: vec![vec![1u8; config.game.num_pieces]; NUM_PLAYERS],
             })
             .await
             .unwrap();

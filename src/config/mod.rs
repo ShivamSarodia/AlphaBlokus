@@ -16,7 +16,7 @@ pub use inference::{
 };
 pub use observability::{LoggingConfig, MetricsConfig, ObservabilityConfig};
 pub use parents::{
-    BenchmarkInferenceConfig, LoadableConfig, MCTSAnalyzerConfig, PreprocessMovesConfig,
-    SelfPlayConfig, WebPlayConfig,
+    BenchmarkInferenceConfig, EnrichPieceAvailabilityConfig, LoadableConfig, MCTSAnalyzerConfig,
+    PreprocessMovesConfig, SelfPlayConfig, WebPlayConfig,
 };
 pub use recorder::MCTSRecorderConfig;

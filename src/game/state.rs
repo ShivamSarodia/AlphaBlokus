@@ -21,6 +21,7 @@ pub struct State {
     turn: u16,
     // Stored as a tuple of (move_index, player).
     last_move_played: Option<(usize, usize)>,
+    piece_availability: [Vec<u8>; NUM_PLAYERS],
     moves_enabled: [MovesBitSet; NUM_PLAYERS],
     moves_ruled_out: [MovesBitSet; NUM_PLAYERS],
     game_config: &'static GameConfig,
@@ -32,6 +33,7 @@ pub struct SerializableState {
     player: usize,
     turn: u16,
     last_move_played: Option<(usize, usize)>,
+    piece_availability: [Vec<u8>; NUM_PLAYERS],
     moves_enabled: [MovesBitSet; NUM_PLAYERS],
     moves_ruled_out: [MovesBitSet; NUM_PLAYERS],
 }
@@ -43,6 +45,7 @@ impl State {
             player: 0,
             turn: 0,
             last_move_played: None,
+            piece_availability: std::array::from_fn(|_| vec![1u8; game_config.num_pieces]),
             moves_enabled: game_config.cloned_initial_moves_enabled()?,
             moves_ruled_out: std::array::from_fn(|_| MovesBitSet::new(game_config.num_moves)),
             game_config,
@@ -59,6 +62,7 @@ impl State {
         // Update the board occupancies with the newly occupied cells of the
         // selected move.
         self.board.add(self.player, &move_profile.occupied_cells);
+        self.piece_availability[self.player][move_profile.piece_index] = 0;
 
         // Update moves enabled for player.
         self.moves_enabled[self.player].add_mut(&move_profile.moves_enabled_for_self);
@@ -150,6 +154,14 @@ impl State {
     pub fn board(&self) -> &Board {
         &self.board
     }
+
+    pub fn piece_availability_player_pov(&self, player: usize) -> Vec<Vec<u8>> {
+        let rows: [Vec<u8>; NUM_PLAYERS] = std::array::from_fn(|i| {
+            let row = (i + player) % NUM_PLAYERS;
+            self.piece_availability[row].clone()
+        });
+        rows.to_vec()
+    }
 }
 
 impl SerializableState {
@@ -159,6 +171,7 @@ impl SerializableState {
             player: state.player,
             turn: state.turn,
             last_move_played: state.last_move_played,
+            piece_availability: state.piece_availability.clone(),
             moves_enabled: state.moves_enabled.clone(),
             moves_ruled_out: state.moves_ruled_out.clone(),
         }
@@ -170,6 +183,7 @@ impl SerializableState {
             player: self.player,
             turn: self.turn,
             last_move_played: self.last_move_played,
+            piece_availability: self.piece_availability,
             moves_enabled: self.moves_enabled,
             moves_ruled_out: self.moves_ruled_out,
             game_config,
@@ -317,6 +331,52 @@ mod tests {
         let invalid_move_index = config.num_moves + 100;
         let result = state.apply_move(invalid_move_index);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_piece_availability_starts_all_available() {
+        let config = create_game_config();
+        let state = State::new(&config).unwrap();
+
+        assert_eq!(state.piece_availability.len(), NUM_PLAYERS);
+        for player in 0..NUM_PLAYERS {
+            assert_eq!(state.piece_availability[player].len(), config.num_pieces);
+            assert!(
+                state.piece_availability[player]
+                    .iter()
+                    .all(|&value| value == 1)
+            );
+        }
+    }
+
+    #[test]
+    fn test_apply_move_marks_piece_unavailable_for_player() {
+        let config = create_game_config();
+        let mut state = State::new(&config).unwrap();
+        let player = state.player();
+        let move_index = state.first_valid_move().unwrap();
+        let piece_index = config.move_profiles().unwrap().get(move_index).piece_index;
+
+        state.apply_move(move_index).unwrap();
+
+        assert_eq!(state.piece_availability[player][piece_index], 0);
+    }
+
+    #[test]
+    fn test_piece_availability_player_pov_rotation() {
+        let config = create_game_config();
+        let mut state = State::new(&config).unwrap();
+
+        for player in 0..NUM_PLAYERS {
+            state.piece_availability[player].fill(1);
+            state.piece_availability[player][player] = 0;
+        }
+
+        let pov = state.piece_availability_player_pov(1);
+        assert_eq!(pov[0], state.piece_availability[1]);
+        assert_eq!(pov[1], state.piece_availability[2]);
+        assert_eq!(pov[2], state.piece_availability[3]);
+        assert_eq!(pov[3], state.piece_availability[0]);
     }
 
     #[test]

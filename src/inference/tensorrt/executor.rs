@@ -14,7 +14,9 @@ use crate::{
 };
 
 use super::{
-    constants::{BOARD_INPUT_NAME, POLICY_OUTPUT_NAME, VALUE_OUTPUT_NAME},
+    constants::{
+        BOARD_INPUT_NAME, PIECE_AVAILABILITY_INPUT_NAME, POLICY_OUTPUT_NAME, VALUE_OUTPUT_NAME,
+    },
     memory::{MemoryBlockSizes, MemoryPool},
     shapes::TensorShapes,
     streams::{CudaEvent, Streams},
@@ -71,19 +73,23 @@ impl TensorRtExecutor {
         }
         .context("Failed to create TensorRT engine")?;
 
-        let sizes = TensorShapes::from_engine(&engine_unique)?;
+        let sizes = TensorShapes::from_engine(&engine_unique, game_config)?;
 
-        let input_bytes = sizes.input_elements_per_item * std::mem::size_of::<f32>();
+        let board_bytes = sizes.board_elements_per_item * std::mem::size_of::<f32>();
+        let piece_availability_bytes =
+            sizes.piece_availability_elements_per_item * std::mem::size_of::<f32>();
         let value_bytes = sizes.value_elements_per_item * std::mem::size_of::<f32>();
         let policy_bytes = sizes.policy_elements_per_item * std::mem::size_of::<f32>();
 
         let memory_pool = MemoryPool::new(
             pool_size,
             MemoryBlockSizes {
-                input_device_bytes: input_bytes * max_batch_size,
+                board_device_bytes: board_bytes * max_batch_size,
+                piece_availability_device_bytes: piece_availability_bytes * max_batch_size,
                 value_device_bytes: value_bytes * max_batch_size,
                 policy_device_bytes: policy_bytes * max_batch_size,
-                input_host_bytes: input_bytes * max_batch_size,
+                board_host_bytes: board_bytes * max_batch_size,
+                piece_availability_host_bytes: piece_availability_bytes * max_batch_size,
                 value_host_bytes: value_bytes * max_batch_size,
                 policy_host_bytes: policy_bytes * max_batch_size,
             },
@@ -120,23 +126,34 @@ impl Executor for TensorRtExecutor {
         let block_handle = self.memory_pool.acquire()?;
         let block = block_handle.block();
 
-        let input_elements = self.sizes.input_elements_per_item;
+        let board_elements = self.sizes.board_elements_per_item;
+        let piece_availability_elements = self.sizes.piece_availability_elements_per_item;
         let value_elements = self.sizes.value_elements_per_item;
         let policy_elements = self.sizes.policy_elements_per_item;
 
-        let input_floats = unsafe {
+        let board_floats = unsafe {
             slice::from_raw_parts_mut(
-                block.input_host.as_mut_ptr() as *mut f32,
-                input_elements * batch_size,
+                block.board_host.as_mut_ptr() as *mut f32,
+                board_elements * batch_size,
+            )
+        };
+        let piece_availability_floats = unsafe {
+            slice::from_raw_parts_mut(
+                block.piece_availability_host.as_mut_ptr() as *mut f32,
+                piece_availability_elements * batch_size,
             )
         };
 
-        input_floats.fill(0.0);
+        board_floats.fill(0.0);
+        piece_availability_floats.fill(0.0);
         let board_area = self.game_config.board_area();
 
         for (batch_index, request) in requests.iter().enumerate() {
-            let offset = batch_index * input_elements;
-            let sample_slice = &mut input_floats[offset..offset + input_elements];
+            let board_offset = batch_index * board_elements;
+            let board_sample_slice = &mut board_floats[board_offset..board_offset + board_elements];
+            let piece_offset = batch_index * piece_availability_elements;
+            let piece_sample_slice = &mut piece_availability_floats
+                [piece_offset..piece_offset + piece_availability_elements];
 
             for player in 0..NUM_PLAYERS {
                 let player_offset = player * board_area;
@@ -145,14 +162,22 @@ impl Executor for TensorRtExecutor {
                     for y in 0..self.game_config.board_size {
                         if slice.get((x, y)) {
                             let idx = player_offset + x * self.game_config.board_size + y;
-                            sample_slice[idx] = 1.0;
+                            board_sample_slice[idx] = 1.0;
                         }
                     }
+                }
+
+                for piece_index in 0..self.game_config.num_pieces {
+                    let idx = player * self.game_config.num_pieces + piece_index;
+                    piece_sample_slice[idx] =
+                        request.piece_availability[player][piece_index] as f32;
                 }
             }
         }
 
-        let input_bytes = batch_size * input_elements * std::mem::size_of::<f32>();
+        let board_bytes = batch_size * board_elements * std::mem::size_of::<f32>();
+        let piece_availability_bytes =
+            batch_size * piece_availability_elements * std::mem::size_of::<f32>();
         let value_bytes = batch_size * value_elements * std::mem::size_of::<f32>();
         let policy_bytes = batch_size * policy_elements * std::mem::size_of::<f32>();
 
@@ -162,12 +187,19 @@ impl Executor for TensorRtExecutor {
 
         unsafe {
             ffi::memcpy_h2d_async(
-                block.input_device.ptr(),
-                block.input_host.as_ptr(),
-                input_bytes,
+                block.board_device.ptr(),
+                block.board_host.as_ptr(),
+                board_bytes,
                 self.streams.h2d_handle(),
             )
-            .context("cudaMemcpyAsync H2D failed")?;
+            .context("cudaMemcpyAsync board H2D failed")?;
+            ffi::memcpy_h2d_async(
+                block.piece_availability_device.ptr(),
+                block.piece_availability_host.as_ptr(),
+                piece_availability_bytes,
+                self.streams.h2d_handle(),
+            )
+            .context("cudaMemcpyAsync piece_availability H2D failed")?;
         }
         ffi::event_record(h2d_event.handle(), self.streams.h2d_handle())
             .context("Failed to record H2D event")?;
@@ -186,11 +218,18 @@ impl Executor for TensorRtExecutor {
                 .context("Failed to set input shape on TensorRT context")?;
 
             let_cxx_string!(board_name = BOARD_INPUT_NAME);
+            let_cxx_string!(piece_availability_name = PIECE_AVAILABILITY_INPUT_NAME);
             let_cxx_string!(value_name = VALUE_OUTPUT_NAME);
             let_cxx_string!(policy_name = POLICY_OUTPUT_NAME);
 
-            ffi::set_tensor_address(engine.as_mut(), &board_name, block.input_device.ptr())
+            ffi::set_tensor_address(engine.as_mut(), &board_name, block.board_device.ptr())
                 .context("Failed to set board tensor address")?;
+            ffi::set_tensor_address(
+                engine.as_mut(),
+                &piece_availability_name,
+                block.piece_availability_device.ptr(),
+            )
+            .context("Failed to set piece_availability tensor address")?;
             ffi::set_tensor_address(engine.as_mut(), &value_name, block.value_device.ptr())
                 .context("Failed to set value tensor address")?;
             ffi::set_tensor_address(engine.as_mut(), &policy_name, block.policy_device.ptr())
@@ -312,6 +351,7 @@ mod tests {
         inference::Request {
             board,
             valid_move_indexes,
+            piece_availability: vec![vec![1u8; game_config.num_pieces]; NUM_PLAYERS],
         }
     }
 

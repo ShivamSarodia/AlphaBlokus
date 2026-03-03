@@ -59,13 +59,10 @@ def build_sample_window(
 
 
 def _stack_batch(samples: Sequence[tuple[torch.Tensor, ...]]):
-    boards, values, policies, valid_masks = zip(*samples)
-    return (
-        torch.stack(boards),
-        torch.stack(values),
-        torch.stack(policies),
-        torch.stack(valid_masks),
-    )
+    stacked_fields = []
+    for field_values in zip(*samples):
+        stacked_fields.append(torch.stack(field_values))
+    return tuple(stacked_fields)
 
 
 class FileProvider:
@@ -149,6 +146,7 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
         batch_size: int,
         in_memory_shuffle_file_count: int,
         *,
+        require_piece_availability: bool = False,
         local_cache_dir: Optional[str] = None,
         cleanup_local_files: bool = False,
         stats: Optional[DataLoaderStats] = None,
@@ -157,6 +155,7 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
         self.file_provider = file_provider
         self.batch_size = batch_size
         self.in_memory_shuffle_file_count = in_memory_shuffle_file_count
+        self.require_piece_availability = require_piece_availability
         self.local_cache_dir = local_cache_dir
         self.cleanup_local_files = cleanup_local_files
         self.stats = stats
@@ -164,10 +163,12 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
     def _load_samples_from_file(
         self,
         path: str,
-    ) -> List[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]]:
+    ) -> List[tuple[torch.Tensor, ...]]:
         local_path = localize_file(path, self.local_cache_dir)
-        boards, values, policies, valid_masks = load_game_file(
-            self.game_config, local_path
+        boards, values, policies, valid_masks, piece_availabilities = load_game_file(
+            self.game_config,
+            local_path,
+            require_piece_availability=self.require_piece_availability,
         )
         if self.stats is not None:
             self.stats.files_loaded += 1
@@ -177,7 +178,7 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
                 os.remove(local_path)
             except OSError:
                 pass
-        return list(zip(boards, values, policies, valid_masks))
+        return list(zip(boards, values, policies, valid_masks, piece_availabilities))
 
     def __iter__(self) -> Iterable[tuple[torch.Tensor, ...]]:
         worker_info = torch.utils.data.get_worker_info()
@@ -187,7 +188,7 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
         worker_id = worker_info.id if worker_info is not None else 0
         num_workers = worker_info.num_workers if worker_info is not None else 1
 
-        buffer: List[tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]] = []
+        buffer: List[tuple[torch.Tensor, ...]] = []
         while True:
             if len(buffer) < self.batch_size:
                 next_files = self.file_provider.next_files(

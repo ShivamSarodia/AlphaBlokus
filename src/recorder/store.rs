@@ -38,6 +38,10 @@ pub struct MCTSData {
     /// This field will be 0.0 for a game that is in progress, and completed
     /// before writing when the game result is known.
     pub game_result: [f32; NUM_PLAYERS],
+    /// Piece availability by player and piece index.
+    /// A value of 1 means the piece is still available, 0 means unavailable.
+    #[serde(default)]
+    pub piece_availability: Vec<Vec<u8>>,
 }
 
 #[derive(Clone)]
@@ -131,12 +135,7 @@ async fn write_mcts_data(mcts_data: Vec<MCTSData>, output_directory: &str) -> Re
     if num_rows == 0 {
         return Ok(());
     }
-    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
-        let uncompressed_bytes = rmp_serde::encode::to_vec_named(&mcts_data)?;
-        let compressed = zstd::encode_all(&uncompressed_bytes[..], 6)?;
-        Ok(compressed)
-    })
-    .await??;
+    let body = tokio::task::spawn_blocking(move || encode_mcts_data(&mcts_data)).await??;
 
     if output_directory.starts_with("s3://") {
         write_mcts_data_to_s3(num_rows, body, output_directory).await?;
@@ -172,18 +171,32 @@ async fn write_mcts_data_to_s3(
     let uri = S3Uri::new(output_directory.to_string())?;
     let filename = generate_filename(num_rows);
     let uri_with_file = uri.with_filename(filename)?;
-    let bucket = uri_with_file.bucket.clone();
-    let key = uri_with_file.key();
+    upload_encoded_mcts_data_to_s3_file(mcts_data, &uri_with_file).await?;
+
+    Ok(())
+}
+
+pub fn encode_mcts_data(mcts_data: &[MCTSData]) -> Result<Vec<u8>> {
+    let uncompressed_bytes = rmp_serde::encode::to_vec_named(mcts_data)?;
+    let compressed = zstd::encode_all(&uncompressed_bytes[..], 6)?;
+    Ok(compressed)
+}
+
+pub async fn upload_encoded_mcts_data_to_s3_file(mcts_data: Vec<u8>, s3_uri: &S3Uri) -> Result<()> {
+    let filename = s3_uri
+        .filename
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("S3 URI must include a filename"))?;
+    let final_s3_uri = s3_uri.with_filename(filename.to_string())?;
 
     let client = create_s3_client().await?;
     client
         .put_object()
         .body(aws_sdk_s3::primitives::ByteStream::from(mcts_data))
-        .bucket(bucket)
-        .key(key)
+        .bucket(final_s3_uri.bucket.clone())
+        .key(final_s3_uri.key())
         .send()
         .await?;
-
     Ok(())
 }
 
@@ -198,10 +211,23 @@ pub fn read_mcts_data_from_disk(filename: &str) -> Result<Vec<MCTSData>> {
 #[cfg(test)]
 mod tests {
     use itertools::Itertools;
+    use serde::Serialize;
 
     use crate::testing;
 
     use super::*;
+
+    #[derive(Serialize)]
+    struct OldMCTSData {
+        player: usize,
+        turn: u16,
+        game_id: u64,
+        board: Board,
+        valid_moves: Vec<usize>,
+        valid_move_tuples: Vec<(usize, usize, usize)>,
+        visit_counts: Vec<u32>,
+        game_result: [f32; NUM_PLAYERS],
+    }
 
     fn create_mcts_data(game_id: u64) -> MCTSData {
         MCTSData {
@@ -213,6 +239,7 @@ mod tests {
             valid_move_tuples: vec![(0, 0, 0), (1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 0, 0)],
             visit_counts: vec![0, 0, 0, 0, 0],
             game_result: [0.0, 0.0, 0.0, 0.0],
+            piece_availability: vec![],
         }
     }
 
@@ -293,5 +320,29 @@ mod tests {
             .to_string_lossy()
             .into_owned();
         assert!(file.ends_with("_1.bin"));
+    }
+
+    #[test]
+    fn test_read_old_mcts_data_defaults_piece_availability() {
+        let old_row = OldMCTSData {
+            player: 0,
+            turn: 0,
+            game_id: 123,
+            board: Board::new(&testing::create_game_config()),
+            valid_moves: vec![0, 1],
+            valid_move_tuples: vec![(0, 0, 0), (1, 0, 0)],
+            visit_counts: vec![1, 2],
+            game_result: [0.0; NUM_PLAYERS],
+        };
+
+        let bytes = rmp_serde::encode::to_vec_named(&vec![old_row]).unwrap();
+        let compressed = zstd::encode_all(&bytes[..], 6).unwrap();
+        let directory = testing::create_tmp_directory();
+        let file_path = format!("{}/old.bin", directory);
+        std::fs::write(&file_path, compressed).unwrap();
+
+        let decoded = read_mcts_data_from_disk(&file_path).unwrap();
+        assert_eq!(decoded.len(), 1);
+        assert!(decoded[0].piece_availability.is_empty());
     }
 }

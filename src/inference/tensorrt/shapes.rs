@@ -1,33 +1,43 @@
 use anyhow::{Context, Result, bail};
 use cxx::let_cxx_string;
 
+use crate::config::GameConfig;
 use crate::tensorrt::bridge::ffi;
 
 use super::constants::{
-    BOARD_INPUT_NAME, POLICY_OUTPUT_NAME, TENSORRT_FLOAT_DATATYPE, VALUE_OUTPUT_NAME,
+    BOARD_INPUT_NAME, PIECE_AVAILABILITY_INPUT_NAME, POLICY_OUTPUT_NAME, TENSORRT_FLOAT_DATATYPE,
+    VALUE_OUTPUT_NAME,
 };
 
 pub struct TensorShapes {
-    pub input_elements_per_item: usize,
+    pub board_elements_per_item: usize,
+    pub piece_availability_elements_per_item: usize,
     pub value_elements_per_item: usize,
     pub policy_elements_per_item: usize,
     pub policy_shape_without_batch: Vec<usize>,
 }
 
 impl TensorShapes {
-    pub fn from_engine(engine: &cxx::UniquePtr<ffi::TrtEngine>) -> Result<Self> {
+    pub fn from_engine(
+        engine: &cxx::UniquePtr<ffi::TrtEngine>,
+        _game_config: &GameConfig,
+    ) -> Result<Self> {
         let_cxx_string!(board_name = BOARD_INPUT_NAME);
+        let_cxx_string!(piece_availability_name = PIECE_AVAILABILITY_INPUT_NAME);
         let_cxx_string!(value_name = VALUE_OUTPUT_NAME);
         let_cxx_string!(policy_name = POLICY_OUTPUT_NAME);
 
         let board_shape = ffi::get_tensor_shape(engine, &board_name)
             .context("Failed to get board tensor shape")?;
+        let piece_availability_shape = ffi::get_tensor_shape(engine, &piece_availability_name)
+            .context("Failed to get piece_availability tensor shape")?;
         let value_shape = ffi::get_tensor_shape(engine, &value_name)
             .context("Failed to get value tensor shape")?;
         let policy_shape = ffi::get_tensor_shape(engine, &policy_name)
             .context("Failed to get policy tensor shape")?;
 
         ensure_float_tensor(engine, &board_name)?;
+        ensure_float_tensor(engine, &piece_availability_name)?;
         ensure_float_tensor(engine, &value_name)?;
         ensure_float_tensor(engine, &policy_name)?;
 
@@ -40,7 +50,8 @@ impl TensorShapes {
         }
 
         Ok(Self {
-            input_elements_per_item: product_without_batch(&board_shape)?,
+            board_elements_per_item: product_without_batch(&board_shape)?,
+            piece_availability_elements_per_item: product_without_batch(&piece_availability_shape)?,
             value_elements_per_item: product_without_batch(&value_shape)?,
             policy_elements_per_item: product_without_batch(&policy_shape)?,
             policy_shape_without_batch,

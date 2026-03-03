@@ -19,6 +19,13 @@ class TrainingError(Exception):
     pass
 
 
+MODEL_CLASSES_REQUIRING_PIECE_AVAILABILITY = frozenset({"resnet_film"})
+
+
+def requires_piece_availability(network_config: NetworkConfig) -> bool:
+    return network_config.model_class in MODEL_CLASSES_REQUIRING_PIECE_AVAILABILITY
+
+
 def _copy_state_to_cpu(value):
     if isinstance(value, torch.Tensor):
         return value.detach().cpu().clone()
@@ -239,14 +246,26 @@ def get_loss(
     device: str,
     policy_loss_weight: float,
     value_head_l2: float = 0.0,
+    expects_piece_availability: bool = False,
 ) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
-    # Forward pass
-    board, expected_value, expected_policy, valid_policy_mask = batch
+    if len(batch) not in (4, 5):
+        raise ValueError(f"Expected batch to have 4 or 5 tensors, got {len(batch)}")
+
+    board, expected_value, expected_policy, valid_policy_mask = batch[:4]
+    piece_availability = batch[4] if len(batch) == 5 else None
+
     board = board.to(device)
     expected_value = expected_value.to(device)
     expected_policy = expected_policy.to(device)
     valid_policy_mask = valid_policy_mask.to(device)
-    pred_value, pred_policy = model(board)
+    if expects_piece_availability:
+        if piece_availability is None:
+            raise ValueError(
+                "Model expects piece_availability but batch only had 4 tensors"
+            )
+        pred_value, pred_policy = model(board, piece_availability.to(device))
+    else:
+        pred_value, pred_policy = model(board)
 
     # Calculate value loss.
     value_loss = nn.CrossEntropyLoss()(pred_value, expected_value)

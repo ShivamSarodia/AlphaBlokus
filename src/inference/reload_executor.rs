@@ -192,6 +192,7 @@ mod tests {
         inference::Request {
             board: Board::new(game_config),
             valid_move_indexes: vec![],
+            piece_availability: vec![vec![1u8; game_config.num_pieces]; NUM_PLAYERS],
         }
     }
 

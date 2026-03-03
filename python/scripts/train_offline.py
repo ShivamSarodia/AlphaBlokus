@@ -16,6 +16,7 @@ from alphablokus.files import list_files, parse_num_games_from_filename
 from alphablokus.train_utils import (
     get_loss,
     load_initial_state,
+    requires_piece_availability,
     restore_training_snapshot,
     save_model_and_state,
     take_training_snapshot,
@@ -178,33 +179,40 @@ def build_train_files_bulk(
     train_files = []
 
     # Whole chunk
-    train_files += build_sample_window(
-        file_infos,
-        start_samples=int(samples_from_end),
-        end_samples=0,
-        origin="end",
-    )
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=int(samples_from_end),
+    #     end_samples=0,
+    #     origin="end",
+    # )
 
-    # Last 2/3
-    train_files += build_sample_window(
-        file_infos,
-        start_samples=int(samples_from_end * 0.667),
-        end_samples=0,
-        origin="end",
-    )
+    # # Last 2/3
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=int(samples_from_end * 0.667),
+    #     end_samples=0,
+    #     origin="end",
+    # )
 
-    # Last 1/3
-    train_files += build_sample_window(
-        file_infos,
-        start_samples=int(samples_from_end * 0.333),
-        end_samples=0,
-        origin="end",
-    )
+    # # Last 1/3
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=int(samples_from_end * 0.333),
+    #     end_samples=0,
+    #     origin="end",
+    # )
 
-    # Last 1/8th
+    # # Last 1/8th
+    # train_files += build_sample_window(
+    #     file_infos,
+    #     start_samples=int(samples_from_end * 0.167),
+    #     end_samples=0,
+    #     origin="end",
+    # )
+
     train_files += build_sample_window(
         file_infos,
-        start_samples=int(samples_from_end * 0.167),
+        start_samples=4_500_000,
         end_samples=0,
         origin="end",
     )
@@ -216,6 +224,7 @@ def run_offline_training(config_path: str) -> None:
     game_config = GameConfig(config_path)
     network_config = NetworkConfig(config_path)
     training_config = TrainingOfflineConfig(config_path)
+    needs_piece_availability = requires_piece_availability(network_config)
 
     initial_state_file = training_config.initial_training_state_file.strip() or None
     model, optimizer = load_initial_state(
@@ -252,6 +261,7 @@ def run_offline_training(config_path: str) -> None:
         file_provider,
         training_config.batch_size,
         training_config.in_memory_shuffle_file_count,
+        require_piece_availability=needs_piece_availability,
         local_cache_dir=training_config.local_game_mirror or None,
         cleanup_local_files=False,
     )
@@ -277,6 +287,7 @@ def run_offline_training(config_path: str) -> None:
                 device=training_config.device,
                 policy_loss_weight=training_config.policy_loss_weight,
                 value_head_l2=training_config.value_head_l2,
+                expects_piece_availability=needs_piece_availability,
             )
 
             if loss is None:

@@ -23,6 +23,9 @@ pub struct OrtExecutor {
     game_config: &'static GameConfig,
 }
 
+const BOARD_INPUT_NAME: &str = "board";
+const PIECE_AVAILABILITY_INPUT_NAME: &str = "piece_availability";
+
 impl OrtExecutor {
     pub fn build(
         model_path: &Path,
@@ -56,11 +59,20 @@ impl OrtExecutor {
 
 impl Executor for OrtExecutor {
     fn execute(&self, requests: Vec<inference::Request>) -> Result<Vec<inference::Response>> {
+        if requests.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let mut input_array = ndarray::Array4::<f32>::zeros((
             requests.len(),
             NUM_PLAYERS,
             self.game_config.board_size,
             self.game_config.board_size,
+        ));
+        let mut piece_availability_array = ndarray::Array3::<f32>::zeros((
+            requests.len(),
+            NUM_PLAYERS,
+            self.game_config.num_pieces,
         ));
 
         for (batch_index, request) in requests.iter().enumerate() {
@@ -72,10 +84,19 @@ impl Executor for OrtExecutor {
                         }
                     }
                 }
+
+                for piece_index in 0..self.game_config.num_pieces {
+                    piece_availability_array[[batch_index, player, piece_index]] =
+                        request.piece_availability[player][piece_index] as f32;
+                }
             }
         }
-        let ort_inputs = ort::inputs!["board" => Tensor::from_array(input_array)
-            .context("Failed to create ORT input tensor")?];
+        let ort_inputs = ort::inputs![
+            BOARD_INPUT_NAME => Tensor::from_array(input_array)
+                .context("Failed to create ORT board input tensor")?,
+            PIECE_AVAILABILITY_INPUT_NAME => Tensor::from_array(piece_availability_array)
+                .context("Failed to create ORT piece_availability input tensor")?
+        ];
         let mut session = self
             .session
             .lock()
@@ -154,6 +175,10 @@ mod tests {
         let request_1 = inference::Request {
             board: board_1,
             valid_move_indexes: vec![0, 1, 2],
+            piece_availability: vec![
+                vec![1u8; testing::create_game_config().num_pieces];
+                NUM_PLAYERS
+            ],
         };
 
         let mut board_1_copy = Board::new(&testing::create_game_config());
@@ -161,6 +186,10 @@ mod tests {
         let request_1_copy = inference::Request {
             board: board_1_copy,
             valid_move_indexes: vec![2, 1, 0],
+            piece_availability: vec![
+                vec![1u8; testing::create_game_config().num_pieces];
+                NUM_PLAYERS
+            ],
         };
 
         let mut board_2 = Board::new(&testing::create_game_config());
@@ -168,6 +197,10 @@ mod tests {
         let request_2 = inference::Request {
             board: board_2,
             valid_move_indexes: vec![0, 1, 2],
+            piece_availability: vec![
+                vec![1u8; testing::create_game_config().num_pieces];
+                NUM_PLAYERS
+            ],
         };
 
         let results = executor
