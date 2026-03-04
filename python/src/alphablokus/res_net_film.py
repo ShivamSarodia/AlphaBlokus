@@ -8,11 +8,12 @@ from alphablokus.save_onnx import SaveOnnxMixin
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, net_config: NetworkConfig):
+    def __init__(self, net_config: NetworkConfig, include_pos_channels: bool = False):
         super().__init__()
+        self.include_pos_channels = include_pos_channels
 
         self.conv_1 = nn.Conv2d(
-            in_channels=net_config.main_body_channels,
+            in_channels=net_config.main_body_channels + (2 if include_pos_channels else 0),
             out_channels=net_config.main_body_channels,
             kernel_size=3,
             stride=1,
@@ -30,13 +31,20 @@ class ResidualBlock(nn.Module):
         )
         self.bn_2 = nn.BatchNorm2d(net_config.main_body_channels)
 
-    def forward(self, x, gamma, beta):
-        residual = self.conv_1(x)
+    def forward(self, x, gamma=None, beta=None, pos=None):
+        residual_input = x
+        if self.include_pos_channels:
+            if pos is None:
+                raise ValueError("pos must be provided when include_pos_channels is enabled")
+            residual_input = torch.cat([residual_input, pos], dim=1)
+
+        residual = self.conv_1(residual_input)
         residual = self.bn_1(residual)
         residual = F.relu(residual)
         residual = self.conv_2(residual)
         residual = self.bn_2(residual)
-        residual = residual * (1.0 + gamma[:, :, None, None]) + beta[:, :, None, None]
+        if gamma is not None and beta is not None:
+            residual = residual * (1.0 + gamma[:, :, None, None]) + beta[:, :, None, None]
         return F.relu(x + residual)
 
 
@@ -99,6 +107,18 @@ class PolicyHead(nn.Module):
 
 
 class NeuralNet(nn.Module, SaveOnnxMixin):
+    @staticmethod
+    def _trunk_film_block_indices(residual_block_count: int) -> list[int]:
+        # FiLM every other block, capped to exactly half (floor for odd counts).
+        trunk_film_block_count = residual_block_count // 2
+        return list(range(0, residual_block_count, 2))[:trunk_film_block_count]
+
+    @staticmethod
+    def _positional_residual_block_indices(residual_block_count: int) -> list[int]:
+        # Add coordinates into a few deeper blocks (e.g. 2, 5, 8 for a 10-block trunk).
+        start_index = 2 if residual_block_count > 2 else 0
+        return list(range(start_index, residual_block_count, 3))
+
     def __init__(
         self,
         net_config: NetworkConfig,
@@ -128,10 +148,29 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
             nn.BatchNorm2d(net_config.main_body_channels),
             nn.ReLU(),
         )
-        self.residual_blocks = nn.ModuleList(
-            [ResidualBlock(net_config) for _ in range(net_config.residual_blocks)]
+        self.trunk_film_block_indices = self._trunk_film_block_indices(
+            net_config.residual_blocks
         )
-        self.film_stage_count = len(self.residual_blocks)
+        self.trunk_film_block_index_to_param_index = {
+            block_index: param_index
+            for param_index, block_index in enumerate(self.trunk_film_block_indices)
+        }
+        self.positional_residual_block_indices = self._positional_residual_block_indices(
+            net_config.residual_blocks
+        )
+        self.positional_residual_block_index_set = set(
+            self.positional_residual_block_indices
+        )
+        self.residual_blocks = nn.ModuleList(
+            [
+                ResidualBlock(
+                    net_config,
+                    include_pos_channels=i in self.positional_residual_block_index_set,
+                )
+                for i in range(net_config.residual_blocks)
+            ]
+        )
+        self.film_stage_count = len(self.trunk_film_block_indices)
         self.trunk_film_param_count = (
             self.film_stage_count * 2 * self.net_config.main_body_channels
         )
@@ -217,7 +256,14 @@ class NeuralNet(nn.Module, SaveOnnxMixin):
             board.shape[0], self.film_stage_count, 2, self.net_config.main_body_channels
         )
         for i, residual_block in enumerate(self.residual_blocks):
-            x = residual_block(x, film_params[:, i, 0], film_params[:, i, 1])
+            film_param_index = self.trunk_film_block_index_to_param_index.get(i)
+            gamma = None
+            beta = None
+            if film_param_index is not None:
+                gamma = film_params[:, film_param_index, 0]
+                beta = film_params[:, film_param_index, 1]
+            pos = trunk_pos if i in self.positional_residual_block_index_set else None
+            x = residual_block(x, gamma, beta, pos)
 
         head_pos = self._build_pos_channels(
             x.shape[0], x.shape[-1], x.device, x.dtype
