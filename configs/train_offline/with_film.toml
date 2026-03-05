@@ -18,7 +18,7 @@ policy_convolution_kernel = 3
 [training_offline]
 device = "mps"
 learning_rate = 1e-3
-policy_loss_weight = 0.158
+policy_loss_weight = 0.374
 batch_size = 128
 in_memory_shuffle_file_count = 8
 num_workers = 2
