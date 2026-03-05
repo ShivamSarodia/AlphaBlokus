@@ -33,6 +33,14 @@ class DataLoaderStats:
     buffer_refills: int = 0
 
 
+@dataclass(frozen=True)
+class WindowUsageProgress:
+    total_samples: int
+    used_samples: int
+    remaining_samples: int
+    percent_used: float
+
+
 def list_game_files_with_samples(
     directory: str,
 ) -> List[GameFileInfo]:
@@ -106,7 +114,10 @@ class StaticWindowedS3FileProvider(FileProvider):
         self.window_size_samples = window_size_samples
 
         # Maintain an in-memory shuffled window of files.
-        self.current_window_paths = []
+        self.current_window_paths: List[str] = []
+        self.window_file_samples: dict[str, int] = {}
+        self.window_total_samples: Optional[int] = None
+        self.window_remaining_samples = 0
 
     def _reload_window(self):
         """
@@ -117,9 +128,31 @@ class StaticWindowedS3FileProvider(FileProvider):
         window_files = build_sample_window(files, self.window_size_samples)
         self.current_window_paths = [file_info.path for file_info in window_files]
         random.shuffle(self.current_window_paths)
+        self.window_file_samples = {
+            file_info.path: file_info.num_samples for file_info in window_files
+        }
         total_samples = sum(file_info.num_samples for file_info in window_files)
+        self.window_total_samples = total_samples
+        self.window_remaining_samples = total_samples
         log(
             f"Reloaded window with {len(self.current_window_paths)} files. Found {total_samples} samples."
+        )
+
+    def get_window_progress(self) -> Optional[WindowUsageProgress]:
+        if self.window_total_samples is None:
+            return None
+
+        used_samples = self.window_total_samples - self.window_remaining_samples
+        percent_used = (
+            0.0
+            if self.window_total_samples == 0
+            else (used_samples / self.window_total_samples) * 100.0
+        )
+        return WindowUsageProgress(
+            total_samples=self.window_total_samples,
+            used_samples=used_samples,
+            remaining_samples=self.window_remaining_samples,
+            percent_used=percent_used,
         )
 
     def next_files(
@@ -134,7 +167,12 @@ class StaticWindowedS3FileProvider(FileProvider):
         while len(output) < count:
             if not self.current_window_paths:
                 self._reload_window()
-            output.append(self.current_window_paths.pop(0))
+            next_path = self.current_window_paths.pop(0)
+            output.append(next_path)
+            next_file_samples = self.window_file_samples.get(next_path, 0)
+            self.window_remaining_samples = max(
+                0, self.window_remaining_samples - next_file_samples
+            )
         return output
 
 

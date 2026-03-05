@@ -432,7 +432,7 @@ impl Node {
             // This will be populated externally when the game is over.
             game_result: [0.0; NUM_PLAYERS],
             q_value: self.root_value_estimate_as_player_pov(),
-            piece_availability: vec![],
+            piece_availability: state.piece_availability_player_pov(self.player),
         })
     }
 
@@ -529,5 +529,25 @@ mod tests {
             node.root_value_estimate_as_player_pov(),
             [0.35, 0.25, 0.15, 0.25]
         );
+    }
+
+    #[test]
+    fn generate_mcts_data_includes_piece_availability() {
+        let game_config = testing::create_game_config();
+        let mut state = State::new(game_config).unwrap();
+        let move_index = state.valid_moves().next().unwrap();
+        state.apply_move(move_index).unwrap();
+
+        let node = create_test_node(state.player());
+        let data = node.generate_mcts_data(42, &state).unwrap();
+
+        assert_eq!(
+            data.piece_availability,
+            state.piece_availability_player_pov(state.player())
+        );
+        assert_eq!(data.piece_availability.len(), NUM_PLAYERS);
+        for row in data.piece_availability {
+            assert_eq!(row.len(), game_config.num_pieces);
+        }
     }
 }

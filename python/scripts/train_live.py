@@ -4,7 +4,7 @@
 import argparse
 import os
 import time
-from typing import Iterable
+from typing import Iterator
 
 import torch
 from prometheus_client import Gauge, start_http_server
@@ -95,7 +95,8 @@ def publish_metrics(
 
 
 def train_for_samples(
-    dataloader: Iterable,
+    *,
+    dataloader_iter: Iterator,
     model: torch.nn.Module,
     optimizer: torch.optim.Optimizer,
     training_config: TrainingLiveConfig,
@@ -103,7 +104,12 @@ def train_for_samples(
     expects_piece_availability: bool,
 ) -> int:
     samples_trained = 0
-    for batch in dataloader:
+    loss = None
+    value_loss = None
+    policy_loss = None
+    while True:
+        batch = next(dataloader_iter)
+
         loss, value_loss, policy_loss = get_loss(
             batch,
             model,
@@ -136,6 +142,17 @@ def train_for_samples(
         f"Loss: {loss.item():.4f} (Value: {value_loss.item():.4f}, Policy: {policy_loss.item():.4f})"
     )
     return samples_trained
+
+
+def log_window_usage(file_provider: StaticWindowedS3FileProvider) -> None:
+    progress = file_provider.get_window_progress()
+    if progress is None:
+        return
+    log(
+        f"Window usage: used={progress.used_samples}/{progress.total_samples} samples "
+        f"({progress.percent_used:.1f}%), remaining={progress.remaining_samples} "
+        f"samples before reload."
+    )
 
 
 def run_live_training(config_path: str) -> None:
@@ -182,6 +199,7 @@ def run_live_training(config_path: str) -> None:
         num_workers=training_config.num_workers,
         prefetch_factor=training_config.prefetch_factor,
     )
+    dataloader_iter = iter(dataloader)
 
     while True:
         poll_start = time.time()
@@ -209,11 +227,11 @@ def run_live_training(config_path: str) -> None:
         )
 
         samples_trained = train_for_samples(
-            dataloader,
-            model,
-            optimizer,
-            training_config,
-            target_samples,
+            dataloader_iter=dataloader_iter,
+            model=model,
+            optimizer=optimizer,
+            training_config=training_config,
+            max_samples=target_samples,
             expects_piece_availability=needs_piece_availability,
         )
 
@@ -225,6 +243,7 @@ def run_live_training(config_path: str) -> None:
         log(
             f"{samples_since_last_save}/{training_config.min_samples_for_save} since last save."
         )
+        log_window_usage(file_provider)
 
         publish_metrics(
             samples_total_available=samples_total,
