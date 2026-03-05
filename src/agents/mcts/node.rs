@@ -206,6 +206,31 @@ impl Node {
         self.value
     }
 
+    fn root_value_estimate_as_universal_pov(&self) -> [f32; NUM_PLAYERS] {
+        if self.children_visit_counts_sum == 0 {
+            return self.value;
+        }
+
+        let mut value_sum = [0.0; NUM_PLAYERS];
+        for child_value_sum in &self.children_value_sums {
+            for (player, &value) in child_value_sum.iter().enumerate() {
+                value_sum[player] += value;
+            }
+        }
+
+        let num_rollouts = self.children_visit_counts_sum as f32;
+        value_sum.iter_mut().for_each(|value| {
+            *value /= num_rollouts;
+        });
+        value_sum
+    }
+
+    fn root_value_estimate_as_player_pov(&self) -> [f32; NUM_PLAYERS] {
+        let mut value = self.root_value_estimate_as_universal_pov();
+        value.rotate_left(self.player);
+        value
+    }
+
     #[allow(dead_code)]
     pub fn get_value_as_player_pov(&self) -> [f32; NUM_PLAYERS] {
         let mut value_clone = self.value;
@@ -406,6 +431,7 @@ impl Node {
                 .collect(),
             // This will be populated externally when the game is over.
             game_result: [0.0; NUM_PLAYERS],
+            q_value: self.root_value_estimate_as_player_pov(),
             piece_availability: vec![],
         })
     }
@@ -445,5 +471,63 @@ impl Node {
         let array_index = self.get_array_index(move_index);
         self.children_visit_counts[array_index] += 1;
         self.children_visit_counts_sum += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::testing;
+
+    fn create_test_node(player: usize) -> Node {
+        let game_config = testing::create_game_config();
+        let mcts_config = testing::create_mcts_config(1, 0.0);
+        Node {
+            id: 1,
+            search_id: 1,
+            player,
+            num_valid_moves: 2,
+            value: [0.15, 0.25, 0.35, 0.25],
+            move_index_to_array_index: HashMap::from_iter([(0, 0), (1, 1)]),
+            array_index_to_move_index: vec![0, 1],
+            array_index_to_player_pov_move_index: vec![0, 1],
+            children_value_sums: vec![[0.0; NUM_PLAYERS], [0.0; NUM_PLAYERS]],
+            children_visit_counts: vec![0, 0],
+            children_visit_counts_sum: 0,
+            children_prior_probabilities: vec![0.5, 0.5],
+            children: HashMap::new(),
+            game_config,
+            mcts_config,
+        }
+    }
+
+    #[test]
+    fn root_q_value_uses_rollout_average() {
+        let mut node = create_test_node(1);
+        node.children_value_sums = vec![[3.0, 1.0, 2.0, 0.0], [1.0, 3.0, 0.0, 2.0]];
+        node.children_visit_counts = vec![2, 2];
+        node.children_visit_counts_sum = 4;
+
+        assert_eq!(
+            node.root_value_estimate_as_universal_pov(),
+            [1.0, 1.0, 0.5, 0.5]
+        );
+        assert_eq!(
+            node.root_value_estimate_as_player_pov(),
+            [1.0, 0.5, 0.5, 1.0]
+        );
+    }
+
+    #[test]
+    fn root_q_value_falls_back_to_network_value_without_rollouts() {
+        let node = create_test_node(2);
+        assert_eq!(
+            node.root_value_estimate_as_universal_pov(),
+            [0.15, 0.25, 0.35, 0.25]
+        );
+        assert_eq!(
+            node.root_value_estimate_as_player_pov(),
+            [0.35, 0.25, 0.15, 0.25]
+        );
     }
 }

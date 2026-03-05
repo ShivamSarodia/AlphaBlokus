@@ -601,6 +601,7 @@ mod tests {
             valid_move_tuples: vec![(1, 0, 0)],
             visit_counts: vec![],
             game_result: [0.0; NUM_PLAYERS],
+            q_value: [0.0; NUM_PLAYERS],
             piece_availability: vec![],
         };
         let availability = vec![

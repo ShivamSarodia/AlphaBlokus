@@ -411,6 +411,7 @@ mod tests {
                 mcts_data.game_result[3],
                 player_scores[(mcts_data.player + 3) % NUM_PLAYERS]
             );
+            assert_ne!(mcts_data.q_value, [0.0; NUM_PLAYERS]);
         }
 
         // Identify the move index of Player 0 starting with a 1x1 square.

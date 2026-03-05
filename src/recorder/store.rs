@@ -38,6 +38,10 @@ pub struct MCTSData {
     /// This field will be 0.0 for a game that is in progress, and completed
     /// before writing when the game result is known.
     pub game_result: [f32; NUM_PLAYERS],
+    /// Root expected value from MCTS rollouts, from the perspective of the
+    /// player to move.
+    #[serde(default)]
+    pub q_value: [f32; NUM_PLAYERS],
     /// Piece availability by player and piece index.
     /// A value of 1 means the piece is still available, 0 means unavailable.
     #[serde(default)]
@@ -239,6 +243,7 @@ mod tests {
             valid_move_tuples: vec![(0, 0, 0), (1, 0, 0), (2, 0, 0), (3, 0, 0), (4, 0, 0)],
             visit_counts: vec![0, 0, 0, 0, 0],
             game_result: [0.0, 0.0, 0.0, 0.0],
+            q_value: [0.0; NUM_PLAYERS],
             piece_availability: vec![],
         }
     }
@@ -343,6 +348,7 @@ mod tests {
 
         let decoded = read_mcts_data_from_disk(&file_path).unwrap();
         assert_eq!(decoded.len(), 1);
+        assert_eq!(decoded[0].q_value, [0.0; NUM_PLAYERS]);
         assert!(decoded[0].piece_availability.is_empty());
     }
 }
