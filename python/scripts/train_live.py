@@ -1,6 +1,3 @@
-# TODO: Before we start using this script, do some testing to make sure it works as expected.
-#       I've eyeballed it but not confirmed correctness.
-
 import argparse
 import os
 import time
@@ -108,34 +105,38 @@ def train_for_samples(
     value_loss = None
     policy_loss = None
     while True:
-        batch = next(dataloader_iter)
+        try:
+            batch = next(dataloader_iter)
 
-        loss, value_loss, policy_loss = get_loss(
-            batch,
-            model,
-            device=training_config.device,
-            policy_loss_weight=training_config.policy_loss_weight,
-            expects_piece_availability=expects_piece_availability,
-        )
-
-        if loss is None:
-            raise TrainingError("Loss not computed")
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        batch_size = batch[0].shape[0]
-        samples_trained += batch_size
-
-        if samples_trained >= max_samples:
-            break
-
-        # Log every 10,000 samples.
-        if samples_trained % 10000 < batch_size:
-            log(
-                f"Step: {samples_trained}/{max_samples}. Loss: {loss.item():.4f} (Value: {value_loss.item():.4f}, Policy: {policy_loss.item():.4f})"
+            loss, value_loss, policy_loss = get_loss(
+                batch,
+                model,
+                device=training_config.device,
+                policy_loss_weight=training_config.policy_loss_weight,
+                expects_piece_availability=expects_piece_availability,
             )
+
+            if loss is None:
+                raise TrainingError("Loss not computed")
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            batch_size = batch[0].shape[0]
+            samples_trained += batch_size
+
+            if samples_trained >= max_samples:
+                break
+
+            # Log every 10,000 samples.
+            if samples_trained % 10000 < batch_size:
+                log(
+                    f"Step: {samples_trained}/{max_samples}. Loss: {loss.item():.4f} (Value: {value_loss.item():.4f}, Policy: {policy_loss.item():.4f})"
+                )
+        except torch.AcceleratorError as exc:
+            log(f"!!! AcceleratorError during batch; skipping batch. Error: {exc}")
+            continue
 
     log(
         f"Finished training on {samples_trained}/{max_samples} samples. "
