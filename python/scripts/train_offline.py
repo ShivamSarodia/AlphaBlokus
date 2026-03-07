@@ -160,6 +160,16 @@ def build_train_files_windowed(
 
     train_files = []
 
+    # Sample the files from 0 to 10m once each
+    for start_samples in range(0, 10_000_000 - window_size, window_size):
+        train_files += build_sample_window(
+            file_infos,
+            start_samples=start_samples,
+            end_samples=start_samples + window_size,
+            origin="start",
+        )
+
+    # Sample the files from 10m to end 3x each
     for start_samples in range(10_000_000, 19_639_056 - window_size, step):
         train_files += build_sample_window(
             file_infos,
