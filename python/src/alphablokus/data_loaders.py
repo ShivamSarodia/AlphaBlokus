@@ -14,7 +14,7 @@ from alphablokus.files import (
     localize_file,
     parse_num_games_from_filename,
 )
-from alphablokus.game_data import load_game_file
+from alphablokus.game_data import GameBatch, GameSample, load_game_samples, stack_game_samples
 from alphablokus.log import log
 
 
@@ -64,13 +64,6 @@ def build_sample_window(
         window.append(file_info)
         total_samples += file_info.num_samples
     return window
-
-
-def _stack_batch(samples: Sequence[tuple[torch.Tensor, ...]]):
-    stacked_fields = []
-    for field_values in zip(*samples):
-        stacked_fields.append(torch.stack(field_values))
-    return tuple(stacked_fields)
 
 
 class FileProvider:
@@ -201,24 +194,24 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
     def _load_samples_from_file(
         self,
         path: str,
-    ) -> List[tuple[torch.Tensor, ...]]:
+    ) -> List[GameSample]:
         local_path = localize_file(path, self.local_cache_dir)
-        boards, values, policies, valid_masks, piece_availabilities = load_game_file(
+        samples = load_game_samples(
             self.game_config,
             local_path,
             require_piece_availability=self.require_piece_availability,
         )
         if self.stats is not None:
             self.stats.files_loaded += 1
-            self.stats.samples_loaded += len(boards)
+            self.stats.samples_loaded += len(samples)
         if self.cleanup_local_files and is_s3(path) and local_path != path:
             try:
                 os.remove(local_path)
             except OSError:
                 pass
-        return list(zip(boards, values, policies, valid_masks, piece_availabilities))
+        return samples
 
-    def __iter__(self) -> Iterable[tuple[torch.Tensor, ...]]:
+    def __iter__(self) -> Iterable[GameBatch]:
         worker_info = torch.utils.data.get_worker_info()
         rng = random.Random()
         if worker_info is not None:
@@ -226,7 +219,7 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
         worker_id = worker_info.id if worker_info is not None else 0
         num_workers = worker_info.num_workers if worker_info is not None else 1
 
-        buffer: List[tuple[torch.Tensor, ...]] = []
+        buffer: List[GameSample] = []
         while True:
             if len(buffer) < self.batch_size:
                 next_files = self.file_provider.next_files(
@@ -247,7 +240,7 @@ class BufferedGameBatchDataset(torch.utils.data.IterableDataset):
 
             batch_samples = buffer[: self.batch_size]
             buffer = buffer[self.batch_size :]
-            yield _stack_batch(batch_samples)
+            yield stack_game_samples(batch_samples)
             if self.stats is not None:
                 self.stats.batches_yielded += 1
                 self.stats.samples_yielded += self.batch_size

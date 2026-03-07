@@ -7,6 +7,7 @@ import torch.nn as nn
 
 from alphablokus.configs import GameConfig, NetworkConfig
 from alphablokus.files import from_localized, is_s3, latest_file, localize_file
+from alphablokus.game_data import GameBatch
 from alphablokus.res_net import NeuralNet
 from alphablokus.res_net_complex_value_head import NeuralNet as ResNetComplexValueHeadNet
 from alphablokus.res_net_film import NeuralNet as ResNetFilmNet
@@ -240,30 +241,27 @@ def save_model_and_state(
 
 
 def get_loss(
-    batch,
+    batch: GameBatch,
     model: nn.Module,
     *,
     device: str,
     policy_loss_weight: float,
+    q_value_mix: float = 0.0,
     value_head_l2: float = 0.0,
     expects_piece_availability: bool = False,
 ) -> tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
-    if len(batch) not in (4, 5):
-        raise ValueError(f"Expected batch to have 4 or 5 tensors, got {len(batch)}")
+    if q_value_mix < 0.0 or q_value_mix > 1.0:
+        raise ValueError(f"q_value_mix must be in [0.0, 1.0], got {q_value_mix}")
 
-    board, expected_value, expected_policy, valid_policy_mask = batch[:4]
-    piece_availability = batch[4] if len(batch) == 5 else None
-
-    board = board.to(device)
-    expected_value = expected_value.to(device)
-    expected_policy = expected_policy.to(device)
-    valid_policy_mask = valid_policy_mask.to(device)
+    board = batch.board.to(device)
+    expected_value = (
+        ((1.0 - q_value_mix) * batch.game_result) + (q_value_mix * batch.q_value)
+    ).to(device)
+    expected_policy = batch.policy.to(device)
+    valid_policy_mask = batch.valid_policy_mask.to(device)
+    piece_availability = batch.piece_availability.to(device)
     if expects_piece_availability:
-        if piece_availability is None:
-            raise ValueError(
-                "Model expects piece_availability but batch only had 4 tensors"
-            )
-        pred_value, pred_policy = model(board, piece_availability.to(device))
+        pred_value, pred_policy = model(board, piece_availability)
     else:
         pred_value, pred_policy = model(board)
 

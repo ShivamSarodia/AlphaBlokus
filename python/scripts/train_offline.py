@@ -154,13 +154,13 @@ def build_train_files_dropoff(
 def build_train_files_windowed(
     file_infos: list[tuple[str, int]], total_samples: int
 ) -> list[str]:
-    window_size = 2_700_000
+    window_size = 2_000_000
     sample_ratio = 3
     step = int(window_size / sample_ratio)
 
     train_files = []
 
-    for start_samples in range(2_000_000, 10_000_000 - window_size, step):
+    for start_samples in range(10_000_000, 19_639_056 - window_size, step):
         train_files += build_sample_window(
             file_infos,
             start_samples=start_samples,
@@ -252,6 +252,7 @@ def run_offline_training(config_path: str) -> None:
         f"selection_methodology='{training_config.selection_methodology}' "
         f"on {len(train_files)} files containing {total_train_samples} samples."
     )
+    log(f"Using q_value_mix={training_config.q_value_mix:.3f} for value targets.")
     model.train()
 
     log("Starting training pass.")
@@ -286,6 +287,7 @@ def run_offline_training(config_path: str) -> None:
                 model,
                 device=training_config.device,
                 policy_loss_weight=training_config.policy_loss_weight,
+                q_value_mix=training_config.q_value_mix,
                 value_head_l2=training_config.value_head_l2,
                 expects_piece_availability=needs_piece_availability,
             )
@@ -318,7 +320,7 @@ def run_offline_training(config_path: str) -> None:
                 clip_grad_norm_(model.parameters(), training_config.gradient_clip_norm)
             optimizer.step()
 
-            batch_size = batch[0].shape[0]
+            batch_size = batch.board.shape[0]
             samples_trained += batch_size
             # samples_seen_since_last_optimizer_reset += batch_size
             batches_seen += 1

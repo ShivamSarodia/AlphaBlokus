@@ -3,6 +3,15 @@ import tomllib
 from dataclasses import dataclass
 
 
+def _parse_q_value_mix(training_data: dict, section_name: str) -> float:
+    q_value_mix = training_data.get("q_value_mix", 0.0)
+    if q_value_mix < 0.0 or q_value_mix > 1.0:
+        raise ValueError(
+            f"{section_name}.q_value_mix must be in [0.0, 1.0], got {q_value_mix}"
+        )
+    return q_value_mix
+
+
 @dataclass
 class GameConfig:
     board_size: int
@@ -63,6 +72,7 @@ class TrainingLiveConfig:
     learning_rate: float
     batch_size: int
     policy_loss_weight: float
+    q_value_mix: float
     sampling_ratio: float
     window_size: int
     device: str
@@ -85,6 +95,7 @@ class TrainingLiveConfig:
         self.learning_rate = training_data["learning_rate"]
         self.batch_size = training_data["batch_size"]
         self.policy_loss_weight = training_data["policy_loss_weight"]
+        self.q_value_mix = _parse_q_value_mix(training_data, "training_live")
         self.sampling_ratio = training_data["sampling_ratio"]
         self.window_size = training_data["window_size"]
         self.device = training_data["device"]
@@ -108,6 +119,7 @@ class TrainingOfflineConfig:
     device: str
     learning_rate: float
     policy_loss_weight: float
+    q_value_mix: float
     batch_size: int
     optimizer_weight_decay: float
     value_head_l2: float
@@ -133,6 +145,7 @@ class TrainingOfflineConfig:
         self.device = offline_data["device"]
         self.learning_rate = offline_data["learning_rate"]
         self.policy_loss_weight = offline_data["policy_loss_weight"]
+        self.q_value_mix = _parse_q_value_mix(offline_data, "training_offline")
         self.batch_size = offline_data["batch_size"]
         self.in_memory_shuffle_file_count = offline_data["in_memory_shuffle_file_count"]
         self.num_workers = offline_data["num_workers"]

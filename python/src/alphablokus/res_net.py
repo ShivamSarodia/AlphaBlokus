@@ -150,7 +150,7 @@ if __name__ == "__main__":
     import random
 
     from alphablokus.files import from_localized, list_files, localize_file
-    from alphablokus.game_data import load_game_files_to_tensor
+    from alphablokus.game_data import GameBatch, load_game_files_to_tensor
 
     config_path = "configs/training/standalone_resnet.toml"
     checkpoint_path = "s3://alpha-blokus/full_v2/training_simulated/segmented_epochs_True_1768300418.pth"
@@ -174,11 +174,11 @@ if __name__ == "__main__":
         )
         for filename in calibration_remote_files
     ]
-    boards, values, policies, valid_masks, piece_availabilities = load_game_files_to_tensor(
+    calibration_data = load_game_files_to_tensor(
         model.game_config, calibration_local_files
     )
 
-    num_samples = boards.shape[0]
+    num_samples = calibration_data.board.shape[0]
     indices = list(range(num_samples))
     random.shuffle(indices)
 
@@ -189,26 +189,26 @@ if __name__ == "__main__":
         if not batch_indices:
             break
         calibration_batches.append(
-            (
-                boards[batch_indices],
-                values[batch_indices],
-                policies[batch_indices],
-                valid_masks[batch_indices],
-                piece_availabilities[batch_indices],
+            GameBatch(
+                board=calibration_data.board[batch_indices],
+                game_result=calibration_data.game_result[batch_indices],
+                q_value=calibration_data.q_value[batch_indices],
+                policy=calibration_data.policy[batch_indices],
+                valid_policy_mask=calibration_data.valid_policy_mask[batch_indices],
+                piece_availability=calibration_data.piece_availability[batch_indices],
             )
         )
         if len(calibration_batches) >= 100:
             break
 
     def forward_step(model, batch):
-        board = batch[0]
-        return model(board)
+        return model(batch.board)
 
     def loss_func(output, batch):
         pred_value, pred_policy = output
-        expected_value = batch[1]
-        expected_policy = batch[2]
-        valid_policy_mask = batch[3]
+        expected_value = batch.game_result
+        expected_policy = batch.policy
+        valid_policy_mask = batch.valid_policy_mask
         expected_value = expected_value.to(pred_value.device)
         expected_policy = expected_policy.to(pred_policy.device)
         valid_policy_mask = valid_policy_mask.to(pred_policy.device)

@@ -113,6 +113,7 @@ def train_for_samples(
                 model,
                 device=training_config.device,
                 policy_loss_weight=training_config.policy_loss_weight,
+                q_value_mix=training_config.q_value_mix,
                 expects_piece_availability=expects_piece_availability,
             )
 
@@ -123,7 +124,7 @@ def train_for_samples(
             loss.backward()
             optimizer.step()
 
-            batch_size = batch[0].shape[0]
+            batch_size = batch.board.shape[0]
             samples_trained += batch_size
 
             if samples_trained >= max_samples:
@@ -161,6 +162,7 @@ def run_live_training(config_path: str) -> None:
     network_config = NetworkConfig(config_path)
     training_config = TrainingLiveConfig(config_path)
     needs_piece_availability = requires_piece_availability(network_config)
+    log(f"Using q_value_mix={training_config.q_value_mix:.3f} for value targets.")
 
     if training_config.num_workers not in (0, 1):
         raise ValueError("Live training supports num_workers of 0 or 1.")
