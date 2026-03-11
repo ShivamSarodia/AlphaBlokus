@@ -70,6 +70,7 @@ pub struct Engine {
     inference_clients: HashMap<String, Arc<DefaultClient>>,
     game_config: &'static GameConfig,
     agent_group_config: &'static AgentGroupConfig,
+    publish_player_order_labels: bool,
     num_started_games: u32,
     num_finished_games: u32,
     recorder: Recorder,
@@ -82,6 +83,7 @@ impl Engine {
         inference_clients: HashMap<String, Arc<DefaultClient>>,
         game_config: &'static GameConfig,
         agent_group_config: &'static AgentGroupConfig,
+        include_player_order_labels: bool,
         recorder: Recorder,
     ) -> Self {
         Self {
@@ -90,6 +92,7 @@ impl Engine {
             inference_clients,
             game_config,
             agent_group_config,
+            publish_player_order_labels: include_player_order_labels,
             num_started_games: 0,
             num_finished_games: 0,
             recorder,
@@ -119,9 +122,16 @@ impl Engine {
             // The recorder itself is quite lightweight (just a MPSC channel), so it's fine to
             // clone here.
             let recorder = self.recorder.clone();
+            let publish_player_order_labels = self.publish_player_order_labels;
             async move {
-                if let Err(err) =
-                    play_one_game(game_config, agent_vector, player_to_agent_index, recorder).await
+                if let Err(err) = play_one_game(
+                    game_config,
+                    agent_vector,
+                    player_to_agent_index,
+                    publish_player_order_labels,
+                    recorder,
+                )
+                .await
                 {
                     tracing::error!("Game failed: {}", err);
                 }
@@ -205,6 +215,7 @@ pub async fn play_one_game(
     game_config: &'static GameConfig,
     mut agents: Vec<Box<dyn Agent>>,
     player_to_agent_index: [usize; NUM_PLAYERS],
+    include_player_order_labels: bool,
     recorder: Recorder,
 ) -> anyhow::Result<()> {
     let mut state = State::new(game_config)?;
@@ -253,18 +264,58 @@ pub async fn play_one_game(
     // Queue up the game data for recording.
     recorder.push_mcts_data(mcts_data)?;
 
+    let player_order_labels = maybe_build_player_order_labels(
+        include_player_order_labels,
+        &agent_names,
+        player_to_agent_index,
+    );
+
     for player in 0..NUM_PLAYERS {
         // The counter doesn't support floating point values, so we increment
         // by 1 for any win.
         if result[player] > 0.0 {
+            increment_games_won_by_agent_metric(
+                &agent_names[player_to_agent_index[player]],
+                player_order_labels.as_ref(),
+            );
+        }
+    }
+    Ok(())
+}
+
+fn maybe_build_player_order_labels(
+    include_player_order_labels: bool,
+    agent_names: &[String],
+    player_to_agent_index: [usize; NUM_PLAYERS],
+) -> Option<[String; NUM_PLAYERS]> {
+    include_player_order_labels
+        .then(|| std::array::from_fn(|player| agent_names[player_to_agent_index[player]].clone()))
+}
+
+fn increment_games_won_by_agent_metric(
+    winner_agent_name: &str,
+    player_order_labels: Option<&[String; NUM_PLAYERS]>,
+) {
+    match player_order_labels {
+        Some(player_order_labels) => {
             metrics::counter!(
                 "games_won_by_agent_total",
-                "agent_name" => agent_names[player_to_agent_index[player]].clone(),
+                "agent_name" => winner_agent_name.to_string(),
+                "p1_agent_name" => player_order_labels[0].clone(),
+                "p2_agent_name" => player_order_labels[1].clone(),
+                "p3_agent_name" => player_order_labels[2].clone(),
+                "p4_agent_name" => player_order_labels[3].clone(),
+            )
+            .increment(1);
+        }
+        None => {
+            metrics::counter!(
+                "games_won_by_agent_total",
+                "agent_name" => winner_agent_name.to_string(),
             )
             .increment(1);
         }
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -275,6 +326,78 @@ mod tests {
     use crate::{
         config::MCTSConfig, config::RandomConfig, recorder::read_mcts_data_from_disk, testing,
     };
+
+    #[test]
+    fn test_maybe_build_player_order_labels_for_quad_arena() {
+        let labels = maybe_build_player_order_labels(
+            true,
+            &[
+                "alpha".to_string(),
+                "beta".to_string(),
+                "gamma".to_string(),
+                "delta".to_string(),
+            ],
+            [2, 0, 3, 1],
+        )
+        .unwrap();
+
+        assert_eq!(
+            labels,
+            [
+                "gamma".to_string(),
+                "alpha".to_string(),
+                "delta".to_string(),
+                "beta".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_maybe_build_player_order_labels_for_duo_arena() {
+        let labels = maybe_build_player_order_labels(
+            true,
+            &["first".to_string(), "second".to_string()],
+            [0, 1, 0, 1],
+        )
+        .unwrap();
+
+        assert_eq!(
+            labels,
+            [
+                "first".to_string(),
+                "second".to_string(),
+                "first".to_string(),
+                "second".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_maybe_build_player_order_labels_for_single_agent_group() {
+        let labels =
+            maybe_build_player_order_labels(true, &["solo".to_string()], [0, 0, 0, 0]).unwrap();
+
+        assert_eq!(
+            labels,
+            [
+                "solo".to_string(),
+                "solo".to_string(),
+                "solo".to_string(),
+                "solo".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_maybe_build_player_order_labels_disabled() {
+        let labels = maybe_build_player_order_labels(
+            false,
+            &["first".to_string(), "second".to_string()],
+            [0, 1, 0, 1],
+        );
+
+        assert!(labels.is_none());
+    }
 
     async fn build_random_inference_client(
         name: &str,
@@ -318,6 +441,7 @@ mod tests {
             HashMap::new(),
             game_config,
             agent_group_config,
+            false,
             recorder,
         );
 
@@ -373,6 +497,7 @@ mod tests {
             HashMap::from([("default".to_string(), Arc::clone(&inference_client))]),
             game_config,
             Box::leak(Box::new(agent_group_config)),
+            false,
             recorder,
         );
 
@@ -523,6 +648,7 @@ mod tests {
             HashMap::new(),
             game_config,
             agent_group_config,
+            false,
             recorder,
         );
 

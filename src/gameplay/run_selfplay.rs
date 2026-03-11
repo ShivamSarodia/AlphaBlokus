@@ -56,6 +56,7 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) -> Result<()> {
             inference_clients,
             &config.game,
             &config.agents,
+            config.observability.metrics.include_player_order_labels(),
             recorder,
         );
 
