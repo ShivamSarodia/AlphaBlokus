@@ -142,16 +142,16 @@ def format_value(value: Any) -> str:
     raise TypeError(f"Unsupported TOML value: {value!r}")
 
 
-def write_key_values(lines: list[str], data: dict[str, Any]) -> None:
+def write_key_values(lines: list[str], data: dict[str, Any], skip_dicts: bool) -> None:
     for key, value in data.items():
-        if isinstance(value, dict):
+        if skip_dicts and isinstance(value, dict):
             continue
         lines.append(f"{key} = {format_value(value)}")
 
 
 def write_named_table(lines: list[str], name: str, data: dict[str, Any]) -> None:
     lines.append(f"[{name}]")
-    write_key_values(lines, data)
+    write_key_values(lines, data, skip_dicts=True)
     lines.append("")
     for key, value in data.items():
         if isinstance(value, dict):
@@ -179,16 +179,25 @@ def render_config(
     game_result_recorder["path"] = result_path
     write_named_table(lines, "game_result_recorder", game_result_recorder)
 
-    for inference in manifest["inference"]:
-        lines.append("[[inference]]")
-        write_key_values(lines, inference)
-        lines.append("")
-
     competitors = [dict(manifest["competitors"][index]) for index in quad]
     rng.shuffle(competitors)
+
+    needed_inference_names = {
+        competitor["inference_config_name"]
+        for competitor in competitors
+        if "inference_config_name" in competitor
+    }
+
+    for inference in manifest["inference"]:
+        if inference["name"] not in needed_inference_names:
+            continue
+        lines.append("[[inference]]")
+        write_key_values(lines, inference, skip_dicts=False)
+        lines.append("")
+
     for competitor in competitors:
         lines.append("[[agents.QuadArena]]")
-        write_key_values(lines, competitor)
+        write_key_values(lines, competitor, skip_dicts=False)
         lines.append("")
 
     write_named_table(lines, "game", manifest["game"])
