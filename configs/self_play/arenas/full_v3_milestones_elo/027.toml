@@ -22,24 +22,28 @@ name = "018001488"
 model_path = "s3://alpha-blokus/full_v3/models/018001488.onnx"
 batch_size = 16
 executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
+cache = { max_entries = 500000 }
 
 [[inference]]
 name = "024020555"
 model_path = "s3://alpha-blokus/full_v3/models/024020555.onnx"
 batch_size = 16
 executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
+cache = { max_entries = 500000 }
 
 [[inference]]
 name = "026025784"
 model_path = "s3://alpha-blokus/full_v3/models/026025784.onnx"
 batch_size = 16
 executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
+cache = { max_entries = 500000 }
 
 [[inference]]
 name = "026393061"
 model_path = "s3://alpha-blokus/full_v3/models/026393061.onnx"
 batch_size = 16
 executor = { type = "tensorrt", max_batch_size = 16, pool_size = 32 }
+cache = { max_entries = 500000 }
 
 [[agents.QuadArena]]
 type = "mcts"
