@@ -5,8 +5,17 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    try:
+        import tomli as tomllib
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "This script requires Python 3.11+ or the 'tomli' package on older Python versions."
+        ) from exc
 
 
 def parse_args() -> argparse.Namespace:
