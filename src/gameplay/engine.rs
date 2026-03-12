@@ -9,7 +9,7 @@ use crate::agents::{Agent, MCTSAgent, PentobiAgent, PolicySamplingAgent, RandomA
 use crate::config::{AgentConfig, AgentGroupConfig, GameConfig, NUM_PLAYERS};
 use crate::game::{GameStatus, State};
 use crate::inference::{DefaultClient, PolicyValueClient};
-use crate::recorder::Recorder;
+use crate::recorder::{GameResultRecorder, GameResultRow, Recorder};
 
 pub fn build_agent(
     agent_config: &'static AgentConfig,
@@ -74,6 +74,12 @@ pub struct Engine {
     num_started_games: u32,
     num_finished_games: u32,
     recorder: Recorder,
+    game_result_recorder: GameResultRecorder,
+}
+
+pub struct EngineRecorders {
+    pub mcts: Recorder,
+    pub game_results: GameResultRecorder,
 }
 
 impl Engine {
@@ -84,7 +90,7 @@ impl Engine {
         game_config: &'static GameConfig,
         agent_group_config: &'static AgentGroupConfig,
         include_player_order_labels: bool,
-        recorder: Recorder,
+        recorders: EngineRecorders,
     ) -> Self {
         Self {
             num_concurrent_games,
@@ -95,7 +101,8 @@ impl Engine {
             publish_player_order_labels: include_player_order_labels,
             num_started_games: 0,
             num_finished_games: 0,
-            recorder,
+            recorder: recorders.mcts,
+            game_result_recorder: recorders.game_results,
         }
     }
 
@@ -122,6 +129,7 @@ impl Engine {
             // The recorder itself is quite lightweight (just a MPSC channel), so it's fine to
             // clone here.
             let recorder = self.recorder.clone();
+            let game_result_recorder = self.game_result_recorder.clone();
             let publish_player_order_labels = self.publish_player_order_labels;
             async move {
                 if let Err(err) = play_one_game(
@@ -130,6 +138,7 @@ impl Engine {
                     player_to_agent_index,
                     publish_player_order_labels,
                     recorder,
+                    game_result_recorder,
                 )
                 .await
                 {
@@ -217,6 +226,7 @@ pub async fn play_one_game(
     player_to_agent_index: [usize; NUM_PLAYERS],
     include_player_order_labels: bool,
     recorder: Recorder,
+    game_result_recorder: GameResultRecorder,
 ) -> anyhow::Result<()> {
     let mut state = State::new(game_config)?;
     loop {
@@ -264,11 +274,13 @@ pub async fn play_one_game(
     // Queue up the game data for recording.
     recorder.push_mcts_data(mcts_data)?;
 
-    let player_order_labels = maybe_build_player_order_labels(
-        include_player_order_labels,
-        &agent_names,
-        player_to_agent_index,
-    );
+    let player_order_names = build_player_order_names(&agent_names, player_to_agent_index);
+    game_result_recorder.push_game_result(GameResultRow {
+        agent_names: player_order_names.clone(),
+        result,
+    })?;
+
+    let player_order_labels = include_player_order_labels.then_some(player_order_names);
 
     for player in 0..NUM_PLAYERS {
         // The counter doesn't support floating point values, so we increment
@@ -283,13 +295,21 @@ pub async fn play_one_game(
     Ok(())
 }
 
+#[cfg(test)]
 fn maybe_build_player_order_labels(
     include_player_order_labels: bool,
     agent_names: &[String],
     player_to_agent_index: [usize; NUM_PLAYERS],
 ) -> Option<[String; NUM_PLAYERS]> {
     include_player_order_labels
-        .then(|| std::array::from_fn(|player| agent_names[player_to_agent_index[player]].clone()))
+        .then(|| build_player_order_names(agent_names, player_to_agent_index))
+}
+
+fn build_player_order_names(
+    agent_names: &[String],
+    player_to_agent_index: [usize; NUM_PLAYERS],
+) -> [String; NUM_PLAYERS] {
+    std::array::from_fn(|player| agent_names[player_to_agent_index[player]].clone())
 }
 
 fn increment_games_won_by_agent_metric(
@@ -442,7 +462,10 @@ mod tests {
             game_config,
             agent_group_config,
             false,
-            recorder,
+            EngineRecorders {
+                mcts: recorder,
+                game_results: GameResultRecorder::disabled().0,
+            },
         );
 
         let num_finished_games = engine.play_games().await;
@@ -498,7 +521,10 @@ mod tests {
             game_config,
             Box::leak(Box::new(agent_group_config)),
             false,
-            recorder,
+            EngineRecorders {
+                mcts: recorder,
+                game_results: GameResultRecorder::disabled().0,
+            },
         );
 
         engine.play_games().await;
@@ -649,7 +675,10 @@ mod tests {
             game_config,
             agent_group_config,
             false,
-            recorder,
+            EngineRecorders {
+                mcts: recorder,
+                game_results: GameResultRecorder::disabled().0,
+            },
         );
 
         // Run games with a timeout to prevent infinite execution

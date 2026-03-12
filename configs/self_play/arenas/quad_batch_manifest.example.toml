@@ -1,0 +1,120 @@
+output_directory = "configs/self_play/generated_quad_arenas"
+results_directory = "/tmp/alphablokus_quad_arena_results"
+num_configs = 180
+duration_seconds = 300
+num_concurrent_games = 64
+
+[observability.metrics]
+type = "prometheus"
+
+[observability.logging]
+type = "console"
+
+[mcts_recorder]
+type = "disabled"
+
+[game_result_recorder]
+type = "jsonl_file"
+flush_row_count = 10
+
+[game]
+board_size = 20
+num_moves = 30433
+num_pieces = 21
+num_piece_orientations = 91
+move_data_file = "static/move_data/full.bin"
+
+[[inference]]
+name = "model_a"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/model_a.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+
+[[inference]]
+name = "model_b"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/model_b.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+
+[[inference]]
+name = "model_c"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/model_c.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+
+[[inference]]
+name = "model_d"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/model_d.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+
+[[inference]]
+name = "model_e"
+model_path = "s3://alpha-blokus/full_v2/models_simulated/model_e.onnx"
+batch_size = 64
+executor = { type = "tensorrt", max_batch_size = 64, pool_size = 32 }
+
+[[competitors]]
+type = "mcts"
+name = "model_a"
+inference_config_name = "model_a"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
+
+[[competitors]]
+type = "mcts"
+name = "model_b"
+inference_config_name = "model_b"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
+
+[[competitors]]
+type = "mcts"
+name = "model_c"
+inference_config_name = "model_c"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
+
+[[competitors]]
+type = "mcts"
+name = "model_d"
+inference_config_name = "model_d"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0
+
+[[competitors]]
+type = "mcts"
+name = "model_e"
+inference_config_name = "model_e"
+fast_move_probability = 0.0
+fast_move_num_rollouts = 500
+full_move_num_rollouts = 500
+total_dirichlet_noise_alpha = 10.83
+root_dirichlet_noise_fraction = 0.0
+ucb_exploration_factor = 1.05
+temperature_turn_cutoff = 35
+move_selection_temperature = 1.0

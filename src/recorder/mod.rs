@@ -1,5 +1,9 @@
+mod game_results;
 mod store;
 
+pub use game_results::GameResultRecorder;
+pub use game_results::GameResultRow;
+pub use game_results::read_game_results_from_disk;
 pub use store::MCTSData;
 pub use store::Recorder;
 pub use store::encode_mcts_data;
