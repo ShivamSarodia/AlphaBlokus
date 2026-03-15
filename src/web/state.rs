@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::agents::Agent;
 use crate::gameplay;
+use crate::inference::DefaultClient;
 use crate::web::serve::ApiError;
 use crate::{config::WebPlayConfig, game::State as BlokusState};
 
@@ -15,6 +16,9 @@ pub struct AppState {
 
     // Agents that can play in this game.
     agents: AgentRegistry,
+
+    // Shared evaluator used to display the network value for the current board.
+    shared_evaluator: Option<Arc<DefaultClient>>,
 
     // Session for the current game. Behind an Arc and Mutex to allow for concurrent
     // access.
@@ -37,9 +41,18 @@ pub struct AgentRegistry {
 
 impl AppState {
     pub async fn build(config: &'static WebPlayConfig) -> Self {
+        let inference_clients = gameplay::build_inference_clients(
+            &config.inference,
+            &config.game,
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap();
+
         Self {
             config,
-            agents: AgentRegistry::build(config).await,
+            agents: AgentRegistry::build(config, &inference_clients),
+            shared_evaluator: select_shared_evaluator(&config.inference, &inference_clients),
             // TODO: We can probably implement some better synchronization here to ensure
             // that multiple agents / resets / etc can't conflict.
             session: Arc::new(Mutex::new(GameSession {
@@ -63,6 +76,10 @@ impl AppState {
 
     pub async fn session(&self) -> MutexGuard<'_, GameSession> {
         self.session.lock().await
+    }
+
+    pub fn shared_evaluator(&self) -> Option<Arc<DefaultClient>> {
+        self.shared_evaluator.as_ref().map(Arc::clone)
     }
 
     pub async fn start_agent_move(&self, agent_name: &str) -> Result<(), ApiError> {
@@ -159,21 +176,16 @@ impl GameSession {
 }
 
 impl AgentRegistry {
-    pub async fn build(config: &'static WebPlayConfig) -> Self {
-        let inference_clients = gameplay::build_inference_clients(
-            &config.inference,
-            &config.game,
-            CancellationToken::new(),
-        )
-        .await
-        .unwrap();
-
+    pub fn build(
+        config: &'static WebPlayConfig,
+        inference_clients: &HashMap<String, Arc<DefaultClient>>,
+    ) -> Self {
         let agents = HashMap::from_iter(
             config
                 .agents
                 .iter()
                 .map(|agent_config| {
-                    gameplay::build_agent(agent_config, &config.game, &inference_clients).unwrap()
+                    gameplay::build_agent(agent_config, &config.game, inference_clients).unwrap()
                 })
                 .map(|agent| (agent.name().to_string(), Arc::new(Mutex::new(agent)))),
         );
@@ -191,5 +203,64 @@ impl AgentRegistry {
 
     fn iter(&self) -> impl Iterator<Item = Arc<Mutex<Box<dyn Agent>>>> {
         self.agents.values().cloned()
+    }
+}
+
+fn select_shared_evaluator(
+    inference_configs: &[crate::config::InferenceConfig],
+    inference_clients: &HashMap<String, Arc<DefaultClient>>,
+) -> Option<Arc<DefaultClient>> {
+    let selected_name = select_shared_evaluator_name(inference_configs)?;
+
+    inference_clients.get(selected_name).map(Arc::clone)
+}
+
+fn select_shared_evaluator_name(
+    inference_configs: &[crate::config::InferenceConfig],
+) -> Option<&str> {
+    inference_configs
+        .iter()
+        .find(|config| config.name == "default")
+        .or_else(|| inference_configs.first())
+        .map(|config| config.name.as_str())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{
+        ExecutorConfig, InferenceCacheConfig, InferenceConfig, OrtExecutionProvider,
+    };
+
+    fn inference_config(name: &str) -> InferenceConfig {
+        InferenceConfig {
+            name: name.to_string(),
+            batch_size: 1,
+            model_path: "unused".to_string(),
+            executor: ExecutorConfig::Ort {
+                execution_provider: OrtExecutionProvider::Cpu,
+            },
+            reload: None,
+            cache: InferenceCacheConfig { max_entries: 0 },
+        }
+    }
+
+    #[test]
+    fn select_shared_evaluator_prefers_default() {
+        let configs = vec![inference_config("other"), inference_config("default")];
+
+        assert_eq!(select_shared_evaluator_name(&configs), Some("default"));
+    }
+
+    #[test]
+    fn select_shared_evaluator_falls_back_to_first() {
+        let configs = vec![inference_config("first"), inference_config("second")];
+
+        assert_eq!(select_shared_evaluator_name(&configs), Some("first"));
+    }
+
+    #[test]
+    fn select_shared_evaluator_returns_none_without_configs() {
+        assert!(select_shared_evaluator_name(&[]).is_none());
     }
 }
