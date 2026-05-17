@@ -7,10 +7,10 @@ move_data_file = "static/move_data/full.bin"
 
 [[inference]]
 name = "default"
-model_path = "s3://alpha-blokus/full_v3/models/023809806.onnx"
-batch_size = 16
+model_path = "s3://alpha-blokus/full_v3/models/026025784.onnx"
+batch_size = 1
 executor = { type = "ort", execution_provider = "cpu" }
-cache = { max_entries = 4000000 }
+cache = { max_entries = 2000000 }
 
 [[agents]]
 type = "random"

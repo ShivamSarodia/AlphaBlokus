@@ -114,6 +114,7 @@
 
 .board-panel,
 .pieces-panel,
+.network-value-panel,
 .agent-panel {
   width: 100%;
 }
@@ -174,6 +175,85 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.network-value-panel {
+  background: #fff;
+  border-radius: 1.5rem;
+  padding: 1.1rem 1.25rem;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.network-value-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.network-value-panel__header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.network-value-panel__header span {
+  color: #475467;
+  font-size: 0.85rem;
+}
+
+.network-value-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.network-value-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.85rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.network-value-panel__row--current {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
+.network-value-panel__player {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.network-value-panel__swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.network-value-panel__row strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.network-value-panel__empty {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.95rem;
 }
 
 .agent-panel__header {
@@ -272,8 +352,11 @@
 }
 
 .cell {
+  position: relative;
   width: 28px;
   height: 28px;
+  display: grid;
+  place-items: center;
   border-radius: 6px;
   border: none;
   background: rgba(255, 255, 255, 0.15);
@@ -312,6 +395,14 @@
 
 .cell:disabled {
   cursor: not-allowed;
+}
+
+.cell__last-move-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #111827;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .placement-actions {

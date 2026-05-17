@@ -27,6 +27,7 @@ type BackendOrientation = {
 type BackendPiece = {
   id: number
   squares: number
+  available: boolean
   orientations: BackendOrientation[]
 }
 
@@ -42,12 +43,14 @@ type GameStateResponse = {
   board_size: number
   pieces: BackendPiece[]
   board: BackendBoardSlice[]
+  last_moves?: BackendBoardSlice[]
   current_player: number
   agents?: string[]
   pending_agent?: string | null
   game_over?: boolean
   scores?: number[]
   tile_counts?: number[]
+  network_value?: number[] | null
 }
 
 const createEmptyBoard = (size: number) =>
@@ -78,12 +81,14 @@ type NormalizedGameState = {
   boardSize: number
   pieces: BackendPiece[]
   board: string[][]
+  lastMoves: Set<string>[]
   currentPlayer: number
   agents: string[]
   pendingAgent: string | null
   gameOver: boolean
   scores: number[] | null
   tileCounts: number[]
+  networkValue: number[] | null
 }
 
 const normalizeGameState = (payload: GameStateResponse): NormalizedGameState => {
@@ -107,6 +112,24 @@ const normalizeGameState = (payload: GameStateResponse): NormalizedGameState => 
     boardSize: payload.board_size,
     pieces: normalizedPieces,
     board: normalizedBoard,
+    lastMoves: Array.from({ length: NUM_PLAYERS }, (_, playerIndex) => {
+      const slice = payload.last_moves?.[playerIndex]
+      const cells = new Set<string>()
+
+      if (!slice) {
+        return cells
+      }
+
+      slice.cells.forEach((column, x) => {
+        column.forEach((filled, y) => {
+          if (filled) {
+            cells.add(cellKey(y, x))
+          }
+        })
+      })
+
+      return cells
+    }),
     currentPlayer,
     agents: Array.isArray(payload.agents) ? payload.agents : [],
     pendingAgent:
@@ -119,6 +142,10 @@ const normalizeGameState = (payload: GameStateResponse): NormalizedGameState => 
         ? payload.scores
         : null,
     tileCounts: Array.isArray(payload.tile_counts) ? payload.tile_counts : [],
+    networkValue:
+      Array.isArray(payload.network_value) && payload.network_value.length > 0
+        ? payload.network_value
+        : null,
   }
 }
 
@@ -126,6 +153,9 @@ function App() {
   const [boardSize, setBoardSize] = useState<number | null>(null)
   const [pieces, setPieces] = useState<BackendPiece[]>([])
   const [board, setBoard] = useState<string[][] | null>(null)
+  const [lastMoves, setLastMoves] = useState<Set<string>[]>(() =>
+    Array.from({ length: NUM_PLAYERS }, () => new Set<string>()),
+  )
   const [currentPlayer, setCurrentPlayer] = useState(0)
   const [expandedPieceId, setExpandedPieceId] = useState<number | null>(null)
   const [selectedOrientation, setSelectedOrientation] = useState<SelectedOrientation | null>(null)
@@ -139,6 +169,7 @@ function App() {
   const [gameOver, setGameOver] = useState(false)
   const [scores, setScores] = useState<number[] | null>(null)
   const [tileCounts, setTileCounts] = useState<number[]>([])
+  const [networkValue, setNetworkValue] = useState<number[] | null>(null)
   const [moveIndexInput, setMoveIndexInput] = useState('')
   const [isFetchingMoveByIndex, setIsFetchingMoveByIndex] = useState(false)
   const [pendingMoveIndex, setPendingMoveIndex] = useState<number | null>(null)
@@ -152,6 +183,7 @@ function App() {
   const applyGameState = useCallback((normalized: NormalizedGameState) => {
     setPieces(normalized.pieces)
     setBoard(normalized.board)
+    setLastMoves(normalized.lastMoves)
     setBoardSize((current) => (normalized.boardSize !== current ? normalized.boardSize : current))
     setCurrentPlayer(normalized.currentPlayer)
     setAgents(normalized.agents)
@@ -159,6 +191,7 @@ function App() {
     setGameOver(normalized.gameOver)
     setScores(normalized.scores)
     setTileCounts(normalized.tileCounts)
+    setNetworkValue(normalized.networkValue)
     setHasLoaded(true)
   }, [])
 
@@ -344,6 +377,12 @@ function App() {
     }
     return Math.max(...scores)
   }, [scores])
+
+  const formattedNetworkValue = useMemo(
+    () =>
+      networkValue?.map((value) => `${(value * 100).toFixed(1)}%`) ?? null,
+    [networkValue],
+  )
 
   const handleOrientationSelect = (pieceId: number, orientation: BackendOrientation) => {
     if (pendingPlacement || !orientation.valid || interactionLocked || !isHumanTurn) {
@@ -708,6 +747,11 @@ function App() {
                 const isPending = pendingMap?.has(key)
                 const isPreview = Boolean(preview?.cellSet.has(key))
                 const showPreviewInvalid = isPreview && preview && !preview.isValid
+                const playerIndex = isFilled ? Number.parseInt(value, 10) : null
+                const hasLastMoveDot =
+                  playerIndex !== null &&
+                  Number.isFinite(playerIndex) &&
+                  Boolean(lastMoves[playerIndex]?.has(key))
 
                 let className = 'cell'
                 if (isFilled) className += ` cell--player-${value}`
@@ -747,7 +791,9 @@ function App() {
                     disabled={Boolean(pendingPlacement) || isSubmittingMove || interactionLocked}
                     style={inlineStyle}
                     aria-label={`Row ${rowIndex + 1}, Column ${colIndex + 1}`}
-                  />
+                  >
+                    {hasLastMoveDot && <span className="cell__last-move-dot" aria-hidden="true" />}
+                  </button>
                 )
               }),
             )}
@@ -822,11 +868,7 @@ function App() {
             <div className="pieces-header">
               <h2>Pieces</h2>
               <span>
-                {
-                  pieces.filter((piece) => piece.orientations.some((orientation) => orientation.valid))
-                    .length
-                }
-                /{pieces.length || 0} playable
+                {pieces.filter((piece) => piece.available).length}/{pieces.length || 0} unplayed
               </span>
             </div>
 
@@ -835,14 +877,13 @@ function App() {
                 const isExpanded = expandedPieceId === piece.id
                 const isSelected = selectedOrientation?.pieceId === piece.id
                 const previewOrientation = piece.orientations[0]
-                const hasPlayableOrientation = piece.orientations.some((orientation) => orientation.valid)
                 const playerColor =
                   PLAYER_COLORS[currentPlayer % PLAYER_COLORS.length] ?? PLAYER_COLORS[0]
 
                 return (
                   <div
                     key={piece.id}
-                    className={`piece-card${isSelected ? ' piece-card--active' : ''}${!hasPlayableOrientation ? ' piece-card--faded' : ''
+                    className={`piece-card${isSelected ? ' piece-card--active' : ''}${!piece.available ? ' piece-card--faded' : ''
                       }`}
                   >
                     <button
@@ -900,6 +941,41 @@ function App() {
               })}
             </div>
           </aside>
+
+          <section className="network-value-panel">
+            <div className="network-value-panel__header">
+              <div>
+                <h2>Network value</h2>
+                <span>Board evaluation for the current position</span>
+              </div>
+            </div>
+            {formattedNetworkValue ? (
+              <ul className="network-value-panel__list">
+                {formattedNetworkValue.map((value, playerIndex) => {
+                  const color = PLAYER_COLORS[playerIndex % PLAYER_COLORS.length] ?? '#475467'
+                  const isCurrentPlayer = playerIndex === currentPlayer
+                  return (
+                    <li
+                      key={playerIndex}
+                      className={`network-value-panel__row${isCurrentPlayer ? ' network-value-panel__row--current' : ''}`}
+                    >
+                      <span className="network-value-panel__player">
+                        <span
+                          className="network-value-panel__swatch"
+                          style={{ backgroundColor: color }}
+                          aria-hidden="true"
+                        />
+                        Player {playerIndex + 1}
+                      </span>
+                      <strong>{value}</strong>
+                    </li>
+                  )
+                })}
+              </ul>
+            ) : (
+              <p className="network-value-panel__empty">Unavailable</p>
+            )}
+          </section>
 
           <section className="agent-panel">
             <div className="agent-panel__header">

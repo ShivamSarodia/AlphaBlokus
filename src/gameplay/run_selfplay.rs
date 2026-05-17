@@ -1,7 +1,10 @@
 use crate::config::{GameConfig, InferenceConfig};
 use crate::utils;
 use crate::{
-    config::SelfPlayConfig, gameplay::Engine, inference::DefaultClient, recorder::Recorder,
+    config::SelfPlayConfig,
+    gameplay::{Engine, EngineRecorders},
+    inference::DefaultClient,
+    recorder::Recorder,
 };
 use ahash::AHashMap as HashMap;
 use anyhow::{Context, Result};
@@ -49,6 +52,19 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) -> Result<()> {
                 flush_row_count,
             } => Recorder::build_and_start(*flush_row_count, data_directory.clone())?,
         };
+        let (game_result_recorder, game_result_recorder_background_task) =
+            match &config.game_result_recorder {
+                crate::config::GameResultRecorderConfig::Disabled => {
+                    crate::recorder::GameResultRecorder::disabled()
+                }
+                crate::config::GameResultRecorderConfig::JsonlFile {
+                    path,
+                    flush_row_count,
+                } => crate::recorder::GameResultRecorder::build_and_start(
+                    *flush_row_count,
+                    path.clone(),
+                )?,
+            };
 
         let mut engine = Engine::new(
             config.num_concurrent_games,
@@ -57,7 +73,10 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) -> Result<()> {
             &config.game,
             &config.agents,
             config.observability.metrics.include_player_order_labels(),
-            recorder,
+            EngineRecorders {
+                mcts: recorder,
+                game_results: game_result_recorder,
+            },
         );
 
         // Start a timer that cancels the token after the specified duration
@@ -86,6 +105,9 @@ pub fn run_selfplay(config: &'static SelfPlayConfig) -> Result<()> {
         recorder_background_task
             .await
             .context("Recorder background task failed")?;
+        game_result_recorder_background_task
+            .await
+            .context("Game result recorder background task failed")?;
 
         tracing::info!("Self-play complete.");
         Ok(())
@@ -133,6 +155,7 @@ mod tests {
                 data_directory: "/tmp/alphablokus_test_fixture".to_string(),
                 flush_row_count: 10,
             },
+            game_result_recorder: crate::config::GameResultRecorderConfig::Disabled,
             observability: Default::default(),
         };
 
@@ -174,6 +197,7 @@ mod tests {
                 data_directory: "/tmp/alphablokus_test_fixture_duration".to_string(),
                 flush_row_count: 10,
             },
+            game_result_recorder: crate::config::GameResultRecorderConfig::Disabled,
             observability: Default::default(),
         };
 

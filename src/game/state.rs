@@ -155,6 +155,14 @@ impl State {
         &self.board
     }
 
+    pub fn is_piece_available(&self, player: usize, piece_index: usize) -> bool {
+        self.piece_availability
+            .get(player)
+            .and_then(|pieces| pieces.get(piece_index))
+            .copied()
+            == Some(1)
+    }
+
     pub fn piece_availability_player_pov(&self, player: usize) -> Vec<Vec<u8>> {
         let rows: [Vec<u8>; NUM_PLAYERS] = std::array::from_fn(|i| {
             let row = (i + player) % NUM_PLAYERS;
@@ -360,6 +368,21 @@ mod tests {
         state.apply_move(move_index).unwrap();
 
         assert_eq!(state.piece_availability[player][piece_index], 0);
+    }
+
+    #[test]
+    fn test_is_piece_available_returns_false_after_piece_is_used() {
+        let config = create_game_config();
+        let mut state = State::new(&config).unwrap();
+        let player = state.player();
+        let move_index = state.first_valid_move().unwrap();
+        let piece_index = config.move_profiles().unwrap().get(move_index).piece_index;
+
+        assert!(state.is_piece_available(player, piece_index));
+
+        state.apply_move(move_index).unwrap();
+
+        assert!(!state.is_piece_available(player, piece_index));
     }
 
     #[test]

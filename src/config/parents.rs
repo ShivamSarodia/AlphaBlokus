@@ -5,8 +5,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
 use crate::config::{
-    AgentConfig, AgentGroupConfig, GameConfig, InferenceConfig, MCTSConfig, MCTSRecorderConfig,
-    ObservabilityConfig,
+    AgentConfig, AgentGroupConfig, GameConfig, GameResultRecorderConfig, InferenceConfig,
+    MCTSConfig, MCTSRecorderConfig, ObservabilityConfig,
 };
 
 pub trait LoadableConfig: Sized + DeserializeOwned {
@@ -49,6 +49,8 @@ pub struct SelfPlayConfig {
     #[serde(default)]
     pub duration_seconds: u64,
     pub mcts_recorder: MCTSRecorderConfig,
+    #[serde(default)]
+    pub game_result_recorder: GameResultRecorderConfig,
     #[serde(default)]
     pub observability: ObservabilityConfig,
 }

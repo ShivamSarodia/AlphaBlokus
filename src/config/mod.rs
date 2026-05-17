@@ -19,4 +19,4 @@ pub use parents::{
     BenchmarkInferenceConfig, EnrichPieceAvailabilityConfig, LoadableConfig, MCTSAnalyzerConfig,
     PreprocessMovesConfig, SelfPlayConfig, WebPlayConfig,
 };
-pub use recorder::MCTSRecorderConfig;
+pub use recorder::{GameResultRecorderConfig, MCTSRecorderConfig};
