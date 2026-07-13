@@ -1,9 +1,9 @@
 //! Architecture-stable serialization for the runtime-optimized move table.
 //!
-//! `MoveData` is the only public gameplay representation. The private structs
-//! in this module are a versioned wire schema using fixed-width integers and
-//! explicit `u64` bit blocks, so native and WASM builds reconstruct identical
-//! `MoveData` values from the same bytes.
+//! `MoveData` is the runtime-optimized representation used by the application.
+//! The structs in this module define a versioned wire schema using fixed-width
+//! integers and explicit `u64` bit blocks, so native and WASM builds
+//! reconstruct identical `MoveData` values from the same bytes.
 
 use std::io::{Read, Write};
 
