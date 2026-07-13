@@ -4,9 +4,15 @@ use std::io::{BufReader, BufWriter, Write};
 use std::path::Path;
 use zstd::stream::{read::Decoder, write::Encoder};
 
+use crate::config::GameConfig;
 use crate::game::move_data::MoveData;
+use crate::game::move_data::codec;
 
-pub fn save<P: AsRef<Path>>(move_profiles: MoveData, output_file: P) -> Result<()> {
+pub fn save<P: AsRef<Path>>(
+    move_profiles: &MoveData,
+    game_config: &GameConfig,
+    output_file: P,
+) -> Result<()> {
     let path = output_file.as_ref();
     println!("Saving move profiles...");
 
@@ -15,7 +21,7 @@ pub fn save<P: AsRef<Path>>(move_profiles: MoveData, output_file: P) -> Result<(
     let buf = BufWriter::new(file);
     let mut enc = Encoder::new(buf, 6)?;
 
-    rmp_serde::encode::write(&mut enc, &move_profiles)?;
+    codec::write(&mut enc, move_profiles, game_config)?;
 
     let mut buf = enc.finish()?;
     buf.flush()?;
@@ -26,7 +32,7 @@ pub fn save<P: AsRef<Path>>(move_profiles: MoveData, output_file: P) -> Result<(
     Ok(())
 }
 
-pub fn load<P: AsRef<Path>>(input_file: P) -> Result<MoveData> {
+pub fn load<P: AsRef<Path>>(input_file: P, game_config: &GameConfig) -> Result<MoveData> {
     let path = input_file.as_ref();
     tracing::info!("Loading move profiles...");
 
@@ -35,7 +41,7 @@ pub fn load<P: AsRef<Path>>(input_file: P) -> Result<MoveData> {
     let buf = BufReader::new(file);
     let mut dec = Decoder::new(buf)?;
 
-    let move_profiles: MoveData = rmp_serde::decode::from_read(&mut dec)?;
+    let move_profiles = codec::read(&mut dec, game_config)?;
 
     tracing::info!("Loaded move profiles from disk at {}", path.display());
     Ok(move_profiles)
