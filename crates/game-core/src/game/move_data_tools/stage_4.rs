@@ -5,7 +5,7 @@ use indicatif::ParallelProgressIterator;
 use indicatif::ProgressBar;
 use rayon::prelude::*;
 
-use crate::game::move_data::stage_3::Stage3MoveProfile;
+use crate::game::move_data_tools::stage_3::Stage3MoveProfile;
 
 pub struct Stage4MoveProfile {
     pub index: usize,

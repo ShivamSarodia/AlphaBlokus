@@ -1,5 +1,4 @@
 mod agents;
-mod game;
 mod inference;
 mod observability;
 mod parents;
@@ -10,7 +9,7 @@ pub use agents::{
     AgentConfig, AgentGroupConfig, DefaultExploitationValue, MCTSConfig, PentobiConfig,
     PolicySamplingConfig, RandomConfig,
 };
-pub use game::GameConfig;
+pub use game_core::config::GameConfig;
 pub use inference::{
     ExecutorConfig, InferenceCacheConfig, InferenceConfig, OrtExecutionProvider, ReloadConfig,
 };

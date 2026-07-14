@@ -254,12 +254,12 @@ pub fn decode(bytes: &[u8], config: &GameConfig) -> Result<MoveData> {
     decoder.finish(config)
 }
 
-pub(crate) fn write<W: Write>(writer: &mut W, data: &MoveData, config: &GameConfig) -> Result<()> {
+pub fn encode<W: Write>(writer: &mut W, data: &MoveData, config: &GameConfig) -> Result<()> {
     rmp_serde::encode::write(writer, &DiskMoveData::from_runtime(data, config)?)?;
     Ok(())
 }
 
-pub(crate) fn read<R: Read>(reader: &mut R, config: &GameConfig) -> Result<MoveData> {
+pub fn decode_reader<R: Read>(reader: &mut R, config: &GameConfig) -> Result<MoveData> {
     let disk: DiskMoveData = rmp_serde::decode::from_read(reader)?;
     let mut decoder = disk.into_decoder(config)?;
     decoder.build_profiles(decoder.remaining_profiles(), config)?;
@@ -299,7 +299,7 @@ fn decode_bitset(blocks: Vec<u64>, num_moves: usize) -> Result<MovesBitSet> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::game::move_data::generate::generate;
+    use crate::game::move_data_tools::generate;
     use crate::testing::create_game_config_without_data;
 
     #[test]
@@ -307,13 +307,13 @@ mod tests {
         let config = create_game_config_without_data();
         let original = generate(config)?;
         let mut encoded = Vec::new();
-        write(&mut encoded, &original, config)?;
+        encode(&mut encoded, &original, config)?;
 
         let decoded = decode(&encoded, config)?;
         assert_move_data_eq(&original, &decoded, config.num_moves);
 
         let mut reencoded = Vec::new();
-        write(&mut reencoded, &decoded, config)?;
+        encode(&mut reencoded, &decoded, config)?;
         assert_eq!(encoded, reencoded);
         Ok(())
     }

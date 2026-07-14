@@ -1,6 +1,6 @@
 pub mod agents;
 pub mod config;
-pub mod game;
+pub use game_core::game;
 pub mod gameplay;
 pub mod inference;
 pub mod recorder;

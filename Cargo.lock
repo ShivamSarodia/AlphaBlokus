@@ -51,6 +51,7 @@ name = "alpha_blokus"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "alphablokus-game-core",
  "anyhow",
  "async-trait",
  "aws-config",
@@ -86,6 +87,22 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "zstd",
+]
+
+[[package]]
+name = "alphablokus-game-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fixedbitset",
+ "indicatif",
+ "itertools 0.14.0",
+ "rand",
+ "rayon",
+ "rmp-serde",
+ "serde",
+ "tracing",
  "zstd",
 ]
 

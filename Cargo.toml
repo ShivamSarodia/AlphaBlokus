@@ -3,6 +3,10 @@ name = "alpha_blokus"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = ["crates/game-core"]
+resolver = "2"
+
 [dependencies]
 ahash = { version = "0.8.12", features = ["serde"] }
 anyhow = "1.0.99"
@@ -40,6 +44,7 @@ tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = "0.3.20"
 zstd = "0.13.3"
+game-core = { package = "alphablokus-game-core", path = "crates/game-core" }
 
 [build-dependencies]
 cxx-build = "1.0.186"

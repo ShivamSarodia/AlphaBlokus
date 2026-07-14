@@ -2,10 +2,10 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::PathBuf;
 
-use crate::config::NUM_PLAYERS;
-use crate::game::move_data;
 use crate::game::move_data::{MoveData, MoveProfile};
 use crate::game::{MovesArray, MovesBitSet};
+
+pub const NUM_PLAYERS: usize = 4;
 
 #[derive(Deserialize, Debug)]
 pub struct GameConfig {
@@ -42,17 +42,5 @@ impl GameConfig {
             .as_ref()
             .map(|data| data.initial_moves_enabled.clone())
             .context("Move data is not loaded")
-    }
-
-    pub fn load_move_profiles(&mut self) -> Result<()> {
-        let move_data =
-            move_data::load(self.move_data_file.as_path(), self).with_context(|| {
-                format!(
-                    "Failed to load move profiles from file: {}",
-                    self.move_data_file.display()
-                )
-            })?;
-        self.move_data = Some(move_data);
-        Ok(())
     }
 }
