@@ -92,6 +92,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "alphablokus-browser-wasm"
+version = "0.1.0"
+dependencies = [
+ "alphablokus-game-core",
+ "alphablokus-mcts-core",
+ "anyhow",
+ "js-sys",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "alphablokus-game-core"
 version = "0.1.0"
 dependencies = [
