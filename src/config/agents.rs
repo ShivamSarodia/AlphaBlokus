@@ -63,15 +63,6 @@ pub struct MCTSConfig {
     /// When set, policy_inference_config_name must also be set.
     #[serde(default = "default_empty_string")]
     pub value_inference_config_name: String,
-    /// If provided, saves debug information for each move as a new file in this directory.
-    #[serde(default)]
-    pub trace_file: Option<PathBuf>,
-}
-
-impl MCTSConfig {
-    pub fn tracing_enabled(&self) -> bool {
-        self.trace_file.is_some()
-    }
 }
 
 #[derive(Deserialize, Debug)]

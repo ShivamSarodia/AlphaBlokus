@@ -83,7 +83,6 @@ pub fn create_mcts_config(num_rollouts: u32, temperature: f32) -> &'static MCTSC
         inference_config_name: "".to_string(),
         policy_inference_config_name: "".to_string(),
         value_inference_config_name: "".to_string(),
-        trace_file: None,
         default_exploitation_value: DefaultExploitationValue::NetworkValue,
     }))
 }
