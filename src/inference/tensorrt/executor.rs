@@ -9,7 +9,7 @@ use crate::{
     config::{GameConfig, NUM_PLAYERS},
     inference,
     inference::batcher::Executor,
-    inference::softmax::softmax_inplace,
+    inference::softmax_inplace,
     tensorrt::bridge::ffi,
 };
 

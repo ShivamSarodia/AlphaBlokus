@@ -1,7 +1,7 @@
 use alpha_blokus::{
     config::{self, GameConfig, NUM_PLAYERS},
     game::Board,
-    inference::{Client, DefaultClient, Request},
+    inference::{DefaultClient, InferenceClient, Request},
     utils,
 };
 use anyhow::{Context, Result};

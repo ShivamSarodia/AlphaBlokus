@@ -3,13 +3,12 @@ use anyhow::{Result, anyhow};
 use rand_distr::Distribution;
 use rand_distr::weighted::WeightedIndex;
 
-use crate::config::GameConfig;
-use crate::game::move_data::move_index_to_player_pov;
-use crate::inference;
-use crate::{
-    config::{DefaultExploitationValue, MCTSConfig, NUM_PLAYERS},
-    game::State,
+use alphablokus_game_core::{
+    config::{GameConfig, NUM_PLAYERS},
+    game::{State, move_data::move_index_to_player_pov},
 };
+
+use crate::{DefaultExploitationValue, InferenceClient, MCTSConfig, Request};
 
 pub struct Node {
     /// Player to move.
@@ -45,7 +44,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn build_and_expand<T: inference::Client>(
+    pub async fn build_and_expand<T: InferenceClient>(
         state: &State,
         inference_client: &T,
         mcts_config: &'static MCTSConfig,
@@ -134,7 +133,7 @@ impl Node {
         self.children_visit_counts_sum = 0;
     }
 
-    async fn initialize_inference_results<T: inference::Client>(
+    async fn initialize_inference_results<T: InferenceClient>(
         &mut self,
         state: &State,
         inference_client: &T,
@@ -144,7 +143,7 @@ impl Node {
 
         // Perform inference on this board.
         let inference_result = inference_client
-            .evaluate(inference::Request {
+            .evaluate(Request {
                 board: state.board().clone_with_player_pov(self.player as i32),
                 valid_move_indexes: self
                     .array_index_to_player_pov_move_index
@@ -370,12 +369,42 @@ impl Node {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::*;
-    use crate::testing;
+
+    fn create_game_config() -> &'static GameConfig {
+        Box::leak(Box::new(GameConfig {
+            board_size: 5,
+            move_data_file: PathBuf::new(),
+            num_moves: 958,
+            num_pieces: 21,
+            num_piece_orientations: 91,
+            move_data: None,
+        }))
+    }
+
+    fn create_mcts_config() -> &'static MCTSConfig {
+        Box::leak(Box::new(MCTSConfig {
+            name: "test".to_string(),
+            fast_move_probability: 0.0,
+            fast_move_num_rollouts: 1,
+            full_move_num_rollouts: 1,
+            total_dirichlet_noise_alpha: 1.0,
+            root_dirichlet_noise_fraction: 0.0,
+            ucb_exploration_factor: 1.0,
+            temperature_turn_cutoff: 0,
+            move_selection_temperature: 0.0,
+            default_exploitation_value: DefaultExploitationValue::NetworkValue,
+            inference_config_name: String::new(),
+            policy_inference_config_name: String::new(),
+            value_inference_config_name: String::new(),
+        }))
+    }
 
     fn create_test_node(player: usize) -> Node {
-        let game_config = testing::create_game_config();
-        let mcts_config = testing::create_mcts_config(1, 0.0);
+        let game_config = create_game_config();
+        let mcts_config = create_mcts_config();
         Node {
             player,
             num_valid_moves: 2,
@@ -421,5 +450,17 @@ mod tests {
             node.root_value_estimate_as_player_pov(),
             [0.35, 0.25, 0.15, 0.25]
         );
+    }
+
+    #[test]
+    fn network_value_rotates_from_player_to_universal_pov() {
+        for player in 0..NUM_PLAYERS {
+            let mut node = create_test_node(player);
+            node.set_value_from_player_pov([1.0, 0.0, 0.0, 0.0]);
+
+            let mut expected = [0.0; NUM_PLAYERS];
+            expected[player] = 1.0;
+            assert_eq!(node.get_value_as_universal_pov(), expected);
+        }
     }
 }

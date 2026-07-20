@@ -1,6 +1,8 @@
 use std::{
+    future::Future,
     hash::{Hash, Hasher},
     path::{Path, PathBuf},
+    pin::Pin,
     sync::Arc,
     time::Duration,
 };
@@ -8,8 +10,7 @@ use std::{
 #[cfg(cuda)]
 use crate::inference::TensorRtExecutor;
 use crate::{
-    config::{ExecutorConfig, GameConfig, InferenceCacheConfig, InferenceConfig, NUM_PLAYERS},
-    game::Board,
+    config::{ExecutorConfig, GameConfig, InferenceCacheConfig, InferenceConfig},
     inference::{
         Executor, LocalModelSource, OrtExecutor, RandomExecutor, ReloadExecutor, S3ModelSource,
         batcher::Batcher,
@@ -24,18 +25,7 @@ use nohash_hasher::BuildNoHashHasher;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 
-#[derive(Debug, Clone, Hash)]
-pub struct Request {
-    pub board: Board,
-    pub valid_move_indexes: Vec<usize>,
-    pub piece_availability: Vec<Vec<u8>>,
-}
-
-#[derive(Debug, Clone)]
-pub struct Response {
-    pub value: [f32; NUM_PLAYERS],
-    pub policy: Vec<f32>,
-}
+use mcts_core::{InferenceClient, Request, Response};
 
 pub struct RequestChannelMessage {
     pub request: Request,
@@ -54,15 +44,6 @@ pub struct PolicyValueClient {
     value_client: Arc<DefaultClient>,
 }
 
-pub trait Client {
-    fn evaluate(
-        &self,
-        request: Request,
-    ) -> impl std::future::Future<Output = Result<Response>> + Send;
-}
-
-/// DefaultClient is the only production implementation of the Client trait. We separate the
-/// two to simplify testing.
 impl DefaultClient {
     pub async fn from_inference_config(
         inference_config: &InferenceConfig,
@@ -211,18 +192,22 @@ impl PolicyValueClient {
     }
 }
 
-impl Client for PolicyValueClient {
-    async fn evaluate(&self, request: Request) -> Result<Response> {
-        let policy_request = request.clone();
-        let value_request = request;
-        let (policy_response, value_response) = tokio::try_join!(
-            self.policy_client.evaluate(policy_request),
-            self.value_client.evaluate(value_request)
-        )?;
+impl InferenceClient for PolicyValueClient {
+    type EvaluationFuture<'a> = Pin<Box<dyn Future<Output = Result<Response>> + Send + 'a>>;
 
-        Ok(Response {
-            value: value_response.value,
-            policy: policy_response.policy,
+    fn evaluate(&self, request: Request) -> Self::EvaluationFuture<'_> {
+        Box::pin(async move {
+            let policy_request = request.clone();
+            let value_request = request;
+            let (policy_response, value_response) = tokio::try_join!(
+                self.policy_client.evaluate(policy_request),
+                self.value_client.evaluate(value_request)
+            )?;
+
+            Ok(Response {
+                value: value_response.value,
+                policy: policy_response.policy,
+            })
         })
     }
 }
@@ -259,22 +244,26 @@ fn build_executor(
     Ok(executor)
 }
 
-impl Client for DefaultClient {
-    async fn evaluate(&self, request: Request) -> Result<Response> {
-        if let Some(cache) = &self.cache {
-            let cache_key = self.cache_key(&request);
-            if let Some(response) = cache.get(&cache_key) {
-                metrics::counter!("inference_cache_hit_total").increment(1);
+impl InferenceClient for DefaultClient {
+    type EvaluationFuture<'a> = Pin<Box<dyn Future<Output = Result<Response>> + Send + 'a>>;
+
+    fn evaluate(&self, request: Request) -> Self::EvaluationFuture<'_> {
+        Box::pin(async move {
+            if let Some(cache) = &self.cache {
+                let cache_key = self.cache_key(&request);
+                if let Some(response) = cache.get(&cache_key) {
+                    metrics::counter!("inference_cache_hit_total").increment(1);
+                    return Ok(response);
+                }
+                metrics::counter!("inference_cache_miss_total").increment(1);
+
+                let response = self.send_request(request).await?;
+                cache.insert(cache_key, response.clone());
                 return Ok(response);
             }
-            metrics::counter!("inference_cache_miss_total").increment(1);
 
-            let response = self.send_request(request).await?;
-            cache.insert(cache_key, response.clone());
-            return Ok(response);
-        }
-
-        self.send_request(request).await
+            self.send_request(request).await
+        })
     }
 }
 
@@ -310,7 +299,12 @@ mod tests {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    use crate::{config::GameConfig, inference::batcher::Executor, testing};
+    use crate::{
+        config::{GameConfig, NUM_PLAYERS},
+        game::Board,
+        inference::batcher::Executor,
+        testing,
+    };
 
     use super::*;
 

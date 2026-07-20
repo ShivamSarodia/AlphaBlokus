@@ -52,6 +52,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "alphablokus-game-core",
+ "alphablokus-mcts-core",
  "anyhow",
  "async-trait",
  "aws-config",
@@ -104,6 +105,20 @@ dependencies = [
  "serde",
  "tracing",
  "zstd",
+]
+
+[[package]]
+name = "alphablokus-mcts-core"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "alphablokus-game-core",
+ "anyhow",
+ "getrandom 0.3.3",
+ "log",
+ "rand",
+ "rand_distr",
+ "serde",
 ]
 
 [[package]]

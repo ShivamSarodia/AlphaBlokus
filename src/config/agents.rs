@@ -1,14 +1,10 @@
 use std::path::PathBuf;
 
+use mcts_core::MCTSConfig;
 use serde::Deserialize;
-use serde::Serialize;
 
 fn default_agent_name() -> String {
     "unnamed".to_string()
-}
-
-fn default_empty_string() -> String {
-    String::new()
 }
 
 /// An agent group config describes the methodology for selecting agents for
@@ -35,34 +31,6 @@ pub enum AgentConfig {
     Random(RandomConfig),
     PolicySampling(PolicySamplingConfig),
     Pentobi(PentobiConfig),
-}
-
-#[derive(Deserialize, Debug)]
-pub struct MCTSConfig {
-    #[serde(default = "default_agent_name")]
-    pub name: String,
-    pub fast_move_probability: f32,
-    pub fast_move_num_rollouts: u32,
-    pub full_move_num_rollouts: u32,
-    pub total_dirichlet_noise_alpha: f32,
-    pub root_dirichlet_noise_fraction: f32,
-    pub ucb_exploration_factor: f32,
-    pub temperature_turn_cutoff: u16,
-    pub move_selection_temperature: f32,
-    #[serde(default)]
-    pub default_exploitation_value: DefaultExploitationValue,
-    /// The name of the inference config that the engine should pass to the
-    /// MCTS agent. The config file must contain an inference config with this
-    /// name. Ignored if policy/value inference config names are provided.
-    pub inference_config_name: String,
-    /// Optional inference config name to use for policy evaluation.
-    /// When set, value_inference_config_name must also be set.
-    #[serde(default = "default_empty_string")]
-    pub policy_inference_config_name: String,
-    /// Optional inference config name to use for value evaluation.
-    /// When set, policy_inference_config_name must also be set.
-    #[serde(default = "default_empty_string")]
-    pub value_inference_config_name: String,
 }
 
 #[derive(Deserialize, Debug)]
@@ -93,14 +61,4 @@ pub struct PentobiConfig {
     pub binary_path: PathBuf,
     pub opening_book: PathBuf,
     pub level: u8,
-}
-
-#[derive(Deserialize, Debug, Serialize, Clone, Copy, Default)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum DefaultExploitationValue {
-    #[default]
-    NetworkValue,
-    FixedValue {
-        value: f32,
-    },
 }

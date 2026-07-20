@@ -6,13 +6,13 @@ mod recorder;
 
 pub const NUM_PLAYERS: usize = 4;
 pub use agents::{
-    AgentConfig, AgentGroupConfig, DefaultExploitationValue, MCTSConfig, PentobiConfig,
-    PolicySamplingConfig, RandomConfig,
+    AgentConfig, AgentGroupConfig, PentobiConfig, PolicySamplingConfig, RandomConfig,
 };
 pub use game_core::config::GameConfig;
 pub use inference::{
     ExecutorConfig, InferenceCacheConfig, InferenceConfig, OrtExecutionProvider, ReloadConfig,
 };
+pub use mcts_core::{DefaultExploitationValue, MCTSConfig};
 pub use observability::{LoggingConfig, MetricsConfig, ObservabilityConfig};
 pub use parents::{
     BenchmarkInferenceConfig, EnrichPieceAvailabilityConfig, LoadableConfig, MCTSAnalyzerConfig,
