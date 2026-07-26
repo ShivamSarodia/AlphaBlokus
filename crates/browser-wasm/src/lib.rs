@@ -213,9 +213,9 @@ fn browser_mcts_config(rollouts: u32) -> Result<&'static MCTSConfig, JsValue> {
 fn create_browser_mcts_config(rollouts: u32) -> MCTSConfig {
     MCTSConfig {
         name: "browser".to_string(),
-        // Browser play uses the existing fast-move search path so no root
-        // noise is added, with the selected rollout count for every turn.
-        fast_move_probability: 1.0,
+        // Browser play uses the full-move search path with root noise disabled,
+        // and the selected rollout count for every turn.
+        fast_move_probability: 0.0,
         fast_move_num_rollouts: rollouts,
         full_move_num_rollouts: rollouts,
         total_dirichlet_noise_alpha: 1.0,
