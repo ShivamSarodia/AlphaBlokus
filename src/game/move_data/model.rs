@@ -1,10 +1,9 @@
 use crate::config::NUM_PLAYERS;
 use crate::game::BoardSlice;
 use crate::game::{MovesArray, MovesBitSet};
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 pub struct MoveProfile {
     pub index: usize,
     pub occupied_cells: BoardSlice,
@@ -18,7 +17,6 @@ pub struct MoveProfile {
 }
 
 // I don't love the naming here :/
-#[derive(Serialize, Deserialize)]
 pub struct MoveData {
     pub profiles: MovesArray<MoveProfile>,
     pub initial_moves_enabled: [MovesBitSet; NUM_PLAYERS],

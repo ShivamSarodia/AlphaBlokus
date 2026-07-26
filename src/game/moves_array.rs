@@ -52,7 +52,7 @@ impl<T> MovesArray<T> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct MovesBitSet {
     values: FixedBitSet,
     num_moves: usize,

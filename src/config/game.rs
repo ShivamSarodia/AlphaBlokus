@@ -21,6 +21,7 @@ pub struct GameConfig {
     pub num_piece_orientations: usize,
 
     // Move data. This is loaded from the provided file when load_move_data is called.
+    #[serde(skip)]
     pub move_data: Option<MoveData>,
 }
 
@@ -44,14 +45,14 @@ impl GameConfig {
     }
 
     pub fn load_move_profiles(&mut self) -> Result<()> {
-        self.move_data = Some(move_data::load(self.move_data_file.as_path()).with_context(
-            || {
+        let move_data =
+            move_data::load(self.move_data_file.as_path(), self).with_context(|| {
                 format!(
                     "Failed to load move profiles from file: {}",
                     self.move_data_file.display()
                 )
-            },
-        )?);
+            })?;
+        self.move_data = Some(move_data);
         Ok(())
     }
 }

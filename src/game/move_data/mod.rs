@@ -1,3 +1,4 @@
+pub mod codec;
 mod generate;
 mod initial_moves_enabled;
 mod model;
