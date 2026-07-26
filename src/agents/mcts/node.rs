@@ -6,7 +6,6 @@ use rand_distr::weighted::WeightedIndex;
 use crate::config::GameConfig;
 use crate::game::move_data::move_index_to_player_pov;
 use crate::inference;
-use crate::recorder::MCTSData;
 use crate::{
     config::{DefaultExploitationValue, MCTSConfig, NUM_PLAYERS},
     game::State,
@@ -185,7 +184,7 @@ impl Node {
         value_sum
     }
 
-    fn root_value_estimate_as_player_pov(&self) -> [f32; NUM_PLAYERS] {
+    pub(super) fn root_value_estimate_as_player_pov(&self) -> [f32; NUM_PLAYERS] {
         let mut value = self.root_value_estimate_as_universal_pov();
         value.rotate_left(self.player);
         value
@@ -319,40 +318,16 @@ impl Node {
         Ok(self.array_index_to_move_index[array_index].into())
     }
 
-    pub fn generate_mcts_data(&self, game_id: u64, state: &State) -> Result<MCTSData> {
-        let move_profiles = self.game_config.move_profiles()?;
-        Ok(MCTSData {
-            player: self.player,
-            turn: state.turn(),
-            game_id,
-            board: state.board().clone_with_player_pov(self.player as i32),
-            valid_moves: self
-                .array_index_to_player_pov_move_index
-                .iter()
-                .map(|&x| x.into())
-                .collect(),
-            valid_move_tuples: self
-                .array_index_to_player_pov_move_index
-                .iter()
-                .map(|&index| {
-                    let move_profile = move_profiles.get(index);
-                    (
-                        move_profile.piece_orientation_index,
-                        move_profile.center.0,
-                        move_profile.center.1,
-                    )
-                })
-                .collect::<Vec<(usize, usize, usize)>>(),
-            visit_counts: self
-                .children_visit_counts
-                .iter()
-                .map(|&x| x as u32)
-                .collect(),
-            // This will be populated externally when the game is over.
-            game_result: [0.0; NUM_PLAYERS],
-            q_value: self.root_value_estimate_as_player_pov(),
-            piece_availability: state.piece_availability_player_pov(self.player),
-        })
+    pub(super) fn player(&self) -> usize {
+        self.player
+    }
+
+    pub(super) fn player_pov_move_indexes(&self) -> &[u16] {
+        &self.array_index_to_player_pov_move_index
+    }
+
+    pub(super) fn child_visit_counts(&self) -> &[u16] {
+        &self.children_visit_counts
     }
 
     #[inline]
@@ -446,25 +421,5 @@ mod tests {
             node.root_value_estimate_as_player_pov(),
             [0.35, 0.25, 0.15, 0.25]
         );
-    }
-
-    #[test]
-    fn generate_mcts_data_includes_piece_availability() {
-        let game_config = testing::create_game_config();
-        let mut state = State::new(game_config).unwrap();
-        let move_index = state.valid_moves().next().unwrap();
-        state.apply_move(move_index).unwrap();
-
-        let node = create_test_node(state.player());
-        let data = node.generate_mcts_data(42, &state).unwrap();
-
-        assert_eq!(
-            data.piece_availability,
-            state.piece_availability_player_pov(state.player())
-        );
-        assert_eq!(data.piece_availability.len(), NUM_PLAYERS);
-        for row in data.piece_availability {
-            assert_eq!(row.len(), game_config.num_pieces);
-        }
     }
 }

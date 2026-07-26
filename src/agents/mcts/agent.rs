@@ -1,22 +1,22 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow};
-use log::trace;
+use anyhow::Result;
 use rand::Rng;
 
 use crate::agents::Agent;
 use crate::agents::mcts::node::Node;
+use crate::agents::mcts::search::MCTSSearch;
+use crate::config::NUM_PLAYERS;
 use crate::config::{GameConfig, MCTSConfig};
-use crate::game::{GameStatus, State};
+use crate::game::State;
 use crate::inference;
 use crate::recorder::MCTSData;
 use async_trait::async_trait;
 
 pub struct MCTSAgent<T: inference::Client + Send + Sync> {
     pub name: String,
-    mcts_config: &'static MCTSConfig,
+    search: MCTSSearch<T>,
     game_config: &'static GameConfig,
-    inference_client: Arc<T>,
     game_id: u64,
     /// The agent is responsible for accumulating MCTS data from rollouts.
     /// The data in this vector will have 0 values for the game result, and that field
@@ -32,98 +32,11 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
     ) -> Self {
         Self {
             name: mcts_config.name.clone(),
-            mcts_config,
+            search: MCTSSearch::new(mcts_config, game_config, inference_client),
             game_config,
-            inference_client,
             game_id: rand::rng().random::<u64>(),
             mcts_data: Vec::new(),
         }
-    }
-
-    async fn rollout_once(&self, state: &State, search_root: &mut Node) -> Result<()> {
-        trace!("Rolling out once from state: {}", state);
-
-        let mut moves_played = Vec::new();
-
-        let value = {
-            let mut current_state = state.clone();
-            // This reborrows search_root as mutable to avoid moving it, since we'll
-            // need it again below when backpropagating the value.
-            let mut current_node = &mut *search_root;
-
-            loop {
-                trace!(
-                    "Rollout traversal iteration. Moves played: {:?}, current state: {}",
-                    moves_played, current_state,
-                );
-
-                // Select the next child node to explore.
-                let move_index = current_node.select_move_by_ucb();
-
-                // Play and record the selected move.
-                let game_status = current_state
-                    .apply_move(move_index)
-                    .map_err(|err| anyhow!("Failed to apply move during rollout: {}", err))?;
-                moves_played.push(move_index);
-
-                // If the game is now over, we just assign values based on the final state.
-                if game_status == GameStatus::GameOver {
-                    trace!(
-                        "Iteration terminated because game is over. Current state: {}",
-                        current_state
-                    );
-                    break current_state.result();
-                }
-
-                // Try to find an existing child node for the selected move.
-                if current_node.has_child(move_index) {
-                    trace!(
-                        "Proceeding to next iteration: found existing child node for move index: {}",
-                        move_index
-                    );
-                    current_node = current_node.get_child_mut(move_index).ok_or_else(|| {
-                        anyhow!(
-                            "Expected child node for move {}, but none found",
-                            move_index
-                        )
-                    })?;
-                } else {
-                    trace!(
-                        "Expanding new node: no existing child node for move index: {}",
-                        move_index
-                    );
-                    let new_node = Node::build_and_expand(
-                        &current_state,
-                        self.inference_client.as_ref(),
-                        self.mcts_config,
-                        self.game_config,
-                        false,
-                    )
-                    .await?;
-                    let value = new_node.get_value_as_universal_pov();
-                    current_node.add_child(move_index, new_node);
-                    break value;
-                }
-            }
-        };
-
-        trace!("Backpropagating through moves played: {:?}", moves_played);
-
-        // Now, backpropagate the value we just learned up the tree.
-        let mut node: Option<&mut Node> = Some(&mut *search_root);
-        for &move_index in moves_played.iter() {
-            node.as_deref_mut()
-                .context("expected node while backpropagating but found none")?
-                .increment_child_value_sum(move_index, value);
-            node.as_deref_mut()
-                .context("expected node while backpropagating but found none")?
-                .increment_child_visit_count(move_index);
-            node = node
-                .context("expected node while backpropagating but found none")?
-                .get_child_mut(move_index);
-        }
-
-        Ok(())
     }
 }
 
@@ -134,43 +47,64 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
     }
 
     async fn choose_move(&mut self, state: &State) -> anyhow::Result<usize> {
-        let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
-        let num_rollouts = if is_fast_move {
-            self.mcts_config.fast_move_num_rollouts
-        } else {
-            self.mcts_config.full_move_num_rollouts
-        };
-
-        // Create a new node to represent the root of the search tree. Start by expanding the
-        // node immediately.
-        let mut search_root = Node::build_and_expand(
-            state,
-            self.inference_client.as_ref(),
-            self.mcts_config,
-            self.game_config,
-            // Add noise only on full moves, not on fast moves.
-            !is_fast_move,
-        )
-        .await?;
-
-        // Run the rollouts, which formulates the search tree.
-        for _ in 0..num_rollouts {
-            self.rollout_once(state, &mut search_root).await?;
+        let result = self.search.choose_move(state).await?;
+        if !result.is_fast_move {
+            self.mcts_data.push(generate_mcts_data(
+                &result.root,
+                self.game_id,
+                state,
+                self.game_config,
+            )?);
         }
-
-        let move_index = search_root.select_move_to_play(state)?;
-
-        if !is_fast_move {
-            self.mcts_data
-                .push(search_root.generate_mcts_data(self.game_id, state)?);
-        }
-
-        Ok(move_index)
+        Ok(result.move_index)
     }
 
     fn flush_mcts_data(&mut self) -> Vec<MCTSData> {
         self.mcts_data.drain(..).collect()
     }
+}
+
+fn generate_mcts_data(
+    search_root: &Node,
+    game_id: u64,
+    state: &State,
+    game_config: &'static GameConfig,
+) -> Result<MCTSData> {
+    let move_profiles = game_config.move_profiles()?;
+    Ok(MCTSData {
+        player: search_root.player(),
+        turn: state.turn(),
+        game_id,
+        board: state
+            .board()
+            .clone_with_player_pov(search_root.player() as i32),
+        valid_moves: search_root
+            .player_pov_move_indexes()
+            .iter()
+            .map(|&x| x.into())
+            .collect(),
+        valid_move_tuples: search_root
+            .player_pov_move_indexes()
+            .iter()
+            .map(|&index| {
+                let move_profile = move_profiles.get(index);
+                (
+                    move_profile.piece_orientation_index,
+                    move_profile.center.0,
+                    move_profile.center.1,
+                )
+            })
+            .collect::<Vec<(usize, usize, usize)>>(),
+        visit_counts: search_root
+            .child_visit_counts()
+            .iter()
+            .map(|&x| x as u32)
+            .collect(),
+        // This will be populated externally when the game is over.
+        game_result: [0.0; NUM_PLAYERS],
+        q_value: search_root.root_value_estimate_as_player_pov(),
+        piece_availability: state.piece_availability_player_pov(search_root.player()),
+    })
 }
 
 #[cfg(test)]
@@ -243,6 +177,30 @@ mod tests {
         // Two requests are made -- one for the initial node expansion, and
         // another for the single rollout.
         assert_eq!(fast_requests, 2);
+    }
+
+    #[tokio::test]
+    async fn test_mcts_data_includes_piece_availability() {
+        let mcts_config = testing::create_mcts_config(1, 0.0);
+        let game_config = testing::create_half_game_config();
+        let mock_client = Arc::new(MockInferenceClient {
+            requests: Mutex::new(Vec::new()),
+        });
+        let mut agent = MCTSAgent::new(mcts_config, game_config, mock_client);
+        let state = State::new(game_config).unwrap();
+
+        agent.choose_move(&state).await.unwrap();
+        let data = agent.flush_mcts_data();
+
+        assert_eq!(data.len(), 1);
+        assert_eq!(
+            data[0].piece_availability,
+            state.piece_availability_player_pov(state.player())
+        );
+        assert_eq!(data[0].piece_availability.len(), NUM_PLAYERS);
+        for row in &data[0].piece_availability {
+            assert_eq!(row.len(), game_config.num_pieces);
+        }
     }
 
     #[tokio::test]
