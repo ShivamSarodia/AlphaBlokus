@@ -66,9 +66,11 @@ For non-NVIDIA systems, inference through ORT is available, but is not optimized
 ## Gameplay
 As far as I'm aware, the state of the art computer opponent for Blokus has been [Pentobi](https://github.com/enz/pentobi), so I used it as the primary benchmark for AlphaBlokus skill.
 
-The strongest AlphaBlokus model, running with 2000 rollouts, achieves a win rate of TODO% against Pentobi head-to-head at maximum difficulty. Importantly, I have not attempted to rigorously compare win rates using equal compute; Pentobi is CPU-only while AlphaBlokus performs best using a GPU for inference. However, even when I run AlphaBlokus inference on CPU on my local machine, it plays each turn faster than Pentobi at maximum difficulty. So, per unit time, AlphaBlokus is a stronger player out of the box.
+The strongest AlphaBlokus model, running with 2000 rollouts, achieves a win rate statistically superior to Pentobi head-to-head at maximum difficulty: over 85 games, Pentobi won or tied 33, while AlphaBlokus won or tied 63.
+
+Notably, I have not attempted to rigorously compare win rates using equal compute. Pentobi is CPU-only while AlphaBlokus performs best using a GPU for inference, so direct comparison is difficult. (Anecdotally, AlphaBlokus is faster per-turn on my machine than Pentobi.) Additionally, I have not tuned Pentobi beyond simply maximizing the available difficulty parameter; I don't know if there's other ways to make Pentobi more powerful than I'm giving it credit for. On the other hand, AlphaBlokus continues to improve with additional training and would likely become a meaningfullystronger player simply with more self-play time.
 
 I don't know if AlphaBlokus is superhuman. It's certainly better than me, but I'm not very good at Blokus. If you're a strong Blokus player, I'd love to hear your perspective.
 
 ## Install / Contributing
-Claude and Codex are perfectly capable of installing AlphaBlokus, refer to their guidance on running the application locally.
+Claude and Codex are perfectly capable of installing AlphaBlokus. Refer to their guidance on running the application locally.
