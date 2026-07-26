@@ -1,6 +1,6 @@
 # AlphaBlokus
 
-Agent for the board game [Blokus](https://en.wikipedia.org/wiki/Blokus), implemented in Rust and trained purely on self-play. As far as I am aware, AlphaBlokus achieves the strongest play of any publicly available Blokus agent.
+Agent for the board game [Blokus](https://en.wikipedia.org/wiki/Blokus), implemented in Rust and trained purely on self-play for only about $100 on Vast.ai. As far as I am aware, AlphaBlokus achieves the strongest play of any publicly available Blokus agent.
 
 **[Play in your browser here](https://google.com)**. The browser application runs using WebGPU and WASM, so expect speed to depend dramatically on your local hardware.
 
@@ -71,4 +71,4 @@ The strongest AlphaBlokus model, running with 2000 rollouts, achieves a win rate
 I don't know if AlphaBlokus is superhuman. It's certainly better than me, but I'm not very good at Blokus. If you're a strong Blokus player, I'd love to hear your perspective.
 
 ## Install / Contributing
-TODO - make it possible to install and run locally+on vast, even if not train? Provide a claude script to install.
+Claude and Codex are perfectly capable of installing AlphaBlokus, refer to their guidance on running the application locally.
