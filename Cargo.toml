@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["crates/game-core", "crates/mcts-core"]
+members = ["crates/browser-wasm", "crates/game-core", "crates/mcts-core"]
 resolver = "2"
 
 [dependencies]
