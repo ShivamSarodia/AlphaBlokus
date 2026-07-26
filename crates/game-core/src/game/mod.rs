@@ -5,6 +5,8 @@ mod moves_array;
 mod state;
 
 pub mod move_data;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod move_data_tools;
 pub use board::Board;
 pub use board_slice::{BoardSlice, BoardSlice2D};
 pub use moves_array::MovesArray;

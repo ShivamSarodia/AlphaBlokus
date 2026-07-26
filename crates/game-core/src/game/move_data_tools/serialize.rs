@@ -21,7 +21,7 @@ pub fn save<P: AsRef<Path>>(
     let buf = BufWriter::new(file);
     let mut enc = Encoder::new(buf, 6)?;
 
-    codec::write(&mut enc, move_profiles, game_config)?;
+    codec::encode(&mut enc, move_profiles, game_config)?;
 
     let mut buf = enc.finish()?;
     buf.flush()?;
@@ -41,7 +41,7 @@ pub fn load<P: AsRef<Path>>(input_file: P, game_config: &GameConfig) -> Result<M
     let buf = BufReader::new(file);
     let mut dec = Decoder::new(buf)?;
 
-    let move_profiles = codec::read(&mut dec, game_config)?;
+    let move_profiles = codec::decode_reader(&mut dec, game_config)?;
 
     tracing::info!("Loaded move profiles from disk at {}", path.display());
     Ok(move_profiles)

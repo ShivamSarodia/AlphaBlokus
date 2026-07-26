@@ -3,7 +3,7 @@ use anyhow::Result;
 use indicatif::{ParallelProgressIterator, ProgressBar};
 use rayon::prelude::*;
 
-use crate::game::move_data::stage_2::Stage2MoveProfile;
+use crate::game::move_data_tools::stage_2::Stage2MoveProfile;
 
 pub struct Stage3MoveProfile {
     pub index: usize,
