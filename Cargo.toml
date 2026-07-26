@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["crates/game-core"]
+members = ["crates/game-core", "crates/mcts-core"]
 resolver = "2"
 
 [dependencies]
@@ -45,6 +45,7 @@ tracing-appender = "0.2.3"
 tracing-subscriber = "0.3.20"
 zstd = "0.13.3"
 game-core = { package = "alphablokus-game-core", path = "crates/game-core" }
+mcts-core = { package = "alphablokus-mcts-core", path = "crates/mcts-core" }
 
 [build-dependencies]
 cxx-build = "1.0.186"

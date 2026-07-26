@@ -1,5 +1,10 @@
 [build]
 rustflags = ["-C", "target-cpu=native"]
 
+# `getrandom` requires an explicit browser entropy backend on bare WASM.
+# Keep this target-specific so native builds retain their host tuning above.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
+
 [alias]
 integration-test = "test test_s3_reload_integration -- --ignored"

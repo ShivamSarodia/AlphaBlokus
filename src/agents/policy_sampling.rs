@@ -11,14 +11,14 @@ use crate::inference;
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 
-pub struct PolicySamplingAgent<T: inference::Client + Send + Sync> {
+pub struct PolicySamplingAgent<T: inference::InferenceClient + Send + Sync> {
     pub name: String,
     temperature: f32,
     game_config: &'static GameConfig,
     inference_client: Arc<T>,
 }
 
-impl<T: inference::Client + Send + Sync> PolicySamplingAgent<T> {
+impl<T: inference::InferenceClient + Send + Sync> PolicySamplingAgent<T> {
     pub fn new(
         policy_sampling_config: &'static PolicySamplingConfig,
         game_config: &'static GameConfig,
@@ -34,7 +34,11 @@ impl<T: inference::Client + Send + Sync> PolicySamplingAgent<T> {
 }
 
 #[async_trait]
-impl<T: inference::Client + Send + Sync> Agent for PolicySamplingAgent<T> {
+impl<T> Agent for PolicySamplingAgent<T>
+where
+    T: inference::InferenceClient + Send + Sync,
+    for<'a> T::EvaluationFuture<'a>: Send,
+{
     fn name(&self) -> &str {
         &self.name
     }
@@ -103,17 +107,16 @@ mod tests {
         pub policy: Vec<f32>,
     }
 
-    impl inference::Client for MockInferenceClient {
-        async fn evaluate(
-            &self,
-            request: inference::Request,
-        ) -> anyhow::Result<inference::Response> {
+    impl inference::InferenceClient for MockInferenceClient {
+        type EvaluationFuture<'a> = std::future::Ready<anyhow::Result<inference::Response>>;
+
+        fn evaluate(&self, request: inference::Request) -> Self::EvaluationFuture<'_> {
             self.requests.lock().unwrap().push(request);
 
-            Ok(inference::Response {
+            std::future::ready(Ok(inference::Response {
                 value: [0.0; 4],
                 policy: self.policy.clone(),
-            })
+            }))
         }
     }
 

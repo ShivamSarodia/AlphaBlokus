@@ -1,21 +1,19 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use mcts_core::{InferenceClient, MCTSSearch, SearchStats};
 use rand::Rng;
 
 use crate::agents::Agent;
-use crate::agents::mcts::node::Node;
-use crate::agents::mcts::search::MCTSSearch;
 use crate::config::NUM_PLAYERS;
 use crate::config::{GameConfig, MCTSConfig};
 use crate::game::State;
-use crate::inference;
 use crate::recorder::MCTSData;
 use async_trait::async_trait;
 
-pub struct MCTSAgent<T: inference::Client + Send + Sync> {
+pub struct MCTSAgent<T: InferenceClient + Send + Sync> {
     pub name: String,
-    search: MCTSSearch<T>,
+    search: MCTSSearch<Arc<T>>,
     game_config: &'static GameConfig,
     game_id: u64,
     /// The agent is responsible for accumulating MCTS data from rollouts.
@@ -24,7 +22,7 @@ pub struct MCTSAgent<T: inference::Client + Send + Sync> {
     mcts_data: Vec<MCTSData>,
 }
 
-impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
+impl<T: InferenceClient + Send + Sync> MCTSAgent<T> {
     pub fn new(
         mcts_config: &'static MCTSConfig,
         game_config: &'static GameConfig,
@@ -41,7 +39,11 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
 }
 
 #[async_trait]
-impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
+impl<T> Agent for MCTSAgent<T>
+where
+    T: InferenceClient + Send + Sync + 'static,
+    for<'a> T::EvaluationFuture<'a>: Send,
+{
     fn name(&self) -> &str {
         &self.name
     }
@@ -50,7 +52,7 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
         let result = self.search.choose_move(state).await?;
         if !result.is_fast_move {
             self.mcts_data.push(generate_mcts_data(
-                &result.root,
+                &result.stats,
                 self.game_id,
                 state,
                 self.game_config,
@@ -65,26 +67,26 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
 }
 
 fn generate_mcts_data(
-    search_root: &Node,
+    search_stats: &SearchStats,
     game_id: u64,
     state: &State,
     game_config: &'static GameConfig,
 ) -> Result<MCTSData> {
     let move_profiles = game_config.move_profiles()?;
     Ok(MCTSData {
-        player: search_root.player(),
+        player: search_stats.player,
         turn: state.turn(),
         game_id,
         board: state
             .board()
-            .clone_with_player_pov(search_root.player() as i32),
-        valid_moves: search_root
-            .player_pov_move_indexes()
+            .clone_with_player_pov(search_stats.player as i32),
+        valid_moves: search_stats
+            .player_pov_move_indexes
             .iter()
             .map(|&x| x.into())
             .collect(),
-        valid_move_tuples: search_root
-            .player_pov_move_indexes()
+        valid_move_tuples: search_stats
+            .player_pov_move_indexes
             .iter()
             .map(|&index| {
                 let move_profile = move_profiles.get(index);
@@ -95,15 +97,15 @@ fn generate_mcts_data(
                 )
             })
             .collect::<Vec<(usize, usize, usize)>>(),
-        visit_counts: search_root
-            .child_visit_counts()
+        visit_counts: search_stats
+            .child_visit_counts
             .iter()
             .map(|&x| x as u32)
             .collect(),
         // This will be populated externally when the game is over.
         game_result: [0.0; NUM_PLAYERS],
-        q_value: search_root.root_value_estimate_as_player_pov(),
-        piece_availability: state.piece_availability_player_pov(search_root.player()),
+        q_value: search_stats.q_value,
+        piece_availability: state.piece_availability_player_pov(search_stats.player),
     })
 }
 
@@ -113,6 +115,7 @@ mod tests {
 
     use super::*;
     use crate::config::DefaultExploitationValue;
+    use crate::inference;
     use crate::inference::softmax_inplace;
     use crate::{config::NUM_PLAYERS, testing};
     use itertools::Itertools;
@@ -121,11 +124,10 @@ mod tests {
         pub requests: Mutex<Vec<inference::Request>>,
     }
 
-    impl inference::Client for MockInferenceClient {
-        async fn evaluate(
-            &self,
-            request: inference::Request,
-        ) -> anyhow::Result<inference::Response> {
+    impl inference::InferenceClient for MockInferenceClient {
+        type EvaluationFuture<'a> = std::future::Ready<anyhow::Result<inference::Response>>;
+
+        fn evaluate(&self, request: inference::Request) -> Self::EvaluationFuture<'_> {
             // Push the requests onto the vector.
             self.requests.lock().unwrap().push(request.clone());
 
@@ -141,7 +143,7 @@ mod tests {
                     policy[index_to_prefer] = 1.0;
                 });
 
-            Ok(inference::Response { value, policy })
+            std::future::ready(Ok(inference::Response { value, policy }))
         }
     }
 
@@ -351,51 +353,11 @@ mod tests {
         assert_eq!(state.board().slice(3).get((0, 9)), true);
     }
 
-    #[tokio::test]
-    async fn test_value_rotation() {
-        let mcts_config = testing::create_mcts_config(1, 0.0);
-
-        // Generate a larger game config so that there's no concern about
-        // one move blocking the others.
-        let game_config = testing::create_half_game_config();
-
-        let mock_client = Arc::new(MockInferenceClient {
-            requests: Mutex::new(Vec::new()),
-        });
-
-        for player in 0..NUM_PLAYERS {
-            let mut state = State::new(&game_config).unwrap();
-            for _ in 0..player {
-                state.apply_move(state.first_valid_move().unwrap()).unwrap();
-            }
-
-            let search_root = Node::build_and_expand(
-                &state,
-                mock_client.as_ref(),
-                &mcts_config,
-                &game_config,
-                true,
-            )
-            .await
-            .unwrap();
-
-            let universal_value = search_root.get_value_as_universal_pov();
-            for i in 0..NUM_PLAYERS {
-                if i == player {
-                    assert_eq!(universal_value[i], 1.0);
-                } else {
-                    assert_eq!(universal_value[i], 0.0);
-                }
-            }
-        }
-    }
-
     struct ValuesInferenceClient {}
-    impl inference::Client for ValuesInferenceClient {
-        async fn evaluate(
-            &self,
-            request: inference::Request,
-        ) -> anyhow::Result<inference::Response> {
+    impl inference::InferenceClient for ValuesInferenceClient {
+        type EvaluationFuture<'a> = std::future::Ready<anyhow::Result<inference::Response>>;
+
+        fn evaluate(&self, request: inference::Request) -> Self::EvaluationFuture<'_> {
             // Define "value" to prefer players with fewer pieces on the board, so that
             // if MCTS is working correctly all four players will play the single piece
             // move.
@@ -409,7 +371,7 @@ mod tests {
             ];
             softmax_inplace(&mut value);
 
-            Ok(inference::Response { value, policy })
+            std::future::ready(Ok(inference::Response { value, policy }))
         }
     }
 

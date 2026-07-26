@@ -12,7 +12,7 @@ use crate::{
     config::{GameConfig, NUM_PLAYERS, OrtExecutionProvider},
     inference,
     inference::batcher::Executor,
-    inference::softmax::softmax_inplace,
+    inference::softmax_inplace,
 };
 
 /// The ORT executor runs inference using the ORT library. This executor isn't

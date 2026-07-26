@@ -92,7 +92,7 @@ pub async fn build_game_response(app_state: &AppState) -> GameResponse {
     }
 }
 
-async fn evaluate_network_value<T: inference::Client + ?Sized>(
+async fn evaluate_network_value<T: inference::InferenceClient + ?Sized>(
     state: &BlokusState,
     game_config: &'static GameConfig,
     client: &T,
@@ -286,16 +286,15 @@ mod tests {
         should_fail: bool,
     }
 
-    impl inference::Client for MockInferenceClient {
-        async fn evaluate(
-            &self,
-            request: inference::Request,
-        ) -> anyhow::Result<inference::Response> {
+    impl inference::InferenceClient for MockInferenceClient {
+        type EvaluationFuture<'a> = std::future::Ready<anyhow::Result<inference::Response>>;
+
+        fn evaluate(&self, request: inference::Request) -> Self::EvaluationFuture<'_> {
             self.requests.lock().unwrap().push(request);
             if self.should_fail {
-                Err(anyhow!("inference failed"))
+                std::future::ready(Err(anyhow!("inference failed")))
             } else {
-                Ok(self.response.clone().unwrap())
+                std::future::ready(Ok(self.response.clone().unwrap()))
             }
         }
     }

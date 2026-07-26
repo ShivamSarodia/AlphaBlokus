@@ -1,35 +1,43 @@
-use std::sync::Arc;
-
 use anyhow::{Context, Result, anyhow};
 use log::trace;
 use rand::Rng;
 
 use super::node::Node;
-use crate::config::{GameConfig, MCTSConfig};
-use crate::game::{GameStatus, State};
-use crate::inference;
+use alphablokus_game_core::{
+    config::GameConfig,
+    game::{GameStatus, State},
+};
 
-/// The result of one search. Native callers retain the root to produce
-/// self-play records; browser callers only need the selected move.
+use crate::{InferenceClient, MCTSConfig};
+
+/// The selected move and the compact statistics needed by native self-play.
 pub struct MCTSSearchResult {
     pub move_index: usize,
     pub is_fast_move: bool,
-    pub(super) root: Node,
+    pub stats: SearchStats,
+}
+
+#[derive(Debug, Clone)]
+pub struct SearchStats {
+    pub player: usize,
+    pub player_pov_move_indexes: Vec<u16>,
+    pub child_visit_counts: Vec<u16>,
+    pub q_value: [f32; alphablokus_game_core::config::NUM_PLAYERS],
 }
 
 /// Runs the existing MCTS algorithm independently of the native Agent and
 /// self-play recording lifecycle.
-pub struct MCTSSearch<T: inference::Client + Send + Sync> {
+pub struct MCTSSearch<T: InferenceClient> {
     mcts_config: &'static MCTSConfig,
     game_config: &'static GameConfig,
-    inference_client: Arc<T>,
+    inference_client: T,
 }
 
-impl<T: inference::Client + Send + Sync> MCTSSearch<T> {
+impl<T: InferenceClient> MCTSSearch<T> {
     pub fn new(
         mcts_config: &'static MCTSConfig,
         game_config: &'static GameConfig,
-        inference_client: Arc<T>,
+        inference_client: T,
     ) -> Self {
         Self {
             mcts_config,
@@ -92,7 +100,7 @@ impl<T: inference::Client + Send + Sync> MCTSSearch<T> {
                     );
                     let new_node = Node::build_and_expand(
                         &current_state,
-                        self.inference_client.as_ref(),
+                        &self.inference_client,
                         self.mcts_config,
                         self.game_config,
                         false,
@@ -136,7 +144,7 @@ impl<T: inference::Client + Send + Sync> MCTSSearch<T> {
         // node immediately.
         let mut search_root = Node::build_and_expand(
             state,
-            self.inference_client.as_ref(),
+            &self.inference_client,
             self.mcts_config,
             self.game_config,
             // Add noise only on full moves, not on fast moves.
@@ -154,7 +162,12 @@ impl<T: inference::Client + Send + Sync> MCTSSearch<T> {
         Ok(MCTSSearchResult {
             move_index,
             is_fast_move,
-            root: search_root,
+            stats: SearchStats {
+                player: search_root.player(),
+                player_pov_move_indexes: search_root.player_pov_move_indexes().to_vec(),
+                child_visit_counts: search_root.child_visit_counts().to_vec(),
+                q_value: search_root.root_value_estimate_as_player_pov(),
+            },
         })
     }
 }

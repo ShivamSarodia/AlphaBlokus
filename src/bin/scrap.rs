@@ -1,6 +1,6 @@
 use alpha_blokus::{
     config::{self, GameConfig, NUM_PLAYERS},
-    inference::{Client, DefaultClient, Request},
+    inference::{DefaultClient, InferenceClient, Request},
     recorder::read_mcts_data_from_disk,
     utils,
 };
