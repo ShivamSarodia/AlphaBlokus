@@ -511,7 +511,6 @@ mod tests {
             inference_config_name: "default".to_string(),
             policy_inference_config_name: "".to_string(),
             value_inference_config_name: "".to_string(),
-            trace_file: None,
             default_exploitation_value: DefaultExploitationValue::NetworkValue,
         }));
         let mut engine = Engine::new(
@@ -613,7 +612,6 @@ mod tests {
             inference_config_name: "default".to_string(),
             policy_inference_config_name: "".to_string(),
             value_inference_config_name: "".to_string(),
-            trace_file: None,
             default_exploitation_value: DefaultExploitationValue::NetworkValue,
         });
         let agent_config = Box::leak(Box::new(agent_config));
@@ -643,7 +641,6 @@ mod tests {
             inference_config_name: "default".to_string(),
             policy_inference_config_name: "policy".to_string(),
             value_inference_config_name: "value".to_string(),
-            trace_file: None,
             default_exploitation_value: DefaultExploitationValue::NetworkValue,
         });
         let agent_config = Box::leak(Box::new(agent_config));

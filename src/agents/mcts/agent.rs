@@ -6,9 +6,8 @@ use rand::Rng;
 
 use crate::agents::Agent;
 use crate::agents::mcts::node::Node;
-use crate::agents::mcts::tracing::{MCTSTrace, record_mcts_trace};
 use crate::config::{GameConfig, MCTSConfig};
-use crate::game::{GameStatus, SerializableState, State};
+use crate::game::{GameStatus, State};
 use crate::inference;
 use crate::recorder::MCTSData;
 use async_trait::async_trait;
@@ -59,7 +58,7 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
                 );
 
                 // Select the next child node to explore.
-                let move_index = current_node.select_move_by_ucb().await;
+                let move_index = current_node.select_move_by_ucb();
 
                 // Play and record the selected move.
                 let game_status = current_state
@@ -95,28 +94,14 @@ impl<T: inference::Client + Send + Sync> MCTSAgent<T> {
                     );
                     let new_node = Node::build_and_expand(
                         &current_state,
-                        current_node.search_id,
                         self.inference_client.as_ref(),
                         self.mcts_config,
                         self.game_config,
                         false,
                     )
                     .await?;
-                    let new_node_id = new_node.id;
                     let value = new_node.get_value_as_universal_pov();
                     current_node.add_child(move_index, new_node);
-                    if self.mcts_config.tracing_enabled() {
-                        record_mcts_trace(
-                            MCTSTrace::AddedChild {
-                                parent_node_id: current_node.id,
-                                child_node_id: new_node_id,
-                                search_id: current_node.search_id,
-                                move_index,
-                            },
-                            self.mcts_config,
-                        )
-                        .await;
-                    }
                     break value;
                 }
             }
@@ -149,11 +134,6 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
     }
 
     async fn choose_move(&mut self, state: &State) -> anyhow::Result<usize> {
-        let search_id: u64 = chrono::Utc::now()
-            .timestamp_nanos_opt()
-            .ok_or_else(|| anyhow!("Failed to generate search id: timestamp unavailable"))?
-            .try_into()
-            .map_err(|_| anyhow!("Failed to generate search id: out of range"))?;
         let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
         let num_rollouts = if is_fast_move {
             self.mcts_config.fast_move_num_rollouts
@@ -165,7 +145,6 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
         // node immediately.
         let mut search_root = Node::build_and_expand(
             state,
-            search_id,
             self.inference_client.as_ref(),
             self.mcts_config,
             self.game_config,
@@ -174,26 +153,12 @@ impl<T: inference::Client + Send + Sync> Agent for MCTSAgent<T> {
         )
         .await?;
 
-        if self.mcts_config.tracing_enabled() {
-            record_mcts_trace(
-                MCTSTrace::StartedSearch {
-                    state: SerializableState::from_state(state),
-                    search_id,
-                    root_node_id: search_root.id,
-                    is_fast_move,
-                    num_rollouts,
-                },
-                self.mcts_config,
-            )
-            .await;
-        }
-
         // Run the rollouts, which formulates the search tree.
         for _ in 0..num_rollouts {
             self.rollout_once(state, &mut search_root).await?;
         }
 
-        let move_index = search_root.select_move_to_play(state).await?;
+        let move_index = search_root.select_move_to_play(state)?;
 
         if !is_fast_move {
             self.mcts_data
@@ -263,7 +228,6 @@ mod tests {
             inference_config_name: "".to_string(),
             policy_inference_config_name: "".to_string(),
             value_inference_config_name: "".to_string(),
-            trace_file: None,
             default_exploitation_value: DefaultExploitationValue::NetworkValue,
         }));
         let fast_client = Arc::new(MockInferenceClient {
@@ -449,7 +413,6 @@ mod tests {
 
             let search_root = Node::build_and_expand(
                 &state,
-                0,
                 mock_client.as_ref(),
                 &mcts_config,
                 &game_config,
