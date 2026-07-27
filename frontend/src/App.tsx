@@ -5,6 +5,7 @@ import {
   STRENGTHS,
   type BotProgress,
   type LoadingProgress,
+  type MemoryTelemetry,
   type Piece,
   type PieceOrientation,
   type Placement,
@@ -18,6 +19,9 @@ import {
 
 const send = (worker: Worker | null, command: WorkerCommand) => worker?.postMessage(command)
 const GAME_STORAGE_KEY = 'alphablokus.game.v1'
+const MEMORY_TELEMETRY_KEY = 'alphablokus.debug-memory.current'
+const PREVIOUS_MEMORY_TELEMETRY_KEY = 'alphablokus.debug-memory.previous'
+const MEMORY_DIAGNOSTICS_ENABLED = new URLSearchParams(window.location.search).has('debug-memory')
 const PLAYER_NAMES = ['Blue', 'Yellow', 'Red', 'Green'] as const
 const START_CORNER_NAMES = ['top-left', 'top-right', 'bottom-right', 'bottom-left'] as const
 const EDGE_DIRECTIONS = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const
@@ -104,6 +108,41 @@ function clearPersistedGame(): void {
   }
 }
 
+function readMemoryTelemetry(key: string): MemoryTelemetry | null {
+  if (!MEMORY_DIAGNOSTICS_ENABLED) return null
+  try {
+    const value = localStorage.getItem(key)
+    return value ? JSON.parse(value) as MemoryTelemetry : null
+  } catch {
+    return null
+  }
+}
+
+function formatMemoryTelemetry(telemetry: MemoryTelemetry): string {
+  const memory = `${(telemetry.wasmBytes / (1024 * 1024)).toFixed(1)} MiB`
+  if (telemetry.completed !== undefined && telemetry.total !== undefined) {
+    return `${memory} · rollout ${telemetry.completed} / ${telemetry.total}`
+  }
+  return `${memory} · ${telemetry.stage.replaceAll('-', ' ')}`
+}
+
+function MemoryDiagnostic({
+  current,
+  previous,
+}: {
+  current: MemoryTelemetry | null
+  previous: MemoryTelemetry | null
+}) {
+  if (!MEMORY_DIAGNOSTICS_ENABLED) return null
+  return (
+    <aside className="memory-diagnostic" aria-live="polite">
+      <strong>Engine memory diagnostic</strong>
+      <span>{current ? formatMemoryTelemetry(current) : 'Waiting for engine…'}</span>
+      {previous && <span>Previous session: {formatMemoryTelemetry(previous)}</span>}
+    </aside>
+  )
+}
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
@@ -184,6 +223,13 @@ export default function App() {
   const savedGameToRestoreRef = useRef(savedGameToRestore)
   const [loading, setLoading] = useState<LoadingProgress | null>(null)
   const [botProgress, setBotProgress] = useState<BotProgress | null>(null)
+  const [memoryTelemetry, setMemoryTelemetry] = useState<MemoryTelemetry | null>(
+    () => readMemoryTelemetry(MEMORY_TELEMETRY_KEY),
+  )
+  const memoryTelemetryRef = useRef(memoryTelemetry)
+  const [previousMemoryTelemetry, setPreviousMemoryTelemetry] = useState<MemoryTelemetry | null>(
+    () => readMemoryTelemetry(PREVIOUS_MEMORY_TELEMETRY_KEY),
+  )
   const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null)
   const [selectedOrientationId, setSelectedOrientationId] = useState<number | null>(null)
   const [placementResult, setPlacementResult] = useState<{
@@ -212,6 +258,24 @@ export default function App() {
       }
       if (data.type === 'loading') setLoading(data.progress)
       if (data.type === 'bot-progress') setBotProgress(data.progress)
+      if (data.type === 'memory-telemetry') {
+        const existing = memoryTelemetryRef.current
+        if (existing && existing.telemetrySession !== data.telemetry.telemetrySession) {
+          setPreviousMemoryTelemetry(existing)
+          try {
+            localStorage.setItem(PREVIOUS_MEMORY_TELEMETRY_KEY, JSON.stringify(existing))
+          } catch {
+            // The live diagnostic remains visible when storage is unavailable.
+          }
+        }
+        memoryTelemetryRef.current = data.telemetry
+        setMemoryTelemetry(data.telemetry)
+        try {
+          localStorage.setItem(MEMORY_TELEMETRY_KEY, JSON.stringify(data.telemetry))
+        } catch {
+          // The live diagnostic remains visible when storage is unavailable.
+        }
+      }
       if (data.type === 'snapshot') {
         setLoading(null)
         setBotProgress(null)
@@ -249,7 +313,7 @@ export default function App() {
         setError(data.message)
       }
     }
-    send(instance, { type: 'init' })
+    send(instance, { type: 'init', debugMemory: MEMORY_DIAGNOSTICS_ENABLED })
     return () => {
       instance.onmessage = null
       instance.terminate()
@@ -417,6 +481,7 @@ export default function App() {
   if (game) {
     return (
       <main className="game-shell">
+        <MemoryDiagnostic current={memoryTelemetry} previous={previousMemoryTelemetry} />
         <section className="table-layout table-layout--game">
           <header className="game-header">
             <h1>AlphaBlokus</h1>
@@ -632,6 +697,7 @@ export default function App() {
 
   return (
     <main className="setup-shell">
+      <MemoryDiagnostic current={memoryTelemetry} previous={previousMemoryTelemetry} />
       <section className="setup-card">
         <h1>Play AlphaBlokus</h1>
         <div className="setup-intro">

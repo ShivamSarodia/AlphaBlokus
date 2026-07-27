@@ -29,6 +29,28 @@ button:hover, button.selected { border-color: var(--control-border-hover); backg
 button:disabled { cursor: wait; opacity: .55; }
 .primary { background: #3279d4; border-color: #76aff7; color: white; font-size: var(--primary-control-font-size); font-weight: 700; }
 .primary:hover:not(:disabled) { border-color: #8abfff; background: #3b86e2; }
+.memory-diagnostic {
+  position: fixed;
+  z-index: 20;
+  right: .75rem;
+  bottom: .75rem;
+  display: grid;
+  gap: .2rem;
+  max-width: calc(100vw - 1.5rem);
+  padding: .65rem .8rem;
+  border: 1px solid #555764;
+  border-radius: var(--control-radius);
+  color: #edf4fa;
+  background: #15161df2;
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.35;
+}
+
+.memory-diagnostic span {
+  color: var(--muted-color);
+}
+
 .setup-shell, .game-shell { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); }
 .setup-shell {
   display: grid;
