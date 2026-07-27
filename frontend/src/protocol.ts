@@ -51,8 +51,6 @@ export type MemoryTelemetry = {
   telemetrySession: string
   stage: string
   wasmBytes: number
-  modelAssetBytes?: number
-  jsHeapBytes?: number
   player?: number
   completed?: number
   total?: number

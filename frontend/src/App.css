@@ -36,7 +36,6 @@ button:disabled { cursor: wait; opacity: .55; }
   bottom: .75rem;
   display: grid;
   gap: .2rem;
-  width: min(25rem, calc(100vw - 1.5rem));
   max-width: calc(100vw - 1.5rem);
   padding: .65rem .8rem;
   border: 1px solid #555764;
@@ -48,25 +47,8 @@ button:disabled { cursor: wait; opacity: .55; }
   line-height: 1.35;
 }
 
-.memory-diagnostic dl {
-  display: grid;
-  gap: .15rem;
-  margin: .25rem 0 0;
-}
-
-.memory-diagnostic dl div {
-  display: grid;
-  grid-template-columns: minmax(7.5rem, .8fr) minmax(0, 1.2fr);
-  gap: .75rem;
-}
-
-.memory-diagnostic dt {
+.memory-diagnostic span {
   color: var(--muted-color);
-}
-
-.memory-diagnostic dd {
-  margin: 0;
-  text-align: right;
 }
 
 .setup-shell, .game-shell { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); }
