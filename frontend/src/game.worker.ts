@@ -30,9 +30,6 @@ ort.env.wasm.wasmPaths = { wasm: ortWasmUrl }
 let session: ort.InferenceSession | null = null
 let current: Snapshot | null = null
 let moveHistory: number[] = []
-let browserWasmMemory: WebAssembly.Memory | null = null
-const telemetrySession = crypto.randomUUID()
-let memoryDiagnosticsEnabled = false
 type BrowserGame = {
   state_json(): string
   pieces_json(): string
@@ -57,19 +54,6 @@ let game: BrowserGame | null = null
 
 const emit = (event: WorkerEvent) => self.postMessage(event)
 const emitLoading = (progress: LoadingProgress) => emit({ type: 'loading', progress })
-const reportMemory = (stage: string, details: Record<string, unknown> = {}) => {
-  if (!memoryDiagnosticsEnabled) return
-  const bytes = browserWasmMemory?.buffer.byteLength
-  if (bytes === undefined) return
-  const telemetry = {
-    telemetrySession,
-    stage,
-    wasmBytes: bytes,
-    ...details,
-  }
-  console.info('[AlphaBlokus memory]', telemetry)
-  emit({ type: 'memory-telemetry', telemetry })
-}
 const emitCurrent = () => {
   if (!current) return
   const persistedGame: PersistedGame = {
@@ -193,8 +177,7 @@ async function loadBrowserGame(): Promise<void> {
   if (game) return
   const moveDataUrl = `${import.meta.env.BASE_URL}move-data.bin`
   emitLoading({ label: 'Preparing game engine' })
-  browserWasmMemory = (await initBrowserWasm()).memory
-  reportMemory('wasm-initialized')
+  await initBrowserWasm()
   const compressed = await fetchWithProgress(moveDataUrl, 'Downloading move table')
   const moveData = await decompressMoveTable(compressed)
   emitLoading({ label: 'Reading move table metadata' })
@@ -206,7 +189,6 @@ async function loadBrowserGame(): Promise<void> {
     await yieldToWorker()
   }
   game = builder.finish()
-  reportMemory('game-built')
 }
 
 function buildSnapshot(seats: Seat[], message: string): Snapshot {
@@ -244,16 +226,13 @@ async function playBotTurns(seats: Seat[]): Promise<void> {
         type: 'bot-progress',
         progress: { player, completed, total },
       })
-      reportMemory('bot-progress', { player, completed, total })
     }
     reportProgress(0, rollouts)
     const result = JSON.parse(await activeGame.choose_move(rollouts, evaluate, reportProgress)) as {
       move_index: number
     }
-    reportMemory('search-complete', { player, rollouts })
     activeGame.apply_move(result.move_index)
     moveHistory.push(result.move_index)
-    reportMemory('move-applied', { player, rollouts })
   }
   current = buildSnapshot(seats, activeGame.valid_move_indexes().length ? 'Your turn.' : 'Game over.')
   emitCurrent()
@@ -285,7 +264,6 @@ self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {
   try {
     switch (data.type) {
       case 'init':
-        memoryDiagnosticsEnabled = data.debugMemory === true
         if (!('gpu' in navigator)) {
           throw new Error('WebGPU is required to run AlphaBlokus in this browser.')
         }

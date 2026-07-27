@@ -47,15 +47,6 @@ export type BotProgress = {
   total: number
 }
 
-export type MemoryTelemetry = {
-  telemetrySession: string
-  stage: string
-  wasmBytes: number
-  player?: number
-  completed?: number
-  total?: number
-}
-
 export type Snapshot = {
   boardSize: number
   board: number[][]
@@ -68,7 +59,7 @@ export type Snapshot = {
 }
 
 export type WorkerCommand =
-  | { type: 'init'; debugMemory?: boolean }
+  | { type: 'init' }
   | { type: 'start-game'; seats: Seat[] }
   | { type: 'restore-game'; game: PersistedGame }
   | { type: 'select-orientation'; orientationId: number }
@@ -78,7 +69,6 @@ export type WorkerEvent =
   | { type: 'ready'; webgpu: true }
   | { type: 'loading'; progress: LoadingProgress }
   | { type: 'bot-progress'; progress: BotProgress }
-  | { type: 'memory-telemetry'; telemetry: MemoryTelemetry }
   | { type: 'snapshot'; snapshot: Snapshot }
   | { type: 'placements'; orientationId: number; placements: Placement[] }
   | { type: 'persist'; game: PersistedGame }
