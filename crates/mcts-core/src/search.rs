@@ -133,6 +133,17 @@ impl<T: InferenceClient> MCTSSearch<T> {
     }
 
     pub async fn choose_move(&self, state: &State) -> Result<MCTSSearchResult> {
+        self.choose_move_with_progress(state, |_, _| {}).await
+    }
+
+    pub async fn choose_move_with_progress<F>(
+        &self,
+        state: &State,
+        mut on_progress: F,
+    ) -> Result<MCTSSearchResult>
+    where
+        F: FnMut(u32, u32),
+    {
         let is_fast_move = rand::rng().random::<f32>() < self.mcts_config.fast_move_probability;
         let num_rollouts = if is_fast_move {
             self.mcts_config.fast_move_num_rollouts
@@ -153,8 +164,9 @@ impl<T: InferenceClient> MCTSSearch<T> {
         .await?;
 
         // Run the rollouts, which formulates the search tree.
-        for _ in 0..num_rollouts {
+        for completed in 1..=num_rollouts {
             self.rollout_once(state, &mut search_root).await?;
+            on_progress(completed, num_rollouts);
         }
 
         let move_index = search_root.select_move_to_play(state)?;

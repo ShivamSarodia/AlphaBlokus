@@ -35,6 +35,15 @@ pub struct BrowserGameBuilder {
     move_data_decoder: Option<MoveDataDecoder>,
 }
 
+#[derive(Clone)]
+struct OrientationShape {
+    id: usize,
+    piece_index: usize,
+    width: usize,
+    height: usize,
+    cells: Vec<[usize; 2]>,
+}
+
 #[wasm_bindgen]
 impl BrowserGame {
     /// Construct a game from a decompressed canonical move-table payload.
@@ -146,6 +155,90 @@ impl BrowserGame {
         serde_json::to_string(&profile.occupied_cells.to_cells()).map_err(js_error)
     }
 
+    pub fn pieces_json(&self) -> Result<String, JsValue> {
+        let move_profiles = self.game_config.move_profiles().map_err(js_error)?;
+        let mut orientation_validity = vec![false; self.game_config.num_piece_orientations];
+        for move_index in self.state().valid_moves() {
+            let profile = move_profiles.get(move_index);
+            orientation_validity[profile.piece_orientation_index] = true;
+        }
+
+        let mut orientations: Vec<Option<OrientationShape>> =
+            vec![None; self.game_config.num_piece_orientations];
+        for profile in move_profiles.iter() {
+            let orientation_id = profile.piece_orientation_index;
+            if orientations[orientation_id].is_some() {
+                continue;
+            }
+
+            let cells = profile.occupied_cells.to_cells();
+            let min_x = cells.iter().map(|(x, _)| *x).min().unwrap_or(0);
+            let min_y = cells.iter().map(|(_, y)| *y).min().unwrap_or(0);
+            let max_x = cells.iter().map(|(x, _)| *x).max().unwrap_or(min_x);
+            let max_y = cells.iter().map(|(_, y)| *y).max().unwrap_or(min_y);
+            orientations[orientation_id] = Some(OrientationShape {
+                id: orientation_id,
+                piece_index: profile.piece_index,
+                width: max_x - min_x + 1,
+                height: max_y - min_y + 1,
+                cells: cells
+                    .into_iter()
+                    .map(|(x, y)| [x - min_x, y - min_y])
+                    .collect(),
+            });
+        }
+
+        let player = self.state().player();
+        let pieces = (0..self.game_config.num_pieces)
+            .map(|piece_id| {
+                let piece_orientations = orientations
+                    .iter()
+                    .flatten()
+                    .filter(|orientation| orientation.piece_index == piece_id)
+                    .map(|orientation| {
+                        serde_json::json!({
+                            "id": orientation.id,
+                            "width": orientation.width,
+                            "height": orientation.height,
+                            "cells": orientation.cells,
+                            "valid": orientation_validity[orientation.id],
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                let squares = piece_orientations
+                    .first()
+                    .and_then(|orientation| orientation["cells"].as_array())
+                    .map_or(0, Vec::len);
+                serde_json::json!({
+                    "id": piece_id,
+                    "squares": squares,
+                    "available": self.state().is_piece_available(player, piece_id),
+                    "orientations": piece_orientations,
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::to_string(&pieces).map_err(js_error)
+    }
+
+    pub fn legal_placements_json(&self, orientation_id: usize) -> Result<String, JsValue> {
+        let move_profiles = self.game_config.move_profiles().map_err(js_error)?;
+        let placements = self
+            .state()
+            .valid_moves()
+            .filter_map(|move_index| {
+                let profile = move_profiles.get(move_index);
+                (profile.piece_orientation_index == orientation_id).then(|| {
+                    serde_json::json!({
+                        "move_index": move_index,
+                        "cells": profile.occupied_cells.to_cells(),
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        serde_json::to_string(&placements).map_err(js_error)
+    }
+
     pub fn apply_move(&mut self, move_index: usize) -> Result<bool, JsValue> {
         let mut next = self.state().clone();
         let status = next.apply_move(move_index).map_err(js_error)?;
@@ -176,7 +269,7 @@ impl BrowserGame {
 
     /// Runs the full search in Rust. The caller supplies the Promise-returning
     /// browser inference provider, and receives one promise for the final move.
-    pub fn choose_move(&self, rollouts: u32, evaluate: Function) -> Promise {
+    pub fn choose_move(&self, rollouts: u32, evaluate: Function, on_progress: Function) -> Promise {
         let state = self.state().clone();
         let mcts_config = match browser_mcts_config(rollouts) {
             Ok(config) => config,
@@ -186,7 +279,21 @@ impl BrowserGame {
         let inference_client = BrowserInferenceClient::new(evaluate, game_config);
         future_to_promise(async move {
             let search = MCTSSearch::new(mcts_config, game_config, inference_client);
-            let result = search.choose_move(&state).await.map_err(js_error)?;
+            let report_interval = (rollouts / 50).max(1);
+            let mut last_reported = 0;
+            let result = search
+                .choose_move_with_progress(&state, |completed, total| {
+                    if completed == total || completed - last_reported >= report_interval {
+                        last_reported = completed;
+                        let _ = on_progress.call2(
+                            &JsValue::NULL,
+                            &JsValue::from(completed),
+                            &JsValue::from(total),
+                        );
+                    }
+                })
+                .await
+                .map_err(js_error)?;
             serde_json::to_string(&serde_json::json!({
                 "move_index": result.move_index,
             }))

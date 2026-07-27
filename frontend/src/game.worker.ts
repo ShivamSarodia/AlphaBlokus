@@ -7,7 +7,17 @@ import { Decompress } from 'fzstd'
 import initBrowserWasm, {
   BrowserGameBuilder as WasmBrowserGameBuilder,
 } from './wasm/alphablokus_browser_wasm'
-import { STRENGTHS, type LoadingProgress, type Seat, type Snapshot, type Strength, type WorkerCommand, type WorkerEvent } from './protocol'
+import {
+  STRENGTHS,
+  type LoadingProgress,
+  type Piece,
+  type Placement,
+  type PersistedGame,
+  type Seat,
+  type Snapshot,
+  type WorkerCommand,
+  type WorkerEvent,
+} from './protocol'
 
 declare const self: DedicatedWorkerGlobalScope
 
@@ -19,16 +29,19 @@ ort.env.wasm.wasmPaths = { wasm: ortWasmUrl }
 
 let session: ort.InferenceSession | null = null
 let current: Snapshot | null = null
+let moveHistory: number[] = []
 type BrowserGame = {
   state_json(): string
+  pieces_json(): string
+  legal_placements_json(orientationId: number): string
   current_player(): number
   valid_move_indexes(): Uint32Array
   choose_move(
     rollouts: number,
     evaluate: (board: Uint8Array, pieceAvailability: Uint8Array, policyIndexes: Uint32Array) => Promise<unknown>,
+    onProgress: (completed: number, total: number) => void,
   ): Promise<string>
   apply_move(moveIndex: number): boolean
-  undo(): boolean
   reset(): void
 }
 type BrowserGameBuilder = {
@@ -41,6 +54,16 @@ let game: BrowserGame | null = null
 
 const emit = (event: WorkerEvent) => self.postMessage(event)
 const emitLoading = (progress: LoadingProgress) => emit({ type: 'loading', progress })
+const emitCurrent = () => {
+  if (!current) return
+  const persistedGame: PersistedGame = {
+    version: 2,
+    seats: current.seats,
+    moves: [...moveHistory],
+  }
+  emit({ type: 'persist', game: persistedGame })
+  emit({ type: 'snapshot', snapshot: current })
+}
 const yieldToWorker = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 const TABLE_CHUNK_BYTES = 512 * 1024
 
@@ -137,16 +160,16 @@ async function decompressMoveTable(compressed: Uint8Array): Promise<Uint8Array> 
   }
 }
 
-function snapshot(seats: Seat[], strength: Strength): Snapshot {
+function snapshot(seats: Seat[]): Snapshot {
   return {
     boardSize: BOARD_SIZE,
     board: Array.from({ length: BOARD_SIZE }, () => Array<number>(BOARD_SIZE).fill(-1)),
     currentPlayer: 0,
     seats,
-    strength,
     thinking: false,
     gameOver: false,
     message: 'Choose a piece to begin.',
+    pieces: [],
   }
 }
 
@@ -168,7 +191,7 @@ async function loadBrowserGame(): Promise<void> {
   game = builder.finish()
 }
 
-function buildSnapshot(seats: Seat[], strength: Strength, message: string): Snapshot {
+function buildSnapshot(seats: Seat[], message: string): Snapshot {
   const activeGame = requireGame()
   const state = JSON.parse(activeGame.state_json())
   const board = Array.from({ length: BOARD_SIZE }, () => Array<number>(BOARD_SIZE).fill(-1))
@@ -182,23 +205,37 @@ function buildSnapshot(seats: Seat[], strength: Strength, message: string): Snap
     board,
     currentPlayer: activeGame.current_player(),
     seats,
-    strength,
     thinking: false,
     gameOver: activeGame.valid_move_indexes().length === 0,
     message,
+    pieces: JSON.parse(activeGame.pieces_json()) as Piece[],
   }
 }
 
-async function playBotTurns(seats: Seat[], strength: Strength): Promise<void> {
+async function playBotTurns(seats: Seat[]): Promise<void> {
   const activeGame = requireGame()
-  while (seats[activeGame.current_player()] === 'bot' && activeGame.valid_move_indexes().length > 0) {
-    current = { ...buildSnapshot(seats, strength, 'AlphaBlokus is thinking…'), thinking: true }
-    emit({ type: 'snapshot', snapshot: current })
-    const result = JSON.parse(await activeGame.choose_move(STRENGTHS[strength].rollouts, evaluate))
+  while (seats[activeGame.current_player()] !== 'human' && activeGame.valid_move_indexes().length > 0) {
+    const player = activeGame.current_player()
+    const strength = seats[player]
+    if (strength === 'human') break
+    current = { ...buildSnapshot(seats, 'AlphaBlokus is thinking…'), thinking: true }
+    emitCurrent()
+    const rollouts = STRENGTHS[strength].rollouts
+    const reportProgress = (completed: number, total: number) => {
+      emit({
+        type: 'bot-progress',
+        progress: { player, completed, total },
+      })
+    }
+    reportProgress(0, rollouts)
+    const result = JSON.parse(await activeGame.choose_move(rollouts, evaluate, reportProgress)) as {
+      move_index: number
+    }
     activeGame.apply_move(result.move_index)
+    moveHistory.push(result.move_index)
   }
-  current = buildSnapshot(seats, strength, activeGame.valid_move_indexes().length ? 'Your turn.' : 'Game over.')
-  emit({ type: 'snapshot', snapshot: current })
+  current = buildSnapshot(seats, activeGame.valid_move_indexes().length ? 'Your turn.' : 'Game over.')
+  emitCurrent()
 }
 
 function requireGame(): BrowserGame {
@@ -235,31 +272,50 @@ self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {
       case 'start-game':
         await loadBrowserGame()
         // Avoid downloading public model weights for an all-human local game.
-        if (data.seats.includes('bot')) await loadModel()
-        current = snapshot(data.seats, data.strength)
-        await playBotTurns(data.seats, data.strength)
+        if (data.seats.some((seat) => seat !== 'human')) await loadModel()
+        requireGame().reset()
+        moveHistory = []
+        current = snapshot(data.seats)
+        await playBotTurns(data.seats)
         return
-      case 'restart':
-        if (game && current) {
-          game.reset()
-          await playBotTurns(current.seats, current.strength)
+      case 'restore-game': {
+        await loadBrowserGame()
+        if (data.game.seats.some((seat) => seat !== 'human')) await loadModel()
+        const activeGame = requireGame()
+        activeGame.reset()
+        moveHistory = []
+        for (const moveIndex of data.game.moves) {
+          activeGame.apply_move(moveIndex)
+          moveHistory.push(moveIndex)
         }
+        current = buildSnapshot(data.game.seats, 'Game restored.')
+        await playBotTurns(data.game.seats)
         return
-      case 'undo':
-        if (game && current) {
-          game.undo()
-          current = buildSnapshot(current.seats, current.strength, 'Move undone.')
-          emit({ type: 'snapshot', snapshot: current })
-        }
+      }
+      case 'select-orientation': {
+        const activeGame = requireGame()
+        const placements = (
+          JSON.parse(activeGame.legal_placements_json(data.orientationId)) as {
+            move_index: number
+            cells: [number, number][]
+          }[]
+        ).map<Placement>((placement) => ({
+          moveIndex: placement.move_index,
+          cells: placement.cells,
+        }))
+        emit({
+          type: 'placements',
+          orientationId: data.orientationId,
+          placements,
+        })
         return
+      }
       case 'play-move':
         if (!game || !current) return
         if (current.seats[game.current_player()] !== 'human') throw new Error('Wait for the bot to finish its turn.')
         game.apply_move(data.moveIndex)
-        await playBotTurns(current.seats, current.strength)
-        return
-      case 'save':
-        if (game) emit({ type: 'save', json: game.state_json() })
+        moveHistory.push(data.moveIndex)
+        await playBotTurns(current.seats)
         return
     }
   } catch (error) {
