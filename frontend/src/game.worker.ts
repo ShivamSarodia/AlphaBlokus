@@ -31,6 +31,7 @@ let session: ort.InferenceSession | null = null
 let current: Snapshot | null = null
 let moveHistory: number[] = []
 let browserWasmMemory: WebAssembly.Memory | null = null
+let modelAssetBytes: number | undefined
 const telemetrySession = crypto.randomUUID()
 let memoryDiagnosticsEnabled = false
 type BrowserGame = {
@@ -57,6 +58,13 @@ let game: BrowserGame | null = null
 
 const emit = (event: WorkerEvent) => self.postMessage(event)
 const emitLoading = (progress: LoadingProgress) => emit({ type: 'loading', progress })
+const readJsHeapBytes = (): number | undefined => {
+  const memory = (performance as Performance & {
+    memory?: { usedJSHeapSize?: number }
+  }).memory
+  const bytes = memory?.usedJSHeapSize
+  return typeof bytes === 'number' && Number.isFinite(bytes) ? bytes : undefined
+}
 const reportMemory = (stage: string, details: Record<string, unknown> = {}) => {
   if (!memoryDiagnosticsEnabled) return
   const bytes = browserWasmMemory?.buffer.byteLength
@@ -65,6 +73,8 @@ const reportMemory = (stage: string, details: Record<string, unknown> = {}) => {
     telemetrySession,
     stage,
     wasmBytes: bytes,
+    modelAssetBytes,
+    jsHeapBytes: readJsHeapBytes(),
     ...details,
   }
   console.info('[AlphaBlokus memory]', telemetry)
@@ -270,6 +280,8 @@ async function loadModel(): Promise<void> {
   const externalDataUrl = `${import.meta.env.BASE_URL}026025784.onnx.data`
   const model = await fetchWithProgress(modelUrl, 'Downloading model definition')
   const externalData = await fetchWithProgress(externalDataUrl, 'Downloading model weights')
+  modelAssetBytes = model.byteLength + externalData.byteLength
+  reportMemory('model-assets-loaded')
   emitLoading({ label: 'Preparing WebGPU model' })
   const options: ort.InferenceSession.SessionOptions = {
     executionProviders: [{ name: 'webgpu', preferredLayout: 'NCHW' }],
@@ -279,6 +291,7 @@ async function loadModel(): Promise<void> {
   })
   session = await ort.InferenceSession.create(model, options)
   setBrowserInferenceSession(session)
+  reportMemory('model-session-created')
 }
 
 self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {

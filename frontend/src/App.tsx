@@ -118,12 +118,16 @@ function readMemoryTelemetry(key: string): MemoryTelemetry | null {
   }
 }
 
-function formatMemoryTelemetry(telemetry: MemoryTelemetry): string {
-  const memory = `${(telemetry.wasmBytes / (1024 * 1024)).toFixed(1)} MiB`
+function formatDiagnosticBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
+}
+
+function formatMemoryStage(telemetry: MemoryTelemetry): string {
   if (telemetry.completed !== undefined && telemetry.total !== undefined) {
-    return `${memory} · rollout ${telemetry.completed} / ${telemetry.total}`
+    return `Rollout ${telemetry.completed} / ${telemetry.total}`
   }
-  return `${memory} · ${telemetry.stage.replaceAll('-', ' ')}`
+  return telemetry.stage.replaceAll('-', ' ')
 }
 
 function MemoryDiagnostic({
@@ -136,9 +140,51 @@ function MemoryDiagnostic({
   if (!MEMORY_DIAGNOSTICS_ENABLED) return null
   return (
     <aside className="memory-diagnostic" aria-live="polite">
-      <strong>Engine memory diagnostic</strong>
-      <span>{current ? formatMemoryTelemetry(current) : 'Waiting for engine…'}</span>
-      {previous && <span>Previous session: {formatMemoryTelemetry(previous)}</span>}
+      <strong>Memory diagnostic</strong>
+      <dl>
+        <div>
+          <dt>Stage</dt>
+          <dd>{current ? formatMemoryStage(current) : 'Waiting for engine…'}</dd>
+        </div>
+        <div>
+          <dt>Game WASM</dt>
+          <dd>{current ? formatDiagnosticBytes(current.wasmBytes) : '—'}</dd>
+        </div>
+        <div>
+          <dt>ONNX Runtime</dt>
+          <dd>Not exposed by ORT Web</dd>
+        </div>
+        <div>
+          <dt>WebGPU</dt>
+          <dd>Not exposed by WebGPU</dd>
+        </div>
+        <div>
+          <dt>JavaScript heap</dt>
+          <dd>
+            {current?.jsHeapBytes === undefined
+              ? 'Not exposed by this browser'
+              : formatDiagnosticBytes(current.jsHeapBytes)}
+          </dd>
+        </div>
+        <div>
+          <dt>Safari / Page</dt>
+          <dd>External profiler only</dd>
+        </div>
+        <div>
+          <dt>Model assets</dt>
+          <dd>
+            {current?.modelAssetBytes === undefined
+              ? 'Not loaded'
+              : `${formatDiagnosticBytes(current.modelAssetBytes)} downloaded`}
+          </dd>
+        </div>
+        {previous && (
+          <div>
+            <dt>Previous game WASM</dt>
+            <dd>{formatDiagnosticBytes(previous.wasmBytes)} · {formatMemoryStage(previous)}</dd>
+          </div>
+        )}
+      </dl>
     </aside>
   )
 }
