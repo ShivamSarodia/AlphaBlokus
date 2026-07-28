@@ -1,4 +1,4 @@
-# AlphaBlokus ONNX Runtime Web build
+# AlphaBlok ONNX Runtime Web build
 
 The browser includes two model-specific ONNX Runtime Web 1.24.1 builds:
 
@@ -10,7 +10,7 @@ selection happens before model initialization, and only the selected pair is
 fetched and compiled.
 
 `tools/ci_build/build.py` belongs to the upstream ONNX Runtime repository, not
-AlphaBlokus. Check out the matching release and initialize its submodules:
+AlphaBlok. Check out the matching release and initialize its submodules:
 
 ```sh
 git clone --branch v1.24.1 --depth 1 \

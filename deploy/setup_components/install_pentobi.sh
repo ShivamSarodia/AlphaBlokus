@@ -12,6 +12,6 @@ cd pentobi
 cmake . -DPENTOBI_BUILD_GTP=ON -DPENTOBI_BUILD_GUI=OFF
 make
 
-cd /workspace/AlphaBlokus
+cd /workspace/AlphaBlok
 
 echo "✅ Installed Pentobi"

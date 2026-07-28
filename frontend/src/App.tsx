@@ -690,11 +690,11 @@ export default function App() {
             <h1>
               <a
                 className="game-title-link"
-                href="https://github.com/ShivamSarodia/AlphaBlokus"
+                href="https://github.com/ShivamSarodia/AlphaBlok"
                 target="_blank"
                 rel="noreferrer"
               >
-                AlphaBlokus
+                AlphaBlok
               </a>
             </h1>
             <div className="header-actions">
@@ -918,15 +918,15 @@ export default function App() {
     <>
       <main className="setup-shell">
       <section className="setup-card">
-        <h1>Play AlphaBlokus</h1>
+        <h1>Play AlphaBlok</h1>
         <div className="setup-intro">
           <p>
             <a
-              href="https://github.com/ShivamSarodia/AlphaBlokus"
+              href="https://github.com/ShivamSarodia/AlphaBlok"
               target="_blank"
               rel="noreferrer"
             >
-              AlphaBlokus
+              AlphaBlok
             </a>
             {' '}is a Blokus-playing agent that runs in a browser. It&apos;s implemented in Rust and trained
             entirely through self-play for under $100 on Vast.ai. To my knowledge, it’s the
@@ -967,7 +967,7 @@ export default function App() {
                   <select value={seat} onChange={(event) => setSeats((all) => all.map((value, i) => i === index ? event.target.value as Seat : value))}>
                     <option value="human">Human</option>
                     {(Object.keys(STRENGTHS) as Strength[]).map((name) => (
-                      <option key={name} value={name}>AlphaBlokus ({STRENGTHS[name].label})</option>
+                      <option key={name} value={name}>AlphaBlok ({STRENGTHS[name].label})</option>
                     ))}
                   </select>
                 </label>
