@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { captureAnalyticsEvent, captureAnalyticsException } from './analytics'
 import { isMobileDevice } from './device'
 import { getInferenceConfiguration, resolveInferenceBackend } from './inference-backend'
 import {
   PLAYER_COLORS,
   STRENGTHS,
   type BotProgress,
+  type GameAnalyticsMetadata,
   type InferenceBackend,
   type LoadingProgress,
   type Piece,
@@ -25,6 +27,79 @@ const PLAYER_NAMES = ['Blue', 'Yellow', 'Red', 'Green'] as const
 const START_CORNER_NAMES = ['top-left', 'top-right', 'bottom-right', 'bottom-left'] as const
 const EDGE_DIRECTIONS = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const
 const CORNER_DIRECTIONS = [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const
+const ANALYTICS_SCHEMA_VERSION = 1
+const MODEL_ID = '026025784'
+const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'development'
+
+function errorTrackingProperties(
+  source: string,
+  backend: InferenceBackend | null,
+  analytics: GameAnalyticsMetadata | null,
+): Record<string, unknown> {
+  return {
+    error_source: source,
+    analytics_schema_version: ANALYTICS_SCHEMA_VERSION,
+    app_version: APP_VERSION,
+    model_id: MODEL_ID,
+    inference_backend: backend ?? 'unknown',
+    game_id: analytics?.gameId ?? 'none',
+  }
+}
+
+function createGameAnalyticsMetadata(): GameAnalyticsMetadata {
+  return {
+    gameId: typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    startedAt: new Date().toISOString(),
+  }
+}
+
+function isGameAnalyticsMetadata(value: unknown): value is GameAnalyticsMetadata {
+  if (!value || typeof value !== 'object') return false
+  const metadata = value as Partial<GameAnalyticsMetadata>
+  return typeof metadata.gameId === 'string'
+    && typeof metadata.startedAt === 'string'
+    && (metadata.completedAt === undefined || typeof metadata.completedAt === 'string')
+}
+
+function gameConfigurationProperties(
+  seats: Seat[],
+  backend: InferenceBackend | null,
+  requestedBackend: InferenceBackend | null,
+): Record<string, unknown> {
+  const properties: Record<string, unknown> = {
+    analytics_schema_version: ANALYTICS_SCHEMA_VERSION,
+    app_version: APP_VERSION,
+    model_id: MODEL_ID,
+    inference_backend: backend ?? 'unknown',
+    inference_backend_selection: requestedBackend ?? 'automatic',
+    device_class: isMobileDevice() ? 'mobile' : 'desktop',
+  }
+  const configuration: string[] = []
+  const humanColors: string[] = []
+  const botColors: string[] = []
+
+  seats.forEach((seat, player) => {
+    const color = PLAYER_NAMES[player].toLowerCase()
+    const isHuman = seat === 'human'
+    const strength = isHuman ? 'none' : seat
+    const rollouts = isHuman ? 0 : STRENGTHS[seat].rollouts
+    properties[`${color}_agent`] = isHuman ? 'human' : 'alphablokus'
+    properties[`${color}_strength`] = strength
+    properties[`${color}_rollouts`] = rollouts
+    configuration.push(`${color}=${isHuman ? 'human' : `alphablokus:${rollouts}`}`)
+    if (isHuman) humanColors.push(color)
+    else botColors.push(color)
+  })
+
+  properties.table_configuration = configuration.join(';')
+  properties.human_colors = humanColors
+  properties.alphablokus_colors = botColors
+  properties.human_count = humanColors.length
+  properties.alphablokus_count = botColors.length
+  return properties
+}
 
 function invalidPlacementReason(
   cells: [number, number][],
@@ -85,7 +160,13 @@ function readPersistedGame(): PersistedGame | null {
       localStorage.removeItem(GAME_STORAGE_KEY)
       return null
     }
-    return game as PersistedGame
+    const analytics = isGameAnalyticsMetadata(game.analytics) ? game.analytics : undefined
+    return {
+      version: 2,
+      seats: game.seats as Seat[],
+      moves: game.moves as number[],
+      analytics,
+    }
   } catch {
     return null
   }
@@ -193,6 +274,14 @@ export default function App() {
     () => readPersistedGame(),
   )
   const savedGameToRestoreRef = useRef(savedGameToRestore)
+  const latestPersistedGameRef = useRef(savedGameToRestore)
+  const [initialGameAnalytics] = useState<GameAnalyticsMetadata | null>(() =>
+    savedGameToRestore
+      ? savedGameToRestore.analytics ?? createGameAnalyticsMetadata()
+      : null,
+  )
+  const gameAnalyticsRef = useRef(initialGameAnalytics)
+  const activeBackendRef = useRef<InferenceBackend | null>(null)
   const [loading, setLoading] = useState<LoadingProgress | null>(null)
   const [botProgress, setBotProgress] = useState<BotProgress | null>(null)
   const [selectedPieceId, setSelectedPieceId] = useState<number | null>(null)
@@ -231,12 +320,28 @@ export default function App() {
       worker.current = nextInstance
       nextInstance.onerror = (event) => {
         if (worker.current !== nextInstance) return
+        captureAnalyticsException(
+          new Error(event.message || 'The game worker stopped unexpectedly.'),
+          errorTrackingProperties(
+            'game_worker_error',
+            activeBackendRef.current,
+            gameAnalyticsRef.current,
+          ),
+        )
         setLoading(null)
         setBotProgress(null)
         setError(event.message || 'The game worker stopped unexpectedly.')
       }
       nextInstance.onmessageerror = () => {
         if (worker.current !== nextInstance) return
+        captureAnalyticsException(
+          new Error('The game worker returned an unreadable response.'),
+          errorTrackingProperties(
+            'game_worker_message_error',
+            activeBackendRef.current,
+            gameAnalyticsRef.current,
+          ),
+        )
         setLoading(null)
         setBotProgress(null)
         setError('The game worker returned an unreadable response.')
@@ -244,6 +349,7 @@ export default function App() {
       nextInstance.onmessage = ({ data }: MessageEvent<WorkerEvent>) => {
         if (worker.current !== nextInstance) return
         if (data.type === 'ready') {
+          activeBackendRef.current = data.backend
           setActiveBackend(data.backend)
           setReady(true)
           const savedGame = savedGameToRestoreRef.current
@@ -269,6 +375,54 @@ export default function App() {
           setPlacementFeedback(null)
           setIsPieceTrayOpen(false)
           setIsLoadingPlacements(false)
+          const persistedGame = latestPersistedGameRef.current
+          const analytics = gameAnalyticsRef.current
+          if (data.snapshot.gameOver && persistedGame && analytics && !analytics.completedAt) {
+            const scores = [0, 1, 2, 3].map(
+              (player) => data.snapshot.board.reduce(
+                (total, row) => total + row.filter((owner) => owner === player).length,
+                0,
+              ),
+            )
+            const winningScore = Math.max(...scores)
+            const winnerColors = scores
+              .map((score, player) => ({ player, score }))
+              .filter(({ score }) => score === winningScore)
+              .map(({ player }) => PLAYER_NAMES[player].toLowerCase())
+            const completedAt = new Date().toISOString()
+            const durationMilliseconds = Date.parse(completedAt) - Date.parse(analytics.startedAt)
+            const captured = captureAnalyticsEvent('game_completed', {
+              ...gameConfigurationProperties(
+                persistedGame.seats,
+                activeBackendRef.current,
+                inference.requestedBackend,
+              ),
+              game_id: analytics.gameId,
+              started_at: analytics.startedAt,
+              completed_at: completedAt,
+              duration_seconds: Number.isFinite(durationMilliseconds)
+                ? Math.max(0, Math.round(durationMilliseconds / 1000))
+                : null,
+              winner: winnerColors.length === 1 ? winnerColors[0] : 'tie',
+              winner_colors: winnerColors,
+              is_tie: winnerColors.length > 1,
+              winning_score: winningScore,
+              blue_score: scores[0],
+              yellow_score: scores[1],
+              red_score: scores[2],
+              green_score: scores[3],
+              move_count: persistedGame.moves.length,
+              move_indexes: persistedGame.moves,
+              move_sequence: persistedGame.moves.join(','),
+            })
+            if (captured) {
+              const completedAnalytics = { ...analytics, completedAt }
+              const completedGame = { ...persistedGame, analytics: completedAnalytics }
+              gameAnalyticsRef.current = completedAnalytics
+              latestPersistedGameRef.current = completedGame
+              persistGame(completedGame)
+            }
+          }
         }
         if (data.type === 'placements') {
           setPlacementResult({
@@ -280,8 +434,44 @@ export default function App() {
           setPlacementFeedback(null)
           setIsLoadingPlacements(false)
         }
-        if (data.type === 'persist') persistGame(data.game)
+        if (data.type === 'move-played') {
+          const analytics = gameAnalyticsRef.current ?? createGameAnalyticsMetadata()
+          gameAnalyticsRef.current = analytics
+          const playerColor = PLAYER_NAMES[data.move.player].toLowerCase()
+          const strength = data.move.seat === 'human' ? null : data.move.seat
+          captureAnalyticsEvent('game_move_played', {
+            ...gameConfigurationProperties(
+              data.move.seats,
+              activeBackendRef.current,
+              inference.requestedBackend,
+            ),
+            game_id: analytics.gameId,
+            move_number: data.move.moveNumber,
+            move_index: data.move.moveIndex,
+            player_color: playerColor,
+            agent: strength ? 'alphablokus' : 'human',
+            strength: strength ?? 'none',
+            rollouts: strength ? STRENGTHS[strength].rollouts : 0,
+            cells: data.move.cells.map(([x, y]) => `${x},${y}`),
+            cells_json: JSON.stringify(data.move.cells),
+          })
+        }
+        if (data.type === 'persist') {
+          const analytics = gameAnalyticsRef.current ?? createGameAnalyticsMetadata()
+          const persistedGame = { ...data.game, analytics }
+          gameAnalyticsRef.current = analytics
+          latestPersistedGameRef.current = persistedGame
+          persistGame(persistedGame)
+        }
         if (data.type === 'error') {
+          captureAnalyticsException(
+            new Error(data.message),
+            errorTrackingProperties(
+              'game_worker_reported_error',
+              activeBackendRef.current,
+              gameAnalyticsRef.current,
+            ),
+          )
           setLoading(null)
           setBotProgress(null)
           if (savedGameToRestoreRef.current) {
@@ -305,7 +495,7 @@ export default function App() {
       window.removeEventListener('beforeunload', stopBeforeUnload)
       stopWorker()
     }
-  }, [workerGeneration, inference.backend])
+  }, [workerGeneration, inference.backend, inference.requestedBackend])
 
   const botCount = useMemo(() => seats.filter((seat) => seat !== 'human').length, [seats])
   const board = game?.board ?? Array.from({ length: 20 }, () => Array<number>(20).fill(-1))
@@ -345,10 +535,18 @@ export default function App() {
   const highlightedPlayers = game?.gameOver ? winningPlayers : game ? [game.currentPlayer] : []
 
   const start = () => {
+    const analytics = createGameAnalyticsMetadata()
+    gameAnalyticsRef.current = analytics
+    latestPersistedGameRef.current = null
     setError(null)
     setBotProgress(null)
     setLoading({ label: 'Starting local game' })
     clearPersistedGame()
+    captureAnalyticsEvent('game_started', {
+      ...gameConfigurationProperties(seats, activeBackendRef.current, inference.requestedBackend),
+      game_id: analytics.gameId,
+      started_at: analytics.startedAt,
+    })
     send(worker.current, { type: 'start-game', seats })
   }
 
@@ -362,6 +560,9 @@ export default function App() {
     clearPersistedGame()
     setSavedGameToRestore(null)
     savedGameToRestoreRef.current = null
+    latestPersistedGameRef.current = null
+    gameAnalyticsRef.current = null
+    activeBackendRef.current = null
     setReady(false)
     setSelectedBackend(null)
     setActiveBackend(null)
@@ -713,12 +914,12 @@ export default function App() {
             >
               AlphaBlokus
             </a>
-            {' '}is an agent for the board game Blokus, implemented in Rust and trained
-            purely on self-play.
+            {' '}is a computer opponent for the board game Blokus. It is written in Rust and
+            trained entirely through self-play for under $100 on vast.ai. To my knowledge,
+            it’s the strongest publicly available Blokus opponent.
           </p>
           <p>
-            Inference runs locally on your machine, so expect runtime to vary significantly based
-            on your device.
+            AlphaBlokus runs entirely in your browser, so its speed will depend on your device.
           </p>
         </div>
         {savedGameToRestore ? (

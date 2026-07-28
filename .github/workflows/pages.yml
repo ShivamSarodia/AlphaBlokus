@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_BASE_PATH: /AlphaBlokus/
+      VITE_APP_VERSION: ${{ github.sha }}
       VITE_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_POSTHOG_PROJECT_TOKEN }}
       VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
     steps:

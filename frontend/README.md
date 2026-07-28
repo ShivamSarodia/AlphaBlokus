@@ -44,3 +44,25 @@ The SDK and React provider are initialized only when
 `VITE_POSTHOG_PROJECT_TOKEN` is set. Without a token, PostHog is disabled and
 the frontend does not send analytics requests. The GitHub Pages workflow reads
 both values from repository Actions secrets with the same names.
+
+When configured, PostHog captures product analytics, page views and exits,
+session replays, console output, automatic browser exceptions, Web Vitals, and
+network timing. Handled game-worker failures are also reported explicitly with
+the backend, model, deployment, and anonymous game ID when available. Network
+request and response headers and request bodies are recorded in session replay.
+Response bodies are removed before replay events are sent. Session replay
+sampling is controlled remotely in PostHog rather than hard-coded in the client.
+
+Game telemetry uses three custom events:
+
+- `game_started` records the four color assignments, AlphaBlokus strength and
+  rollout count for each bot, inference backend, model, and a random anonymous
+  game ID.
+- `game_move_played` records the game ID, ordered move number, canonical move
+  index, player color and agent settings, and occupied board coordinates.
+- `game_completed` records the winner, all four scores, duration, and the full
+  ordered canonical move-index sequence. That sequence can replay the game
+  exactly against the same move table.
+
+The Pages build sets `VITE_APP_VERSION` to the deployment commit SHA so events
+remain attributable if the model, move table, or rules change later.

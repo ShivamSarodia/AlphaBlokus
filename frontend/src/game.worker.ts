@@ -31,6 +31,7 @@ type BrowserGame = {
   state_json(): string
   pieces_json(): string
   legal_placements_json(orientationId: number): string
+  move_cells_json(moveIndex: number): string
   current_player(): number
   valid_move_indexes(): Uint32Array
   choose_move(
@@ -215,6 +216,24 @@ function buildSnapshot(seats: Seat[], message: string): Snapshot {
   }
 }
 
+function applyMove(activeGame: BrowserGame, seats: Seat[], moveIndex: number): void {
+  const player = activeGame.current_player()
+  const cells = JSON.parse(activeGame.move_cells_json(moveIndex)) as [number, number][]
+  activeGame.apply_move(moveIndex)
+  moveHistory.push(moveIndex)
+  emit({
+    type: 'move-played',
+    move: {
+      moveIndex,
+      moveNumber: moveHistory.length,
+      player,
+      seat: seats[player],
+      seats,
+      cells,
+    },
+  })
+}
+
 async function playBotTurns(seats: Seat[]): Promise<void> {
   const activeGame = requireGame()
   while (seats[activeGame.current_player()] !== 'human' && activeGame.valid_move_indexes().length > 0) {
@@ -234,8 +253,7 @@ async function playBotTurns(seats: Seat[]): Promise<void> {
     const result = JSON.parse(await activeGame.choose_move(rollouts, evaluate, reportProgress)) as {
       move_index: number
     }
-    activeGame.apply_move(result.move_index)
-    moveHistory.push(result.move_index)
+    applyMove(activeGame, seats, result.move_index)
   }
   current = buildSnapshot(seats, activeGame.valid_move_indexes().length ? 'Your turn.' : 'Game over.')
   emitCurrent()
@@ -339,8 +357,7 @@ self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {
       case 'play-move':
         if (!game || !current) return
         if (current.seats[game.current_player()] !== 'human') throw new Error('Wait for the bot to finish its turn.')
-        game.apply_move(data.moveIndex)
-        moveHistory.push(data.moveIndex)
+        applyMove(game, current.seats, data.moveIndex)
         await playBotTurns(current.seats)
         return
     }

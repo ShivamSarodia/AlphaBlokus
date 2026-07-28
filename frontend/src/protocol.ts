@@ -9,10 +9,17 @@ export type Strength = keyof typeof STRENGTHS
 export type Seat = 'human' | Strength
 export type InferenceBackend = 'webgpu' | 'wasm'
 
+export type GameAnalyticsMetadata = {
+  gameId: string
+  startedAt: string
+  completedAt?: string
+}
+
 export type PersistedGame = {
   version: 2
   seats: Seat[]
   moves: number[]
+  analytics?: GameAnalyticsMetadata
 }
 
 export type PieceOrientation = {
@@ -48,6 +55,15 @@ export type BotProgress = {
   total: number
 }
 
+export type PlayedMove = {
+  moveIndex: number
+  moveNumber: number
+  player: number
+  seat: Seat
+  seats: Seat[]
+  cells: [number, number][]
+}
+
 export type Snapshot = {
   boardSize: number
   board: number[][]
@@ -72,5 +88,6 @@ export type WorkerEvent =
   | { type: 'bot-progress'; progress: BotProgress }
   | { type: 'snapshot'; snapshot: Snapshot }
   | { type: 'placements'; orientationId: number; placements: Placement[] }
+  | { type: 'move-played'; move: PlayedMove }
   | { type: 'persist'; game: PersistedGame }
   | { type: 'error'; message: string }
