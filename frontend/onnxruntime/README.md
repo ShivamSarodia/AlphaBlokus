@@ -1,9 +1,13 @@
 # AlphaBlokus ONNX Runtime Web build
 
-The browser uses a model-specific ONNX Runtime Web 1.24.1 non-JSEP build. It
-runs inference through the SIMD CPU WebAssembly execution provider, avoiding
-Safari's excessive memory growth when compiling the JSEP runtime. The paired
-generated files are committed under `src/assets/`.
+The browser includes two model-specific ONNX Runtime Web 1.24.1 builds:
+
+- a non-JSEP SIMD CPU WebAssembly runtime; and
+- a JSEP runtime used by the WebGPU execution provider.
+
+Their paired generated files are committed under `src/assets/`. Runtime
+selection happens before model initialization, and only the selected pair is
+fetched and compiled.
 
 `tools/ci_build/build.py` belongs to the upstream ONNX Runtime repository, not
 AlphaBlokus. Check out the matching release and initialize its submodules:
@@ -38,3 +42,8 @@ Copy the resulting paired `.mjs` and `.wasm` files from the build configuration
 directory to `src/assets/`, naming them `ort-wasm-alphablokus.mjs` and
 `ort-wasm-alphablokus.wasm`. Regenerate the operator config before rebuilding
 if the browser model graph changes.
+
+Build the WebGPU/JSEP pair with the same command plus `--use_jsep` and a
+separate build directory, then copy the resulting `.jsep.mjs` and `.jsep.wasm`
+files to `src/assets/` as `ort-wasm-alphablokus.jsep.mjs` and
+`ort-wasm-alphablokus.jsep.wasm`.

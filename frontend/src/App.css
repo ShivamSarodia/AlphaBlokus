@@ -29,6 +29,29 @@ button:hover, button.selected { border-color: var(--control-border-hover); backg
 button:disabled { cursor: wait; opacity: .55; }
 .primary { background: #3279d4; border-color: #76aff7; color: white; font-size: var(--primary-control-font-size); font-weight: 700; }
 .primary:hover:not(:disabled) { border-color: #8abfff; background: #3b86e2; }
+.inference-debug {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  gap: .55rem;
+  padding: .5rem .65rem;
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  color: var(--muted-color);
+  background: rgb(21 22 29 / 94%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  font-size: var(--meta-font-size);
+  line-height: 1;
+}
+
+.inference-debug strong {
+  color: var(--control-color);
+  font-size: var(--control-font-size);
+}
+
 .setup-shell, .game-shell { min-height: 100vh; padding: clamp(1.25rem, 4vw, 4rem); }
 .setup-shell {
   display: grid;
@@ -726,7 +749,7 @@ h1, h2, p {
   opacity: .3;
 }
 
-@media (min-width: 1050px) {
+@media (min-width: 1050px), (min-width: 780px) and (min-aspect-ratio: 7 / 8) {
   .table-layout--game {
     max-width: none;
     grid-template:
@@ -734,7 +757,7 @@ h1, h2, p {
       "scores scores" auto
       "board controls" auto
       "board pieces" minmax(0, 1fr)
-      / minmax(400px, min(820px, calc(100vh - 280px))) minmax(290px, 340px);
+      / minmax(220px, min(820px, calc(100vh - 280px), calc(100vw - 390px))) minmax(290px, 340px);
     column-gap: 1.25rem;
     align-items: start;
     justify-content: center;

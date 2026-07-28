@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { getInferenceConfiguration, resolveInferenceBackend } from './inference-backend'
 import {
   PLAYER_COLORS,
   STRENGTHS,
   type BotProgress,
+  type InferenceBackend,
   type LoadingProgress,
   type Piece,
   type PieceOrientation,
@@ -172,9 +174,12 @@ function transformedOrientation(
 }
 
 export default function App() {
+  const inference = useMemo(() => getInferenceConfiguration(), [])
   const worker = useRef<Worker | null>(null)
   const [workerGeneration, setWorkerGeneration] = useState(0)
   const [ready, setReady] = useState(false)
+  const [selectedBackend, setSelectedBackend] = useState<InferenceBackend | null>(null)
+  const [activeBackend, setActiveBackend] = useState<InferenceBackend | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [seats, setSeats] = useState<Seat[]>(['human', 'strong', 'strong', 'strong'])
   const [game, setGame] = useState<Snapshot | null>(null)
@@ -210,8 +215,11 @@ export default function App() {
       instance = null
     }
 
-    const startWorker = () => {
+    const startWorker = async () => {
       if (stopped) return
+      const backend = await resolveInferenceBackend(inference.backend)
+      if (stopped) return
+      setSelectedBackend(backend)
       const nextInstance = new Worker(new URL('./game.worker.ts', import.meta.url), { type: 'module' })
       instance = nextInstance
       worker.current = nextInstance
@@ -230,6 +238,7 @@ export default function App() {
       nextInstance.onmessage = ({ data }: MessageEvent<WorkerEvent>) => {
         if (worker.current !== nextInstance) return
         if (data.type === 'ready') {
+          setActiveBackend(data.backend)
           setReady(true)
           const savedGame = savedGameToRestoreRef.current
           if (savedGame) {
@@ -277,7 +286,7 @@ export default function App() {
           setError(data.message)
         }
       }
-      send(nextInstance, { type: 'init' })
+      send(nextInstance, { type: 'init', backend })
     }
 
     const stopBeforeUnload = () => stopWorker()
@@ -290,7 +299,7 @@ export default function App() {
       window.removeEventListener('beforeunload', stopBeforeUnload)
       stopWorker()
     }
-  }, [workerGeneration])
+  }, [workerGeneration, inference.backend])
 
   const botCount = useMemo(() => seats.filter((seat) => seat !== 'human').length, [seats])
   const board = game?.board ?? Array.from({ length: 20 }, () => Array<number>(20).fill(-1))
@@ -348,6 +357,8 @@ export default function App() {
     setSavedGameToRestore(null)
     savedGameToRestoreRef.current = null
     setReady(false)
+    setSelectedBackend(null)
+    setActiveBackend(null)
     setError(null)
     setLoading(null)
     setBotProgress(null)
@@ -449,9 +460,24 @@ export default function App() {
     cancelPlacement()
   }
 
+  const displayedBackend = activeBackend ?? selectedBackend
+  const debugPanel = inference.debug ? (
+    <aside
+      className="inference-debug"
+      data-inference-backend={displayedBackend ?? 'detecting'}
+      aria-label="Inference debug"
+    >
+      <span>Inference</span>
+      <strong>
+        {displayedBackend === 'webgpu' ? 'WebGPU' : displayedBackend === 'wasm' ? 'WASM' : 'Detecting…'}
+      </strong>
+    </aside>
+  ) : null
+
   if (game) {
     return (
-      <main className="game-shell">
+      <>
+        <main className="game-shell">
         <section className="table-layout table-layout--game">
           <header className="game-header">
             <h1>AlphaBlokus</h1>
@@ -661,12 +687,15 @@ export default function App() {
             </>
           )}
         </section>
-      </main>
+        </main>
+        {debugPanel}
+      </>
     )
   }
 
   return (
-    <main className="setup-shell">
+    <>
+      <main className="setup-shell">
       <section className="setup-card">
         <h1>Play AlphaBlokus</h1>
         <div className="setup-intro">
@@ -735,6 +764,8 @@ export default function App() {
           </>
         )}
       </section>
-    </main>
+      </main>
+      {debugPanel}
+    </>
   )
 }

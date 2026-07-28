@@ -7,6 +7,7 @@ export const STRENGTHS = {
 
 export type Strength = keyof typeof STRENGTHS
 export type Seat = 'human' | Strength
+export type InferenceBackend = 'webgpu' | 'wasm'
 
 export type PersistedGame = {
   version: 2
@@ -59,14 +60,14 @@ export type Snapshot = {
 }
 
 export type WorkerCommand =
-  | { type: 'init' }
+  | { type: 'init'; backend: InferenceBackend }
   | { type: 'start-game'; seats: Seat[] }
   | { type: 'restore-game'; game: PersistedGame }
   | { type: 'select-orientation'; orientationId: number }
   | { type: 'play-move'; moveIndex: number }
 
 export type WorkerEvent =
-  | { type: 'ready' }
+  | { type: 'ready'; backend: InferenceBackend }
   | { type: 'loading'; progress: LoadingProgress }
   | { type: 'bot-progress'; progress: BotProgress }
   | { type: 'snapshot'; snapshot: Snapshot }

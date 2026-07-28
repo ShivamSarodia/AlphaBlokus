@@ -2,7 +2,6 @@
 
 import * as ort from 'onnxruntime-web'
 import { evaluate, setBrowserInferenceSession } from './browser-inference'
-import ortWasmUrl from './ort-wasm-url'
 import { Decompress } from 'fzstd'
 import initBrowserWasm, {
   BrowserGameBuilder as WasmBrowserGameBuilder,
@@ -10,6 +9,7 @@ import initBrowserWasm, {
 import {
   STRENGTHS,
   type LoadingProgress,
+  type InferenceBackend,
   type Piece,
   type Placement,
   type PersistedGame,
@@ -23,11 +23,8 @@ declare const self: DedicatedWorkerGlobalScope
 
 const BOARD_SIZE = 20
 
-// Vite fingerprints these dependencies. Tell ONNX Runtime Web their final
-// URLs instead of letting it resolve unfingerprinted filenames against the page.
-ort.env.wasm.wasmPaths = ortWasmUrl
-
 let session: ort.InferenceSession | null = null
+let inferenceBackend: InferenceBackend | null = null
 let current: Snapshot | null = null
 let moveHistory: number[] = []
 type BrowserGame = {
@@ -251,13 +248,18 @@ function requireGame(): BrowserGame {
 
 async function loadModel(): Promise<void> {
   if (session) return
+  if (!inferenceBackend) throw new Error('The inference backend has not been initialized.')
   const modelUrl = `${import.meta.env.BASE_URL}026025784.onnx`
   const externalDataUrl = `${import.meta.env.BASE_URL}026025784.onnx.data`
   const model = await fetchWithProgress(modelUrl, 'Downloading model definition')
   const externalData = await fetchWithProgress(externalDataUrl, 'Downloading model weights')
-  emitLoading({ label: 'Preparing local model' })
+  emitLoading({
+    label: inferenceBackend === 'webgpu' ? 'Preparing WebGPU model' : 'Preparing local model',
+  })
   const options: ort.InferenceSession.SessionOptions = {
-    executionProviders: ['wasm'],
+    executionProviders: inferenceBackend === 'webgpu'
+      ? [{ name: 'webgpu', preferredLayout: 'NCHW' }]
+      : ['wasm'],
   }
   Object.assign(options, {
     externalData: [{ path: '026025784.onnx.data', data: externalData }],
@@ -266,11 +268,32 @@ async function loadModel(): Promise<void> {
   setBrowserInferenceSession(session)
 }
 
+async function configureInferenceBackend(backend: InferenceBackend): Promise<void> {
+  if (inferenceBackend) {
+    if (inferenceBackend !== backend) {
+      throw new Error('The inference backend cannot be changed while the game worker is running.')
+    }
+    return
+  }
+  if (backend === 'webgpu' && !('gpu' in navigator)) {
+    throw new Error('WebGPU is not available in this browser.')
+  }
+
+  // Dynamic imports ensure the unused ONNX Runtime binary is never fetched or
+  // compiled. Each game worker initializes exactly one runtime variant.
+  const wasmPaths = backend === 'webgpu'
+    ? (await import('./ort-webgpu-wasm-url')).default
+    : (await import('./ort-wasm-url')).default
+  ort.env.wasm.wasmPaths = wasmPaths
+  inferenceBackend = backend
+}
+
 self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {
   try {
     switch (data.type) {
       case 'init':
-        emit({ type: 'ready' })
+        await configureInferenceBackend(data.backend)
+        emit({ type: 'ready', backend: data.backend })
         return
       case 'start-game':
         await loadBrowserGame()

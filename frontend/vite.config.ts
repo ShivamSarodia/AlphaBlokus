@@ -26,6 +26,9 @@ function canonicalMoveTable(): Plugin {
 
 export default defineConfig({
   plugins: [react(), canonicalMoveTable()],
+  worker: {
+    format: 'es',
+  },
   resolve: {
     // Use ONNX Runtime Web's external-WASM entry point. The worker supplies
     // the paired model-specific loader and binary through env.wasm.wasmPaths.

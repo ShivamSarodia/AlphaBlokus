@@ -1,8 +1,14 @@
 # AlphaBlokus browser frontend
 
-This is a static WebGPU application: it does not use the Rust `web-play`
+This is a static browser application: it does not use the Rust `web-play`
 server or make `/api` calls. The ONNX model pair and canonical move table are
 checked into `static` with Git LFS and are served alongside the app.
+
+Inference defaults to WebGPU when it is available, except on iOS, where it
+defaults to CPU WASM. Override the selection with `?backend=webgpu` or
+`?backend=wasm`. Add `debug=true` to display the active backend, for example
+`?backend=wasm&debug=true`. The selected runtime is loaded dynamically; the
+unused ONNX Runtime WASM binary is not fetched or initialized.
 
 ```bash
 cd frontend
