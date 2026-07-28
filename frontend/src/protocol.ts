@@ -66,7 +66,7 @@ export type WorkerCommand =
   | { type: 'play-move'; moveIndex: number }
 
 export type WorkerEvent =
-  | { type: 'ready'; webgpu: true }
+  | { type: 'ready' }
   | { type: 'loading'; progress: LoadingProgress }
   | { type: 'bot-progress'; progress: BotProgress }
   | { type: 'snapshot'; snapshot: Snapshot }

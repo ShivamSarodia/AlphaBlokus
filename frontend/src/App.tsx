@@ -731,7 +731,7 @@ export default function App() {
               <div className="loading-copy"><strong>{loading.label}</strong>{formatProgress(loading) && <span>{formatProgress(loading)}</span>}</div>
               <div className="loading-track" aria-hidden="true"><span className={loading.total ? 'loading-fill' : 'loading-fill indeterminate'} style={loading.total ? { width: `${Math.min(100, loading.loaded! / loading.total * 100)}%` } : undefined} /></div>
             </section>}
-            <button className="start primary" disabled={!ready || !!loading} onClick={start}>{ready ? `Start ${botCount ? 'match' : 'local game'}` : 'Checking WebGPU…'}</button>
+            <button className="start primary" disabled={!ready || !!loading} onClick={start}>{ready ? `Start ${botCount ? 'match' : 'local game'}` : 'Preparing…'}</button>
           </>
         )}
       </section>

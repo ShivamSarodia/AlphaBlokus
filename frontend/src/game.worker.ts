@@ -255,9 +255,9 @@ async function loadModel(): Promise<void> {
   const externalDataUrl = `${import.meta.env.BASE_URL}026025784.onnx.data`
   const model = await fetchWithProgress(modelUrl, 'Downloading model definition')
   const externalData = await fetchWithProgress(externalDataUrl, 'Downloading model weights')
-  emitLoading({ label: 'Preparing WebGPU model' })
+  emitLoading({ label: 'Preparing local model' })
   const options: ort.InferenceSession.SessionOptions = {
-    executionProviders: [{ name: 'webgpu', preferredLayout: 'NCHW' }],
+    executionProviders: ['wasm'],
   }
   Object.assign(options, {
     externalData: [{ path: '026025784.onnx.data', data: externalData }],
@@ -270,10 +270,7 @@ self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {
   try {
     switch (data.type) {
       case 'init':
-        if (!('gpu' in navigator)) {
-          throw new Error('WebGPU is required to run AlphaBlokus in this browser.')
-        }
-        emit({ type: 'ready', webgpu: true })
+        emit({ type: 'ready' })
         return
       case 'start-game':
         await loadBrowserGame()
