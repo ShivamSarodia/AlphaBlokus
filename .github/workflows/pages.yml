@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_BASE_PATH: /AlphaBlokus/
+      VITE_POSTHOG_PROJECT_TOKEN: ${{ secrets.VITE_POSTHOG_PROJECT_TOKEN }}
+      VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
     steps:
       - uses: actions/checkout@v6
         with:

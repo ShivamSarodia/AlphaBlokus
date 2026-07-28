@@ -29,3 +29,18 @@ the checked-in artifact; it never regenerates it:
 cargo run --release --bin generate-move-data -- \
   --config configs/generate_move_data/full.toml
 ```
+
+## PostHog
+
+Copy `.env.example` to `.env.local` and add the project token and ingestion
+host from the PostHog project settings:
+
+```sh
+VITE_POSTHOG_PROJECT_TOKEN=phc_...
+VITE_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+The SDK and React provider are initialized only when
+`VITE_POSTHOG_PROJECT_TOKEN` is set. Without a token, PostHog is disabled and
+the frontend does not send analytics requests. The GitHub Pages workflow reads
+both values from repository Actions secrets with the same names.

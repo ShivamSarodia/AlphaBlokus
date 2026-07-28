@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@fontsource-variable/sora": "^5.3.0",
+    "@posthog/react": "^1.10.3",
     "fzstd": "^0.1.1",
     "onnxruntime-web": "1.24.1",
+    "posthog-js": "^1.407.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
