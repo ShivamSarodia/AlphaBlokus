@@ -4,8 +4,6 @@ Agent for the board game [Blokus](https://en.wikipedia.org/wiki/Blokus), impleme
 
 **[Play in your browser here](http://shivamsarodia.github.io/AlphaBlokus)**. The browser application runs using WebGPU and WASM, so expect speed to depend dramatically on your local hardware.
 
-todo - insert GIF of gameplay?
-
 ## Training methodology
 
 AlphaBlokus is trained from scratch using the classic [AlphaZero](https://arxiv.org/abs/1712.01815) approach, modified to incorporate some ideas from subsequent literature and to suit Blokus.
