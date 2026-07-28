@@ -688,14 +688,14 @@ export default function App() {
         <section className="table-layout table-layout--game">
           <header className="game-header">
             <h1>
-              <button
-                type="button"
-                className="game-title-button"
-                onClick={newGame}
-                aria-label="Return to table setup"
+              <a
+                className="game-title-link"
+                href="https://github.com/ShivamSarodia/AlphaBlokus"
+                target="_blank"
+                rel="noreferrer"
               >
                 AlphaBlokus
-              </button>
+              </a>
             </h1>
             <div className="header-actions">
               <button

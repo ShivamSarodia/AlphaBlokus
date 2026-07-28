@@ -272,7 +272,8 @@ h1, h2, p {
   letter-spacing: -.035em;
 }
 
-.game-title-button {
+.game-title-link {
+  display: inline-block;
   min-height: 0;
   padding: 0;
   border: 0;
@@ -281,10 +282,11 @@ h1, h2, p {
   background: transparent;
   font: inherit;
   letter-spacing: inherit;
+  text-decoration: none;
 }
 
-.game-title-button:hover,
-.game-title-button:focus-visible {
+.game-title-link:hover,
+.game-title-link:focus-visible {
   border-color: transparent;
   color: #fff;
   background: transparent;
