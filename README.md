@@ -1,6 +1,6 @@
 # AlphaBlokus
 
-AlphaBlokus is a [Blokus](https://en.wikipedia.org/wiki/Blokus)-playing agent. It's implemented in Rust and trained entirely through self-play for unser $100 on Vast.ai. To my knowledge, it’s the strongest publicly available Blokus opponent.
+AlphaBlokus is a [Blokus](https://en.wikipedia.org/wiki/Blokus)-playing agent. It's implemented in Rust and trained entirely through self-play for under $100 on Vast.ai. To my knowledge, it’s the strongest publicly available Blokus opponent.
 
 **[Play in your browser here](http://shivamsarodia.github.io/AlphaBlokus)**. The browser application runs using WebGPU and WASM, so expect speed to depend dramatically on your local hardware.
 
