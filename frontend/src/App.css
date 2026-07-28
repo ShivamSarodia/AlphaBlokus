@@ -272,6 +272,24 @@ h1, h2, p {
   letter-spacing: -.035em;
 }
 
+.game-title-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+.game-title-button:hover,
+.game-title-button:focus-visible {
+  border-color: transparent;
+  color: #fff;
+  background: transparent;
+}
+
 .header-actions {
   display: flex;
   justify-content: flex-end;
@@ -299,6 +317,7 @@ h1, h2, p {
 }
 
 .score-player {
+  position: relative;
   display: grid;
   grid-template-rows: auto auto;
   align-items: center;
@@ -310,11 +329,24 @@ h1, h2, p {
   border: 1px solid transparent;
   border-radius: 10px;
   color: #71717d;
-  transition: background .2s ease;
 }
 
 .score-player--current {
   box-shadow: none;
+}
+
+.score-player__highlight {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  bottom: calc(1em + .12rem);
+  border-radius: inherit;
+  pointer-events: none;
+  transition: bottom .15s ease, background-color .2s ease;
+}
+
+.score-player--with-progress .score-player__highlight {
+  bottom: 0;
 }
 
 .score-player .swatch {
@@ -324,6 +356,8 @@ h1, h2, p {
 }
 
 .score-player__summary {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: baseline;
   gap: .4rem;
@@ -340,6 +374,8 @@ h1, h2, p {
 }
 
 .score-player__type {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-rows: auto 1em;
   justify-items: center;

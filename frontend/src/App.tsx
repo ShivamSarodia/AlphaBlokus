@@ -687,7 +687,16 @@ export default function App() {
         <main className="game-shell">
         <section className="table-layout table-layout--game">
           <header className="game-header">
-            <h1>AlphaBlokus</h1>
+            <h1>
+              <button
+                type="button"
+                className="game-title-button"
+                onClick={newGame}
+                aria-label="Return to table setup"
+              >
+                AlphaBlokus
+              </button>
+            </h1>
             <div className="header-actions">
               <button
                 onClick={newGame}
@@ -699,16 +708,21 @@ export default function App() {
           <div className="score-strip" aria-label="Points">
             {game.seats.map((seat, player) => {
               const progress = botProgress?.player === player ? botProgress : null
+              const highlighted = highlightedPlayers.includes(player)
               return (
                 <article
-                  className={highlightedPlayers.includes(player) ? 'score-player score-player--current' : 'score-player'}
+                  className={`score-player${highlighted ? ' score-player--current' : ''}${progress ? ' score-player--with-progress' : ''}`}
                   key={player}
                   aria-label={`${PLAYER_NAMES[player]}, ${occupiedCells[player]} points, ${seat === 'human' ? 'Human' : 'Bot'}${progress ? `, ${progress.completed} of ${progress.total} rollouts` : seat !== 'human' && player === game.currentPlayer && game.thinking ? ', thinking' : ''}`}
                   aria-current={!game.gameOver && player === game.currentPlayer ? 'true' : undefined}
-                  style={highlightedPlayers.includes(player)
-                    ? { backgroundColor: `${PLAYER_COLORS[player]}24` }
-                    : undefined}
                 >
+                  {highlighted && (
+                    <span
+                      className="score-player__highlight"
+                      style={{ backgroundColor: `${PLAYER_COLORS[player]}24` }}
+                      aria-hidden="true"
+                    />
+                  )}
                   <span className="score-player__summary">
                     <span className="swatch" style={{ background: PLAYER_COLORS[player] }} />
                     <strong style={{ color: PLAYER_COLORS[player] }}>
