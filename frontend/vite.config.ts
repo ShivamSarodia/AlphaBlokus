@@ -26,6 +26,11 @@ function canonicalMoveTable(): Plugin {
 
 export default defineConfig({
   plugins: [react(), canonicalMoveTable()],
+  resolve: {
+    // Use ONNX Runtime Web's external-WASM entry point. The worker supplies
+    // the paired model-specific loader and binary through env.wasm.wasmPaths.
+    conditions: ['onnxruntime-web-use-extern-wasm'],
+  },
   // The checked-in ONNX model pair is the only root static asset group. Keep
   // unrelated native move tables out of the Pages artifact. The canonical
   // full table is copied explicitly by canonicalMoveTable above.

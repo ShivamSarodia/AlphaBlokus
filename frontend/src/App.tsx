@@ -197,63 +197,98 @@ export default function App() {
   const [isLoadingPlacements, setIsLoadingPlacements] = useState(false)
 
   useEffect(() => {
-    const instance = new Worker(new URL('./game.worker.ts', import.meta.url), { type: 'module' })
-    worker.current = instance
-    instance.onmessage = ({ data }: MessageEvent<WorkerEvent>) => {
-      if (worker.current !== instance) return
-      if (data.type === 'ready') {
-        setReady(true)
-        const savedGame = savedGameToRestoreRef.current
-        if (savedGame) {
-          setSeats(savedGame.seats)
-          setLoading({ label: 'Restoring saved game' })
-          send(instance, { type: 'restore-game', game: savedGame })
-        }
-      }
-      if (data.type === 'loading') setLoading(data.progress)
-      if (data.type === 'bot-progress') setBotProgress(data.progress)
-      if (data.type === 'snapshot') {
-        setLoading(null)
-        setBotProgress(null)
-        setGame(data.snapshot)
-        setSavedGameToRestore(null)
-        savedGameToRestoreRef.current = null
-        setSelectedPieceId(null)
-        setSelectedOrientationId(null)
-        setPlacementResult(null)
-        setTentativeCells([])
-        setSelectedPlacement(null)
-        setPlacementFeedback(null)
-        setIsPieceTrayOpen(false)
-        setIsLoadingPlacements(false)
-      }
-      if (data.type === 'placements') {
-        setPlacementResult({
-          orientationId: data.orientationId,
-          placements: data.placements,
-        })
-        setTentativeCells([])
-        setSelectedPlacement(null)
-        setPlacementFeedback(null)
-        setIsLoadingPlacements(false)
-      }
-      if (data.type === 'persist') persistGame(data.game)
-      if (data.type === 'error') {
-        setLoading(null)
-        setBotProgress(null)
-        if (savedGameToRestoreRef.current) {
-          clearPersistedGame()
-          setSavedGameToRestore(null)
-          savedGameToRestoreRef.current = null
-        }
-        setError(data.message)
-      }
-    }
-    send(instance, { type: 'init' })
-    return () => {
+    let instance: Worker | null = null
+    let stopped = false
+
+    const stopWorker = () => {
+      if (!instance) return
       instance.onmessage = null
+      instance.onerror = null
+      instance.onmessageerror = null
       instance.terminate()
       if (worker.current === instance) worker.current = null
+      instance = null
+    }
+
+    const startWorker = () => {
+      if (stopped) return
+      const nextInstance = new Worker(new URL('./game.worker.ts', import.meta.url), { type: 'module' })
+      instance = nextInstance
+      worker.current = nextInstance
+      nextInstance.onerror = (event) => {
+        if (worker.current !== nextInstance) return
+        setLoading(null)
+        setBotProgress(null)
+        setError(event.message || 'The game worker stopped unexpectedly.')
+      }
+      nextInstance.onmessageerror = () => {
+        if (worker.current !== nextInstance) return
+        setLoading(null)
+        setBotProgress(null)
+        setError('The game worker returned an unreadable response.')
+      }
+      nextInstance.onmessage = ({ data }: MessageEvent<WorkerEvent>) => {
+        if (worker.current !== nextInstance) return
+        if (data.type === 'ready') {
+          setReady(true)
+          const savedGame = savedGameToRestoreRef.current
+          if (savedGame) {
+            setSeats(savedGame.seats)
+            setLoading({ label: 'Restoring saved game' })
+            send(nextInstance, { type: 'restore-game', game: savedGame })
+          }
+        }
+        if (data.type === 'loading') setLoading(data.progress)
+        if (data.type === 'bot-progress') setBotProgress(data.progress)
+        if (data.type === 'snapshot') {
+          setLoading(null)
+          setBotProgress(null)
+          setGame(data.snapshot)
+          setSavedGameToRestore(null)
+          savedGameToRestoreRef.current = null
+          setSelectedPieceId(null)
+          setSelectedOrientationId(null)
+          setPlacementResult(null)
+          setTentativeCells([])
+          setSelectedPlacement(null)
+          setPlacementFeedback(null)
+          setIsPieceTrayOpen(false)
+          setIsLoadingPlacements(false)
+        }
+        if (data.type === 'placements') {
+          setPlacementResult({
+            orientationId: data.orientationId,
+            placements: data.placements,
+          })
+          setTentativeCells([])
+          setSelectedPlacement(null)
+          setPlacementFeedback(null)
+          setIsLoadingPlacements(false)
+        }
+        if (data.type === 'persist') persistGame(data.game)
+        if (data.type === 'error') {
+          setLoading(null)
+          setBotProgress(null)
+          if (savedGameToRestoreRef.current) {
+            clearPersistedGame()
+            setSavedGameToRestore(null)
+            savedGameToRestoreRef.current = null
+          }
+          setError(data.message)
+        }
+      }
+      send(nextInstance, { type: 'init' })
+    }
+
+    const stopBeforeUnload = () => stopWorker()
+    window.addEventListener('beforeunload', stopBeforeUnload)
+    const startupTimer = window.setTimeout(startWorker, 0)
+
+    return () => {
+      stopped = true
+      window.clearTimeout(startupTimer)
+      window.removeEventListener('beforeunload', stopBeforeUnload)
+      stopWorker()
     }
   }, [workerGeneration])
 
@@ -653,7 +688,12 @@ export default function App() {
         </div>
         {savedGameToRestore ? (
           <section className="restore-loading" aria-live="polite" aria-labelledby="restore-title">
-            <h2 id="restore-title">Loading previous game…</h2>
+            <div className="restore-loading__header">
+              <h2 id="restore-title">Loading previous game…</h2>
+              <button type="button" onClick={newGame}>
+                Start new game instead
+              </button>
+            </div>
             <div className="loading" aria-label={loading?.label ?? 'Preparing saved game'}>
               <div className="loading-copy">
                 <strong>{loading?.label ?? 'Preparing saved game'}</strong>

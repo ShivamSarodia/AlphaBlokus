@@ -171,6 +171,24 @@ h1, h2, p {
   margin-top: 0;
 }
 
+.restore-loading__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: .75rem;
+}
+
+.restore-loading__header h2 {
+  margin: 0;
+}
+
+.restore-loading__header button {
+  flex: 0 0 auto;
+  padding: .5rem .7rem;
+}
+
 .loading-copy {
   display: flex;
   justify-content: space-between;

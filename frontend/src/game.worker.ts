@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import * as ort from 'onnxruntime-web/webgpu'
+import * as ort from 'onnxruntime-web'
 import { evaluate, setBrowserInferenceSession } from './browser-inference'
 import ortWasmUrl from './ort-wasm-url'
 import { Decompress } from 'fzstd'
@@ -23,9 +23,9 @@ declare const self: DedicatedWorkerGlobalScope
 
 const BOARD_SIZE = 20
 
-// Vite fingerprints this dependency. Tell ONNX Runtime Web its final URL
-// instead of letting it resolve an unfingerprinted filename against the page.
-ort.env.wasm.wasmPaths = { wasm: ortWasmUrl }
+// Vite fingerprints these dependencies. Tell ONNX Runtime Web their final
+// URLs instead of letting it resolve unfingerprinted filenames against the page.
+ort.env.wasm.wasmPaths = ortWasmUrl
 
 let session: ort.InferenceSession | null = null
 let current: Snapshot | null = null
@@ -53,6 +53,7 @@ type BrowserGameBuilder = {
 let game: BrowserGame | null = null
 
 const emit = (event: WorkerEvent) => self.postMessage(event)
+const errorMessage = (error: unknown) => error instanceof Error ? error.message : String(error)
 const emitLoading = (progress: LoadingProgress) => emit({ type: 'loading', progress })
 const emitCurrent = () => {
   if (!current) return
@@ -66,6 +67,11 @@ const emitCurrent = () => {
 }
 const yieldToWorker = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 const TABLE_CHUNK_BYTES = 512 * 1024
+
+self.addEventListener('unhandledrejection', (event) => {
+  event.preventDefault()
+  emit({ type: 'error', message: `Unhandled worker error: ${errorMessage(event.reason)}` })
+})
 
 async function fetchWithProgress(url: string, label: string): Promise<Uint8Array> {
   const response = await fetch(url)
@@ -319,6 +325,6 @@ self.onmessage = async ({ data }: MessageEvent<WorkerCommand>) => {
         return
     }
   } catch (error) {
-    emit({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+    emit({ type: 'error', message: errorMessage(error) })
   }
 }

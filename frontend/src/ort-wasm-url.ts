@@ -1,7 +1,7 @@
-// Keep the ONNX Runtime Web backend fingerprinted by Vite. The package does
-// not export its `.wasm` file as an importable subpath, so reference it as a
-// static URL from this source module instead.
-export default new URL(
-  '../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.asyncify.wasm',
-  import.meta.url,
-).href
+// Keep the model-specific ONNX Runtime Web backend fingerprinted by Vite.
+// The generated loader and binary must stay paired: this reduced build
+// exports only the runtime surface AlphaBlokus needs.
+export default {
+  mjs: new URL('./assets/ort-wasm-alphablokus.jsep.mjs', import.meta.url).href,
+  wasm: new URL('./assets/ort-wasm-alphablokus.jsep.wasm', import.meta.url).href,
+}

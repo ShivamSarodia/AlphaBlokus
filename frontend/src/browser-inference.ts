@@ -1,4 +1,4 @@
-import * as ort from 'onnxruntime-web/webgpu'
+import * as ort from 'onnxruntime-web'
 
 const BOARD_SIZE = 20
 const NUM_PIECES = 21
