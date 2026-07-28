@@ -1,4 +1,5 @@
 import type { InferenceBackend } from './protocol'
+import { isIOSDevice } from './device'
 
 export type InferenceConfiguration = {
   backend: InferenceBackend
@@ -10,11 +11,6 @@ type NavigatorWithWebGPU = Navigator & {
   gpu?: {
     requestAdapter(): Promise<unknown | null>
   }
-}
-
-function isIOSPlatform(): boolean {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent)
-    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 }
 
 export function getInferenceConfiguration(): InferenceConfiguration {
@@ -32,7 +28,7 @@ export function getInferenceConfiguration(): InferenceConfiguration {
   } else if (requestedBackend === 'webgpu') {
     backend = supportsWebGPU ? 'webgpu' : 'wasm'
   } else {
-    backend = !isIOSPlatform() && supportsWebGPU ? 'webgpu' : 'wasm'
+    backend = !isIOSDevice() && supportsWebGPU ? 'webgpu' : 'wasm'
   }
 
   return {

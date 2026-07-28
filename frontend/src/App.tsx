@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import { isMobileDevice } from './device'
 import { getInferenceConfiguration, resolveInferenceBackend } from './inference-backend'
 import {
   PLAYER_COLORS,
@@ -173,6 +174,11 @@ function transformedOrientation(
     ?? orientation
 }
 
+function defaultSeats(): Seat[] {
+  const botStrength: Strength = isMobileDevice() ? 'quick' : 'strong'
+  return ['human', botStrength, botStrength, botStrength]
+}
+
 export default function App() {
   const inference = useMemo(() => getInferenceConfiguration(), [])
   const worker = useRef<Worker | null>(null)
@@ -181,7 +187,7 @@ export default function App() {
   const [selectedBackend, setSelectedBackend] = useState<InferenceBackend | null>(null)
   const [activeBackend, setActiveBackend] = useState<InferenceBackend | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [seats, setSeats] = useState<Seat[]>(['human', 'strong', 'strong', 'strong'])
+  const [seats, setSeats] = useState<Seat[]>(defaultSeats)
   const [game, setGame] = useState<Snapshot | null>(null)
   const [savedGameToRestore, setSavedGameToRestore] = useState<PersistedGame | null>(
     () => readPersistedGame(),
