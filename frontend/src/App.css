@@ -514,6 +514,10 @@ h1, h2, p {
   background: #11121b;
 }
 
+.board--piece-placed .tile--preview {
+  touch-action: none;
+}
+
 .tile {
   min-width: 0;
   min-height: 0;

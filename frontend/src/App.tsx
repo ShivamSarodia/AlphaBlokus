@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import './App.css'
 import { captureAnalyticsEvent, captureAnalyticsException } from './analytics'
 import { isMobileDevice } from './device'
@@ -30,6 +30,13 @@ const CORNER_DIRECTIONS = [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const
 const ANALYTICS_SCHEMA_VERSION = 1
 const MODEL_ID = '026025784'
 const APP_VERSION = import.meta.env.VITE_APP_VERSION || 'development'
+
+type PendingPieceDrag = {
+  pointerId: number
+  boardX: number
+  boardY: number
+  cells: [number, number][]
+}
 
 function errorTrackingProperties(
   source: string,
@@ -295,6 +302,8 @@ export default function App() {
   const [placementFeedback, setPlacementFeedback] = useState<'valid' | 'invalid' | null>(null)
   const [isPieceTrayOpen, setIsPieceTrayOpen] = useState(false)
   const [isLoadingPlacements, setIsLoadingPlacements] = useState(false)
+  const pendingPieceDrag = useRef<PendingPieceDrag | null>(null)
+  const suppressBoardClick = useRef(false)
 
   useEffect(() => {
     let instance: Worker | null = null
@@ -654,11 +663,111 @@ export default function App() {
   const testBoardPosition = (x: number, y: number) => {
     if (!selectedOrientation || isLoadingPlacements) return
     const cells = cellsAtBoardPosition(x, y)
+    testTentativePlacement(cells)
+  }
+
+  const testTentativePlacement = (cells: [number, number][]) => {
     const key = orientationKey(cells)
     const match = activePlacements.find((placement) => orientationKey(placement.cells) === key) ?? null
     setTentativeCells(cells)
     setSelectedPlacement(match)
     setPlacementFeedback(match ? 'valid' : 'invalid')
+  }
+
+  const moveTentativeCells = (
+    cells: [number, number][],
+    deltaX: number,
+    deltaY: number,
+  ): [number, number][] => {
+    if (!game || cells.length === 0) return cells
+    const xs = cells.map(([x]) => x)
+    const ys = cells.map(([, y]) => y)
+    const boundedDeltaX = Math.min(
+      Math.max(deltaX, -Math.min(...xs)),
+      game.boardSize - 1 - Math.max(...xs),
+    )
+    const boundedDeltaY = Math.min(
+      Math.max(deltaY, -Math.min(...ys)),
+      game.boardSize - 1 - Math.max(...ys),
+    )
+    return cells.map(([x, y]) => [x + boundedDeltaX, y + boundedDeltaY])
+  }
+
+  const startPendingPieceDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (
+      event.pointerType !== 'touch'
+      || tentativeCells.length === 0
+      || placementFeedback === null
+    ) {
+      return
+    }
+
+    const tile = (event.target as HTMLElement).closest<HTMLButtonElement>('.tile')
+    const boardX = Number(tile?.dataset.boardX)
+    const boardY = Number(tile?.dataset.boardY)
+    if (
+      !tile
+      || !Number.isInteger(boardX)
+      || !Number.isInteger(boardY)
+      || !previewCells.has(`${boardX}-${boardY}`)
+    ) {
+      return
+    }
+
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    suppressBoardClick.current = true
+    pendingPieceDrag.current = {
+      pointerId: event.pointerId,
+      boardX,
+      boardY,
+      cells: tentativeCells,
+    }
+  }
+
+  const dragPendingPiece = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = pendingPieceDrag.current
+    if (!drag || drag.pointerId !== event.pointerId || !game) return
+
+    event.preventDefault()
+    const bounds = event.currentTarget.getBoundingClientRect()
+    const boardX = Math.floor((event.clientX - bounds.left) / (bounds.width / game.boardSize))
+    const boardY = Math.floor((event.clientY - bounds.top) / (bounds.height / game.boardSize))
+    const deltaX = boardX - drag.boardX
+    const deltaY = boardY - drag.boardY
+    if (deltaX === 0 && deltaY === 0) return
+
+    drag.boardX = boardX
+    drag.boardY = boardY
+    drag.cells = moveTentativeCells(drag.cells, deltaX, deltaY)
+    testTentativePlacement(drag.cells)
+  }
+
+  const finishPendingPieceDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = pendingPieceDrag.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+
+    pendingPieceDrag.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    window.setTimeout(() => {
+      suppressBoardClick.current = false
+    }, 0)
+  }
+
+  const cancelPendingPieceDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (pendingPieceDrag.current?.pointerId !== event.pointerId) return
+    pendingPieceDrag.current = null
+    suppressBoardClick.current = false
+  }
+
+  const selectBoardPosition = (x: number, y: number) => {
+    if (suppressBoardClick.current) {
+      suppressBoardClick.current = false
+      return
+    }
+    testBoardPosition(x, y)
   }
 
   const confirmPlacement = () => {
@@ -752,7 +861,14 @@ export default function App() {
               className="board-wrap"
               aria-label="Blokus board"
             >
-              <div className="board" style={{ gridTemplateColumns: `repeat(${game.boardSize}, 1fr)` }}>
+              <div
+                className={`board${placementFeedback === null ? '' : ' board--piece-placed'}`}
+                style={{ gridTemplateColumns: `repeat(${game.boardSize}, 1fr)` }}
+                onPointerDown={startPendingPieceDrag}
+                onPointerMove={dragPendingPiece}
+                onPointerUp={finishPendingPieceDrag}
+                onPointerCancel={cancelPendingPieceDrag}
+              >
                 {board.flatMap((row, y) => row.map((owner, x) => {
                   const isPreview = previewCells.has(`${x}-${y}`)
                   const background = isPreview
@@ -766,8 +882,10 @@ export default function App() {
                       key={`${x}-${y}`}
                       className={`tile${selectedOrientation ? ' tile--interactive' : ''}${isPreview ? ' tile--preview' : ''}${isPreview && placementFeedback === 'invalid' ? ' tile--invalid' : ''}`}
                       style={background ? { background } : undefined}
+                      data-board-x={x}
+                      data-board-y={y}
                       onMouseEnter={() => previewBoardPosition(x, y)}
-                      onClick={() => testBoardPosition(x, y)}
+                      onClick={() => selectBoardPosition(x, y)}
                       disabled={!selectedOrientation || isLoadingPlacements}
                       tabIndex={-1}
                       aria-label={`Place near row ${y + 1}, column ${x + 1}`}
