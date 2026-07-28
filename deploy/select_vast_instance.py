@@ -274,7 +274,7 @@ def create_from_template(offer_id, min_bid=None):
             "PORTAL_CONFIG": "localhost:1111:11111:/:Instance Portal|localhost:8080:18080:/:Jupyter|localhost:8080:8080:/terminals/1:Jupyter Terminal|localhost:8384:18384:/:Syncthing|localhost:6006:16006:/:Tensorboard",
         },
         "args_str": "",
-        "onstart": "initial_dir=$(pwd); mkdir -p /workspace; cd /workspace; git clone https://github.com/ShivamSarodia/AlphaBlok; cd $initial_dir; entrypoint.sh",
+        "onstart": "initial_dir=$(pwd); mkdir -p /workspace; cd /workspace; git clone https://github.com/ShivamSarodia/AlphaBlokus; cd $initial_dir; entrypoint.sh",
         "runtype": "jupyter_direc ssh_direc ssh_proxy",
         "use_jupyter_lab": False,
         "disk": 64,

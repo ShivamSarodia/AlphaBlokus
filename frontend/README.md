@@ -1,4 +1,4 @@
-# AlphaBlok browser frontend
+# AlphaBlokus browser frontend
 
 This is a static browser application: it does not use the Rust `web-play`
 server or make `/api` calls. The ONNX model pair and canonical move table are
@@ -55,7 +55,7 @@ sampling is controlled remotely in PostHog rather than hard-coded in the client.
 
 Game telemetry uses three custom events:
 
-- `game_started` records the four color assignments, AlphaBlok strength and
+- `game_started` records the four color assignments, AlphaBlokus strength and
   rollout count for each bot, inference backend, model, and a random anonymous
   game ID.
 - `game_move_played` records the game ID, ordered move number, canonical move

@@ -240,7 +240,7 @@ async function playBotTurns(seats: Seat[]): Promise<void> {
     const player = activeGame.current_player()
     const strength = seats[player]
     if (strength === 'human') break
-    current = { ...buildSnapshot(seats, 'AlphaBlok is thinking…'), thinking: true }
+    current = { ...buildSnapshot(seats, 'AlphaBlokus is thinking…'), thinking: true }
     emitCurrent()
     const rollouts = STRENGTHS[strength].rollouts
     const reportProgress = (completed: number, total: number) => {
