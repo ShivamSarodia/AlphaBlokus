@@ -5,7 +5,7 @@ AlphaBlokus is a Blokus-playing agent that runs in your browser. It's implemente
 **[▶  Play AlphaBlokus](http://shivamsarodia.github.io/AlphaBlokus)**
 <br><br>
 
-<img width="560" height="418" alt="image" src="https://github.com/user-attachments/assets/8f72af2d-482c-4795-a702-bbc1a8b5702d" />
+<a href="http://shivamsarodia.github.io/AlphaBlokus"><img width="560" height="418" alt="image" src="https://github.com/user-attachments/assets/8f72af2d-482c-4795-a702-bbc1a8b5702d" /></a>
 
 ## Training methodology
 
