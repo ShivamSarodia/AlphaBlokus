@@ -914,12 +914,9 @@ export default function App() {
             >
               AlphaBlokus
             </a>
-            {' '}is a computer opponent for the board game Blokus. It is written in Rust and
-            trained entirely through self-play for under $100 on vast.ai. To my knowledge,
-            it’s the strongest publicly available Blokus opponent.
-          </p>
-          <p>
-            AlphaBlokus runs entirely in your browser, so its speed will depend on your device.
+            {' '}is a Blokus-playing agent that runs in a browser. It&apos;s implemented in Rust and trained
+            entirely through self-play for under $100 on Vast.ai. To my knowledge, it’s the
+            strongest publicly available Blokus opponent.
           </p>
         </div>
         {savedGameToRestore ? (
